@@ -6,7 +6,9 @@ import {
   abandonFlight,
   completeFlight,
   createFlight,
+  getFleetStats,
   getFlight,
+  listCompletedFlights,
   listFlights,
   recordOff,
   recordOn,
@@ -119,6 +121,88 @@ describe('flight repo', () => {
       startFlight(db, created.id, 10000)
       const abandoned = abandonFlight(db, created.id)
       expect(abandoned?.status).toBe('abandoned')
+    })
+  })
+
+  describe('logbook queries', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-09-01T12:00:00Z'))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    /** Drives a flight from planned through completed, advancing the fake clock by `blockMinutes`. */
+    function flyAndComplete(
+      forAircraftId: number,
+      arrIcao: string,
+      blockMinutes: number,
+      fuelBurnKg: number
+    ): void {
+      const created = createFlight(db, { aircraftId: forAircraftId, depIcao: 'EGLL', arrIcao })
+      startFlight(db, created.id, 10000)
+      vi.setSystemTime(new Date(Date.now() + blockMinutes * 60_000))
+      completeFlight(db, created.id, 10000 - fuelBurnKg)
+    }
+
+    it('lists only completed flights, newest actualInUtc first', () => {
+      createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' }) // stays planned
+      flyAndComplete(aircraftId, 'EGCC', 30, 500)
+      vi.setSystemTime(new Date('2026-09-01T14:00:00Z'))
+      flyAndComplete(aircraftId, 'EGPH', 45, 700)
+
+      const completed = listCompletedFlights(db)
+      expect(completed).toHaveLength(2)
+      expect(completed.map((f) => f.arrIcao)).toEqual(['EGPH', 'EGCC'])
+      expect(completed.every((f) => f.status === 'completed')).toBe(true)
+    })
+
+    it('returns no fleet stats when nothing has completed', () => {
+      const created = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' })
+      startFlight(db, created.id, 10000) // active, not completed
+      expect(getFleetStats(db)).toEqual([])
+    })
+
+    it('aggregates hours/cycles per aircraft from completed flights only', () => {
+      const secondAircraftId = createAircraft(db, {
+        registration: 'G-WXYZ',
+        icaoType: 'B738',
+        name: 'Two'
+      }).id
+
+      flyAndComplete(aircraftId, 'EGCC', 60, 500) // 1h
+      vi.setSystemTime(new Date('2026-09-01T14:00:00Z'))
+      flyAndComplete(aircraftId, 'EGPH', 30, 300) // +0.5h, most recent for this tail
+      vi.setSystemTime(new Date('2026-09-01T15:00:00Z'))
+      flyAndComplete(secondAircraftId, 'EGKK', 90, 900) // 1.5h, one cycle
+
+      const stats = getFleetStats(db)
+      expect(stats).toHaveLength(2)
+
+      const first = stats.find((s) => s.aircraftId === aircraftId)
+      expect(first?.registration).toBe('G-ABCD')
+      expect(first?.totalCycles).toBe(2)
+      expect(first?.totalHours).toBeCloseTo(1.5)
+      expect(first?.lastArrIcao).toBe('EGPH') // most recent completed flight for this tail
+
+      const second = stats.find((s) => s.aircraftId === secondAircraftId)
+      expect(second?.registration).toBe('G-WXYZ')
+      expect(second?.totalCycles).toBe(1)
+      expect(second?.totalHours).toBeCloseTo(1.5)
+      expect(second?.lastArrIcao).toBe('EGKK')
+
+      // Sorted by registration.
+      expect(stats.map((s) => s.registration)).toEqual(['G-ABCD', 'G-WXYZ'])
+    })
+
+    it('omits an aircraft with no completed flights, even if it has a planned one', () => {
+      createAircraft(db, { registration: 'G-IDLE', icaoType: 'A320', name: 'Idle' })
+      flyAndComplete(aircraftId, 'EGCC', 30, 500)
+
+      const stats = getFleetStats(db)
+      expect(stats.map((s) => s.registration)).toEqual(['G-ABCD'])
     })
   })
 })
