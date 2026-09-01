@@ -26,6 +26,40 @@ export function parseRouteFromOfpJson(ofpJson: string | null): [number, number][
   return points
 }
 
+export interface OfpAirports {
+  depIcao: string | null
+  arrIcao: string | null
+  altnIcao: string | null
+}
+
+/**
+ * Extracts the planned departure/destination/alternate ICAO codes from a flight's raw
+ * SimBrief OFP JSON — `origin.icao_code`/`destination.icao_code`/`alternate.icao_code`,
+ * the same fields simbrief-client.ts's own mapping already relies on (alternate is
+ * genuinely optional in a real OFP, the other two aren't). Same "empty rather than
+ * throw" behavior as parseRouteFromOfpJson — used for Track's METAR panel when
+ * previewing a fetched-but-not-yet-saved OFP, which has no Flight row to read these
+ * from directly.
+ */
+export function parseAirportsFromOfpJson(ofpJson: string | null): OfpAirports {
+  if (!ofpJson) return { depIcao: null, arrIcao: null, altnIcao: null }
+  try {
+    const parsed = JSON.parse(ofpJson) as {
+      origin?: { icao_code?: unknown }
+      destination?: { icao_code?: unknown }
+      alternate?: { icao_code?: unknown }
+    }
+    const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
+    return {
+      depIcao: str(parsed.origin?.icao_code),
+      arrIcao: str(parsed.destination?.icao_code),
+      altnIcao: str(parsed.alternate?.icao_code)
+    }
+  } catch {
+    return { depIcao: null, arrIcao: null, altnIcao: null }
+  }
+}
+
 export interface Waypoint {
   ident: string
   lon: number
