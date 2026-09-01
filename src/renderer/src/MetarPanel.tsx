@@ -4,7 +4,6 @@ import type { MetarReport } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
 import { AirportSearch } from './AirportSearch'
 
 type Slot = 'departure' | 'destination' | 'alternate' | 'custom'
@@ -49,20 +48,17 @@ function MetarBody(props: {
 }
 
 /**
- * A small, self-contained widget next to Track's page title (not a full-width section) —
- * departure/destination/alternate come from whatever flight (or Dispatch preview) Track
- * is currently showing; "Custom" is a free airport search for anything else — a fuel
- * stop, a diversion candidate, wherever. Fetches all four in one batched call
- * (docs/decisions.md, 2026-09-02) rather than one request per tab, and only for slots
- * that actually have a real 4-letter code.
+ * Sits in Dispatch's right-hand column, above the imported/created plan's details —
+ * departure/destination/alternate come from the fetched OFP once there is one, or the
+ * "Plan a flight" panel's own selections before that; "Custom" is a free airport search
+ * for anything else — a fuel stop, a diversion candidate, wherever. Fetches all four in
+ * one batched call (docs/decisions.md, 2026-09-02) rather than one request per tab, and
+ * only for slots that actually have a real 4-letter code.
  */
 export function MetarPanel(props: {
   depIcao: string | null
   arrIcao: string | null
   altnIcao: string | null
-  /** Defaults to filling its container (a flex-col parent stretches it full width) —
-   *  pass e.g. "w-96" to size it explicitly instead, for a row layout that wouldn't. */
-  className?: string
 }): React.JSX.Element {
   const [tab, setTab] = useState<Slot>('departure')
   const [customIcao, setCustomIcao] = useState('')
@@ -111,7 +107,7 @@ export function MetarPanel(props: {
   }
 
   return (
-    <Card size="sm" className={cn(props.className)}>
+    <Card size="sm">
       <CardContent>
         <Tabs value={tab} onValueChange={(v) => setTab(v as Slot)} className="gap-2">
           <div className="flex items-center gap-2">
