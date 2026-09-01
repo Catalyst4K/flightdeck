@@ -1,6 +1,12 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { IpcChannels, type AircraftUpdate, type DispatchOfp, type NewFlight } from '@shared/ipc'
+import {
+  IpcChannels,
+  type AircraftUpdate,
+  type DispatchOfp,
+  type NewFlight,
+  type WeightUnit
+} from '@shared/ipc'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import {
@@ -13,7 +19,7 @@ import {
 import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
 import { createFlight, listFlights } from './db/flight-repo'
-import { getSimbriefUsername, setSimbriefUsername } from './db/settings-repo'
+import { getSimbriefUsername, getWeightUnit, setSimbriefUsername, setWeightUnit } from './db/settings-repo'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
 
 function createWindow(): BrowserWindow {
@@ -92,6 +98,9 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.settingsSetSimbriefUsername, (_event, username: string) =>
     setSimbriefUsername(db, username)
   )
+
+  ipcMain.handle(IpcChannels.settingsGetWeightUnit, () => getWeightUnit(db))
+  ipcMain.handle(IpcChannels.settingsSetWeightUnit, (_event, unit: WeightUnit) => setWeightUnit(db, unit))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits

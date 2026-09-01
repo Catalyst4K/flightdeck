@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { Aircraft, DispatchOfp, Flight } from '@shared/ipc'
-import { kgToLb, mToFt } from './units'
+import type { Aircraft, DispatchOfp, Flight, WeightUnit } from '@shared/ipc'
+import { formatWeight, mToFt } from './units'
 
 function formatUtc(iso: string): string {
   return `${iso.slice(0, 16).replace('T', ' ')}Z`
 }
 
-export function DispatchView(): React.JSX.Element {
+export function DispatchView(props: { weightUnit: WeightUnit }): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [flights, setFlights] = useState<Flight[]>([])
   const [username, setUsername] = useState('')
@@ -133,16 +133,15 @@ export function DispatchView(): React.JSX.Element {
               {formatUtc(ofp.schedOutUtc)} / {formatUtc(ofp.schedInUtc)}
             </dd>
             <dt>Planned fuel</dt>
-            <dd>{Math.round(kgToLb(ofp.fuelPlannedKg)).toLocaleString()} lb</dd>
+            <dd>{formatWeight(ofp.fuelPlannedKg, props.weightUnit)}</dd>
             <dt>Pax / cargo</dt>
             <dd>
-              {ofp.pax} / {Math.round(kgToLb(ofp.cargoKg)).toLocaleString()} lb
+              {ofp.pax} / {formatWeight(ofp.cargoKg, props.weightUnit)}
             </dd>
             <dt>ZFW / TOW / LDW</dt>
             <dd>
-              {Math.round(kgToLb(ofp.zfwKg)).toLocaleString()} /{' '}
-              {Math.round(kgToLb(ofp.towKg)).toLocaleString()} /{' '}
-              {Math.round(kgToLb(ofp.ldwKg)).toLocaleString()} lb
+              {formatWeight(ofp.zfwKg, props.weightUnit)} / {formatWeight(ofp.towKg, props.weightUnit)} /{' '}
+              {formatWeight(ofp.ldwKg, props.weightUnit)}
             </dd>
             <dt>Waypoints</dt>
             <dd>{ofp.waypoints.length}</dd>

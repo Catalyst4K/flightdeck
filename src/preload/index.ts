@@ -4,7 +4,8 @@ import {
   type AircraftUpdate,
   type FlightdeckApi,
   type NewAircraft,
-  type NewFlight
+  type NewFlight,
+  type WeightUnit
 } from '@shared/ipc'
 
 const api: FlightdeckApi = {
@@ -21,7 +22,9 @@ const api: FlightdeckApi = {
     ipcRenderer.invoke(IpcChannels.dispatchOpenSimBrief, simbriefAirframeId),
   settingsGetSimbriefUsername: () => ipcRenderer.invoke(IpcChannels.settingsGetSimbriefUsername),
   settingsSetSimbriefUsername: (username: string) =>
-    ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username)
+    ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username),
+  settingsGetWeightUnit: () => ipcRenderer.invoke(IpcChannels.settingsGetWeightUnit),
+  settingsSetWeightUnit: (unit: WeightUnit) => ipcRenderer.invoke(IpcChannels.settingsSetWeightUnit, unit)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

@@ -157,6 +157,13 @@ export interface DispatchOfp {
   matchedAircraftId: number | null
 }
 
+/**
+ * Display unit for weights app-wide (Fleet and Dispatch both). Storage stays SI (kg)
+ * regardless — see §5 — this only controls what the UI shows/accepts. Defaults to 'lb'
+ * if never set.
+ */
+export type WeightUnit = 'kg' | 'lb'
+
 export const IpcChannels = {
   aircraftList: 'aircraft:list',
   aircraftCreate: 'aircraft:create',
@@ -169,7 +176,9 @@ export const IpcChannels = {
   dispatchFetchOfp: 'dispatch:fetch-ofp',
   dispatchOpenSimBrief: 'dispatch:open-simbrief',
   settingsGetSimbriefUsername: 'settings:get-simbrief-username',
-  settingsSetSimbriefUsername: 'settings:set-simbrief-username'
+  settingsSetSimbriefUsername: 'settings:set-simbrief-username',
+  settingsGetWeightUnit: 'settings:get-weight-unit',
+  settingsSetWeightUnit: 'settings:set-weight-unit'
 } as const
 
 export interface FlightdeckApi {
@@ -189,4 +198,6 @@ export interface FlightdeckApi {
   dispatchOpenSimBrief: (simbriefAirframeId: string | null) => Promise<void>
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
+  settingsGetWeightUnit: () => Promise<WeightUnit>
+  settingsSetWeightUnit: (unit: WeightUnit) => Promise<void>
 }

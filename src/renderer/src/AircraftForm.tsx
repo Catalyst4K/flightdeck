@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Aircraft, NewAircraft } from '@shared/ipc'
-import { kgToLb, lbToKg } from './units'
+import type { Aircraft, NewAircraft, WeightUnit } from '@shared/ipc'
+import { kgToUnit, unitToKg } from './units'
 
 interface FormState {
   registration: string
@@ -9,11 +9,11 @@ interface FormState {
   operator: string
   livery: string
   simbriefAirframeId: string
-  oewLb: string
-  mzfwLb: string
-  mtowLb: string
-  mlwLb: string
-  maxFuelLb: string
+  oewValue: string
+  mzfwValue: string
+  mtowValue: string
+  mlwValue: string
+  maxFuelValue: string
   maxPax: string
   equip: string
   transponder: string
@@ -33,11 +33,11 @@ const EMPTY_FORM: FormState = {
   operator: '',
   livery: '',
   simbriefAirframeId: '',
-  oewLb: '',
-  mzfwLb: '',
-  mtowLb: '',
-  mlwLb: '',
-  maxFuelLb: '',
+  oewValue: '',
+  mzfwValue: '',
+  mtowValue: '',
+  mlwValue: '',
+  maxFuelValue: '',
   maxPax: '',
   equip: '',
   transponder: '',
@@ -50,8 +50,8 @@ const EMPTY_FORM: FormState = {
   notes: ''
 }
 
-function toFormState(a: Aircraft): FormState {
-  const lb = (kg: number | null): string => (kg == null ? '' : String(Math.round(kgToLb(kg))))
+function toFormState(a: Aircraft, unit: WeightUnit): FormState {
+  const weight = (kg: number | null): string => (kg == null ? '' : String(Math.round(kgToUnit(kg, unit))))
   return {
     registration: a.registration,
     icaoType: a.icaoType,
@@ -59,11 +59,11 @@ function toFormState(a: Aircraft): FormState {
     operator: a.operator ?? '',
     livery: a.livery ?? '',
     simbriefAirframeId: a.simbriefAirframeId ?? '',
-    oewLb: lb(a.oewKg),
-    mzfwLb: lb(a.mzfwKg),
-    mtowLb: lb(a.mtowKg),
-    mlwLb: lb(a.mlwKg),
-    maxFuelLb: lb(a.maxFuelKg),
+    oewValue: weight(a.oewKg),
+    mzfwValue: weight(a.mzfwKg),
+    mtowValue: weight(a.mtowKg),
+    mlwValue: weight(a.mlwKg),
+    maxFuelValue: weight(a.maxFuelKg),
     maxPax: a.maxPax == null ? '' : String(a.maxPax),
     equip: a.equip ?? '',
     transponder: a.transponder ?? '',
@@ -77,11 +77,11 @@ function toFormState(a: Aircraft): FormState {
   }
 }
 
-function toNewAircraft(f: FormState): NewAircraft {
+function toNewAircraft(f: FormState, unit: WeightUnit): NewAircraft {
   const num = (s: string): number | undefined => (s.trim() === '' ? undefined : Number(s))
-  const kgFromLb = (s: string): number | undefined => {
+  const kgFromUnit = (s: string): number | undefined => {
     const n = num(s)
-    return n === undefined ? undefined : lbToKg(n)
+    return n === undefined ? undefined : unitToKg(n, unit)
   }
   const str = (s: string): string | undefined => (s.trim() === '' ? undefined : s.trim())
 
@@ -92,11 +92,11 @@ function toNewAircraft(f: FormState): NewAircraft {
     operator: str(f.operator),
     livery: str(f.livery),
     simbriefAirframeId: str(f.simbriefAirframeId),
-    oewKg: kgFromLb(f.oewLb),
-    mzfwKg: kgFromLb(f.mzfwLb),
-    mtowKg: kgFromLb(f.mtowLb),
-    mlwKg: kgFromLb(f.mlwLb),
-    maxFuelKg: kgFromLb(f.maxFuelLb),
+    oewKg: kgFromUnit(f.oewValue),
+    mzfwKg: kgFromUnit(f.mzfwValue),
+    mtowKg: kgFromUnit(f.mtowValue),
+    mlwKg: kgFromUnit(f.mlwValue),
+    maxFuelKg: kgFromUnit(f.maxFuelValue),
     maxPax: num(f.maxPax),
     equip: str(f.equip),
     transponder: str(f.transponder),
@@ -132,10 +132,13 @@ function Field(props: {
 
 export function AircraftForm(props: {
   initial?: Aircraft
+  weightUnit: WeightUnit
   onSubmit: (data: NewAircraft) => Promise<void>
   onCancel: () => void
 }): React.JSX.Element {
-  const [form, setForm] = useState<FormState>(props.initial ? toFormState(props.initial) : EMPTY_FORM)
+  const [form, setForm] = useState<FormState>(
+    props.initial ? toFormState(props.initial, props.weightUnit) : EMPTY_FORM
+  )
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -148,7 +151,7 @@ export function AircraftForm(props: {
     setSubmitting(true)
     setError(null)
     try {
-      await props.onSubmit(toNewAircraft(form))
+      await props.onSubmit(toNewAircraft(form, props.weightUnit))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -189,12 +192,17 @@ export function AircraftForm(props: {
       </fieldset>
 
       <fieldset style={fieldsetStyle}>
-        <legend>Performance (lb)</legend>
-        <Field label="OEW" value={form.oewLb} onChange={(v) => set('oewLb', v)} type="number" />
-        <Field label="MZFW" value={form.mzfwLb} onChange={(v) => set('mzfwLb', v)} type="number" />
-        <Field label="MTOW" value={form.mtowLb} onChange={(v) => set('mtowLb', v)} type="number" />
-        <Field label="MLW" value={form.mlwLb} onChange={(v) => set('mlwLb', v)} type="number" />
-        <Field label="Max fuel" value={form.maxFuelLb} onChange={(v) => set('maxFuelLb', v)} type="number" />
+        <legend>Performance ({props.weightUnit})</legend>
+        <Field label="OEW" value={form.oewValue} onChange={(v) => set('oewValue', v)} type="number" />
+        <Field label="MZFW" value={form.mzfwValue} onChange={(v) => set('mzfwValue', v)} type="number" />
+        <Field label="MTOW" value={form.mtowValue} onChange={(v) => set('mtowValue', v)} type="number" />
+        <Field label="MLW" value={form.mlwValue} onChange={(v) => set('mlwValue', v)} type="number" />
+        <Field
+          label="Max fuel"
+          value={form.maxFuelValue}
+          onChange={(v) => set('maxFuelValue', v)}
+          type="number"
+        />
         <Field label="Max pax" value={form.maxPax} onChange={(v) => set('maxPax', v)} type="number" />
       </fieldset>
 

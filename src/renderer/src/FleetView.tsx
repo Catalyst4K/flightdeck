@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { Aircraft, AircraftImportSummary, NewAircraft } from '@shared/ipc'
+import type { Aircraft, AircraftImportSummary, NewAircraft, WeightUnit } from '@shared/ipc'
 import { AircraftForm } from './AircraftForm'
-import { kgToLb } from './units'
+import { formatWeight } from './units'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number } | { kind: 'new' } | { kind: 'edit'; id: number }
 
-function formatLb(kg: number | null): string {
-  return kg == null ? '—' : `${Math.round(kgToLb(kg)).toLocaleString()} lb`
-}
-
 function AircraftDetail(props: {
   aircraft: Aircraft
+  weightUnit: WeightUnit
   onEdit: () => void
   onDelete: () => void
   onBack: () => void
@@ -33,15 +30,15 @@ function AircraftDetail(props: {
         <dt>SimBrief airframe</dt>
         <dd>{a.simbriefAirframeId ?? '—'}</dd>
         <dt>OEW</dt>
-        <dd>{formatLb(a.oewKg)}</dd>
+        <dd>{formatWeight(a.oewKg, props.weightUnit)}</dd>
         <dt>MZFW</dt>
-        <dd>{formatLb(a.mzfwKg)}</dd>
+        <dd>{formatWeight(a.mzfwKg, props.weightUnit)}</dd>
         <dt>MTOW</dt>
-        <dd>{formatLb(a.mtowKg)}</dd>
+        <dd>{formatWeight(a.mtowKg, props.weightUnit)}</dd>
         <dt>MLW</dt>
-        <dd>{formatLb(a.mlwKg)}</dd>
+        <dd>{formatWeight(a.mlwKg, props.weightUnit)}</dd>
         <dt>Max fuel</dt>
-        <dd>{formatLb(a.maxFuelKg)}</dd>
+        <dd>{formatWeight(a.maxFuelKg, props.weightUnit)}</dd>
         <dt>Max pax</dt>
         <dd>{a.maxPax ?? '—'}</dd>
         <dt>Equip</dt>
@@ -75,7 +72,7 @@ function AircraftDetail(props: {
   )
 }
 
-export function FleetView(): React.JSX.Element {
+export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [view, setView] = useState<View>({ kind: 'list' })
   const [importSummary, setImportSummary] = useState<AircraftImportSummary | null>(null)
@@ -123,7 +120,11 @@ export function FleetView(): React.JSX.Element {
     return (
       <div>
         <h1>New aircraft</h1>
-        <AircraftForm onSubmit={handleCreate} onCancel={() => setView({ kind: 'list' })} />
+        <AircraftForm
+          weightUnit={props.weightUnit}
+          onSubmit={handleCreate}
+          onCancel={() => setView({ kind: 'list' })}
+        />
       </div>
     )
   }
@@ -136,6 +137,7 @@ export function FleetView(): React.JSX.Element {
         <h1>Edit {existing.registration}</h1>
         <AircraftForm
           initial={existing}
+          weightUnit={props.weightUnit}
           onSubmit={(data) => handleUpdate(view.id, data)}
           onCancel={() => setView({ kind: 'detail', id: view.id })}
         />
@@ -149,6 +151,7 @@ export function FleetView(): React.JSX.Element {
     return (
       <AircraftDetail
         aircraft={existing}
+        weightUnit={props.weightUnit}
         onEdit={() => setView({ kind: 'edit', id: view.id })}
         onDelete={() => handleDelete(view.id)}
         onBack={() => setView({ kind: 'list' })}
