@@ -209,6 +209,11 @@ rather than trusting any list, including this one:**
 **Done when:** live numbers from the sim appear in the Electron window, the app survives
 the sim being closed and reopened, and reconnects on its own.
 
+**Before this ships:** `node-simconnect` is LGPL-3.0-or-later, not permissive — fine for
+a free app, but add a NOTICE / "Third-Party Licenses" file with the installer as part of
+this milestone, not as an afterthought. Full detail in `docs/decisions.md`'s 2026-09-01
+licence-audit entry.
+
 ### M2 — Fleet
 CRUD for aircraft. Form with validation, list view, detail view. Seed from a JSON file so
 you can bulk-add your existing fleet. Import/export as JSON.
@@ -218,13 +223,20 @@ you can bulk-add your existing fleet. Import/export as JSON.
 Fetch the latest OFP by SimBrief username, parse it, map it onto a `flight` row linked to
 an aircraft. Show route, fuel, weights, times, waypoint list. Store the raw JSON.
 If the API key came through, add direct generation; otherwise open SimBrief's dispatch page
-pre-filled with the aircraft's airframe and fetch on return.
+pre-filled with the aircraft's airframe and fetch on return. If a personal SimBrief API
+key is used: its Navigraph-approved use case needs to cover "used by many people via a
+public free app," not personal use — don't bake a personally-issued key into a public
+build without that (see `docs/decisions.md`). The free, keyless `xml.fetcher.php?username=`
+fetch has no such issue and should stay the default regardless.
 **Done when:** you can plan a flight on SimBrief and pull it into the app in one click.
 
 ### M4 — Live map + tracking
 MapLibre with the planned route drawn, the aircraft as a rotating marker, and a breadcrumb
 trail. `FlightRecorder` state machine ties telemetry to the active flight and writes
 `track_point` rows. Phase detection. Handle pause, slew, sim rate ≠ 1, and crashes.
+Tile source decision (§4): for a free, publicly-distributed app with unpredictable
+adoption, prefer one with no shared quota to blow through (OpenFreeMap, or self-hosted
+PMTiles) over a shared MapTiler/Stadia key — see `docs/decisions.md`.
 **Done when:** a full short flight tracks end to end without babysitting.
 
 ### M5 — Logbook
@@ -251,6 +263,14 @@ values as a fallback.
 `electron-builder` NSIS installer, auto-update deferred. Crash/error logging to a rotating
 local file. DB backup-on-launch. Then **fly with it for two weeks and fix what annoys you**
 before writing a single new feature.
+
+**Before a public flightsim.to release** (separate from M7, do this once the app is
+actually ready to give away): ship the LGPL NOTICE file from M1, drop in a "not
+affiliated with or endorsed by Microsoft or Asobo Studio" disclaimer, re-read
+flightsim.to's current Terms of Service directly (their content-license clause caused a
+developer boycott in 2023 — check it hasn't regressed), and consider a listing title that
+doesn't collide with flightsim.to's own "FlightDeck" creator-analytics product. Full
+context in `docs/decisions.md`'s 2026-09-01 licence-audit entry.
 
 ---
 
