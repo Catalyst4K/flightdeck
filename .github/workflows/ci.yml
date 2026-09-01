@@ -1,10 +1,5 @@
 name: CI
 
-# Placeholder — this project isn't scaffolded yet (no package.json). Claude Code
-# should fill this in as part of M0: install deps, then run lint, typecheck and test
-# on every push and pull request against main. Delete this comment once real steps
-# are in place.
-
 on:
   push:
     branches: [main]
@@ -16,5 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: TODO
-        run: echo "Replace with actions/setup-node, npm ci, npm run lint, npm run typecheck, npm test"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test

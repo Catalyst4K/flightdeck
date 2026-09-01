@@ -1,0 +1,56 @@
+import { join } from 'node:path'
+import { app, BrowserWindow, ipcMain } from 'electron'
+import { IpcChannels, type NewAircraft } from '@shared/ipc'
+import { createDb } from './db/client'
+import { migrateDb } from './db/migrate'
+import { createAircraft, listAircraft } from './db/aircraft-repo'
+
+function createWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    width: 1100,
+    height: 720,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+
+  window.on('ready-to-show', () => window.show())
+
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    window.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    window.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+
+  return window
+}
+
+app.whenReady().then(() => {
+  const dbPath = join(app.getPath('userData'), 'flightdeck.db')
+  migrateDb(dbPath)
+  const { db } = createDb(dbPath)
+
+  ipcMain.handle(IpcChannels.aircraftList, () => listAircraft(db))
+  ipcMain.handle(IpcChannels.aircraftCreate, (_event, input: NewAircraft) =>
+    createAircraft(db, input)
+  )
+
+  const window = createWindow()
+
+  // CI packaging check (see .github/workflows/package.yml): proves the built
+  // binary launches, migrates the DB and renders a first frame, then exits
+  // clean — without needing a person at the keyboard on every platform.
+  if (process.env['FLIGHTDECK_SMOKE_TEST']) {
+    window.on('ready-to-show', () => setTimeout(() => app.exit(0), 1000))
+  }
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
+})

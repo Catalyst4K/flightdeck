@@ -33,3 +33,6 @@ Thumbs.db
 
 # Vitest / coverage
 coverage/
+
+# TypeScript incremental build info
+*.tsbuildinfo

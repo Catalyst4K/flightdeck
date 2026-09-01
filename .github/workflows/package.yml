@@ -1,0 +1,78 @@
+name: Package
+
+# Builds the compiled app on Windows (primary target) and macOS (secondary),
+# then launches the packaged binary with FLIGHTDECK_SMOKE_TEST=1 to prove it
+# actually starts, migrates the DB and renders a window — not just that
+# electron-builder didn't error. Manual for now; wire to tags once releases
+# are a real thing (see PLAN.md M7).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - electron-builder.yml
+      - src/main/**
+      - src/preload/**
+      - package.json
+      - .github/workflows/package.yml
+
+jobs:
+  package:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build renderer/main/preload
+        run: npm run build
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --publish=never
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: npx electron-builder --mac dir --publish=never
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path release/win-unpacked -Filter Flightdeck.exe -Recurse | Select-Object -First 1
+          $env:FLIGHTDECK_SMOKE_TEST = "1"
+          $proc = Start-Process -FilePath $exe.FullName -PassThru
+          $exited = $proc.WaitForExit(15000)
+          if (-not $exited) { Stop-Process -Id $proc.Id -Force; throw "App did not exit on its own — did not reach ready-to-show" }
+          if ($proc.ExitCode -ne 0) { throw "App exited with code $($proc.ExitCode)" }
+
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          APP=$(find release -maxdepth 2 -name "*.app" | head -n1)
+          BIN="$APP/Contents/MacOS/Flightdeck"
+          FLIGHTDECK_SMOKE_TEST=1 "$BIN" &
+          PID=$!
+          for i in $(seq 1 15); do
+            if ! kill -0 $PID 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if kill -0 $PID 2>/dev/null; then
+            kill -9 $PID
+            echo "App did not exit on its own — did not reach ready-to-show" && exit 1
+          fi
+          wait $PID
+          echo "Exited with code $?"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flightdeck-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: ignore

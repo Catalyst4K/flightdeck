@@ -1,0 +1,41 @@
+appId: com.callumjones.flightdeck
+productName: Flightdeck
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - '**/*.node'
+
+# Windows is the primary target — MSFS (and therefore this app's real usage) is
+# Windows-only. macOS is built for development convenience; there is no plan to
+# support Linux.
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  # Unsigned is fine for personal use (see PLAN.md M7) — without this,
+  # electron-builder auto-discovers any local dev signing identity and signs
+  # with it, which isn't notarized anyway and just adds failure modes.
+  identity: null
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.utilities
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}

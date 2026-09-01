@@ -66,6 +66,13 @@ The phase-detection state machine and the landing-analysis maths (crosswind, cen
 offset, distance-from-threshold) need real test coverage — they're easy to get subtly
 wrong and hard to eyeball.
 
+`better-sqlite3` is a native module and `npm install` rebuilds it once, for Electron's
+Node ABI (via `postinstall`) — not the system Node ABI. That's why `npm test` and
+`npm run db:migrate` run through `electron` in `ELECTRON_RUN_AS_NODE=1` mode instead of
+plain `node`/`tsx`: it's the same binary the app ships with, so there's only one build of
+the module to keep track of. Don't "simplify" these scripts back to bare `vitest`/`tsx` —
+that reintroduces an ABI mismatch and the native module fails to load.
+
 ## Milestones
 
 See `PLAN.md` §6 for the full breakdown (M0–M7). Work one milestone per branch
