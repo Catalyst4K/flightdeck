@@ -287,3 +287,23 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     `0005_melted_katie_power.sql` — set only when the airline is picked from the search
     dropdown (a free-typed or registration-lookup-filled operator has no code, so no
     logo shows for it).
+- 2026-09-01: Considered switching the airline search to adsbdb.com's own airline
+  database (Callum wanted defunct carriers like Cathay Dragon findable) — checked
+  against the real live endpoint, not just its docs: `/v0/airline/{code}` only accepts
+  an exact ICAO or IATA code (`/v0/airline/Cathay%20Dragon` returns HTTP 400 "invalid
+  airline"), no name search at all, so it can't back a type-to-search dropdown. It's
+  used elsewhere in this app (aircraft registration lookup) precisely because that's an
+  exact-code-shaped lookup, not this.
+  - The actual gap: Cathay Dragon **is** in the vendored OpenFlights data — under
+    "Dragonair", its name before a 2016 rebrand to match parent Cathay Pacific's
+    livery/brand, which is the name still in OpenFlights' frozen snapshot. Same ICAO/
+    IATA (HDA/KA) either way, so it was always resolvable by code, just not by the name
+    it's actually remembered and flown under.
+  - Fix: `resources/airline-aliases.csv`, a small hand-maintained (not OpenFlights-
+    sourced) name→ICAO/IATA list merged into the search results alongside the main
+    vendored file — no separate LICENSE.txt needed since it's our own factual entries
+    (airline names and codes aren't copyrightable), not a redistributed third-party
+    database. Currently just Cathay Dragon; add more rows here for other rebrand-
+    shortly-before-shutdown carriers as they come up, rather than guessing a list up
+    front — most defunct airlines (TWA, Pan Am, Swissair, Ansett...) shut down under
+    their own long-standing name and are already findable as-is.
