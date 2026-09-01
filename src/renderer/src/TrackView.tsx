@@ -14,7 +14,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { FlightMap } from './FlightMap'
-import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
+import { MetarPanel } from './MetarPanel'
+import { parseAirportsFromOfpJson, parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
 
 type ConfirmAction =
   | { kind: 'cancel-active'; title: string; description: string }
@@ -130,10 +131,18 @@ export function TrackView(props: {
   )
   const route = previewFlight ? flightRoute : dispatchPreviewRoute
   const waypoints = previewFlight ? flightWaypoints : dispatchPreviewWaypoints
+  // A saved/active flight already has these as plain fields; a Dispatch preview (not yet
+  // saved) only has the raw OFP JSON, same fallback as route/waypoints above.
+  const airports = previewFlight
+    ? { depIcao: previewFlight.depIcao, arrIcao: previewFlight.arrIcao, altnIcao: previewFlight.altnIcao }
+    : parseAirportsFromOfpJson(props.previewOfpJson ?? null)
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-heading text-2xl font-semibold text-foreground">Track</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="font-heading text-2xl font-semibold text-foreground">Track</h1>
+        <MetarPanel depIcao={airports.depIcao} arrIcao={airports.arrIcao} altnIcao={airports.altnIcao} />
+      </div>
 
       {active ? (
         <Card>

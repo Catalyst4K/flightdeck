@@ -82,6 +82,16 @@ export interface AirlineOption {
   iata: string
 }
 
+/** A METAR observation from aviationweather.gov (docs/decisions.md, 2026-09-02). */
+export interface MetarReport {
+  icao: string
+  /** The raw METAR text, e.g. "METAR EGLL 012320Z AUTO 25008KT 9999 NCD 18/12 Q1020". */
+  rawText: string
+  /** ISO 8601 UTC — empty string if aviationweather.gov didn't report one. */
+  observedUtc: string
+  flightCategory: 'VFR' | 'MVFR' | 'IFR' | 'LIFR' | null
+}
+
 /**
  * Live sim telemetry, in SI units throughout (meters, m/s, kg, degrees) per
  * docs/decisions.md §5 — convert to aviation units only at the UI layer.
@@ -318,7 +328,8 @@ export const IpcChannels = {
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
   aircraftTypeSearch: 'aircraft:type-search',
   airportSearch: 'airport:search',
-  airlineSearch: 'airline:search'
+  airlineSearch: 'airline:search',
+  weatherGetMetars: 'weather:get-metars'
 } as const
 
 export interface FlightdeckApi {
@@ -376,4 +387,7 @@ export interface FlightdeckApi {
   airportSearch: (query: string) => Promise<AirportOption[]>
   /** Searches the vendored OpenFlights airline list. Empty for a query under 2 chars. */
   airlineSearch: (query: string) => Promise<AirlineOption[]>
+  /** Looks up current METARs for one or more ICAO codes. An unknown/non-reporting code
+   *  is just absent from the result array, not an error. */
+  weatherGetMetars: (icaoCodes: string[]) => Promise<MetarReport[]>
 }
