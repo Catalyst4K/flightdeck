@@ -109,3 +109,14 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   you're a future session and can see this note but not the file, that's expected —
   ask Callum for the content rather than reconstructing it, and don't recreate it as a
   tracked file.
+- 2026-09-01: M3 dispatch — the SimBrief OFP JSON schema isn't documented anywhere
+  official (Navigraph's dev portal covers the endpoint, not the response shape), so
+  verified it against one real fetch (`xml.fetcher.php?username=...&json=1`) before
+  writing `src/main/simbrief/simbrief-client.ts`, same rigor as M1's SimConnect spike.
+  Two things worth knowing for later milestones that touch OFP data: every numeric field
+  in the response is a JSON *string*, and `params.units` (`'kgs'` or `'lbs'`) depends on
+  the SimBrief user's own profile setting — weight/fuel figures are in whichever one
+  that is, not a fixed unit. Also confirmed decision #4's assumption: a saved airframe's
+  Internal ID (`simbrief_airframe_id`, format `123456_1582090020`) is used via SimBrief's
+  own `airframe=` URL parameter, both for future direct-generation API calls and for
+  pre-filling the `dispatch.simbrief.com` web form.

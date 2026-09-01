@@ -106,6 +106,102 @@ export type SimConnectionStatus =
   | { state: 'connecting' }
   | { state: 'connected'; simConnectVersion: string }
 
+export type FlightStatus = 'planned' | 'active' | 'completed' | 'abandoned'
+
+export interface Flight {
+  id: number
+  aircraftId: number
+  status: FlightStatus
+  flightNumber: string | null
+  depIcao: string
+  arrIcao: string
+  altnIcao: string | null
+  routeString: string | null
+  /** Meters — SI internally, converted to feet only at the UI layer (§5). */
+  cruiseAltM: number | null
+  schedOutUtc: string | null
+  schedInUtc: string | null
+  actualOutUtc: string | null
+  actualOffUtc: string | null
+  actualOnUtc: string | null
+  actualInUtc: string | null
+  blockMinutes: number | null
+  airMinutes: number | null
+  /** All weights in kg — SI internally, converted to lb only at the UI layer (§5). */
+  fuelPlannedKg: number | null
+  fuelOutKg: number | null
+  fuelInKg: number | null
+  fuelBurnKg: number | null
+  pax: number | null
+  cargoKg: number | null
+  zfwKg: number | null
+  towKg: number | null
+  ldwKg: number | null
+  ofpId: string | null
+  ofpJson: string | null
+  simVersion: string | null
+  createdAt: string
+}
+
+export interface NewFlight {
+  aircraftId: number
+  status?: FlightStatus
+  flightNumber?: string | null
+  depIcao: string
+  arrIcao: string
+  altnIcao?: string | null
+  routeString?: string | null
+  cruiseAltM?: number | null
+  schedOutUtc?: string | null
+  schedInUtc?: string | null
+  fuelPlannedKg?: number | null
+  pax?: number | null
+  cargoKg?: number | null
+  zfwKg?: number | null
+  towKg?: number | null
+  ldwKg?: number | null
+  ofpId?: string | null
+  ofpJson?: string | null
+}
+
+export interface DispatchWaypoint {
+  ident: string
+  altitudeFt: number
+  distanceNm: number
+}
+
+/** A freshly-fetched OFP, not yet saved as a Flight — the renderer confirms/picks the aircraft first. */
+export interface DispatchOfp {
+  ofpId: string
+  aircraftIcaoType: string
+  aircraftRegistration: string
+  flightNumber: string
+  depIcao: string
+  arrIcao: string
+  altnIcao: string
+  routeString: string
+  cruiseAltM: number
+  schedOutUtc: string
+  schedInUtc: string
+  fuelPlannedKg: number
+  pax: number
+  cargoKg: number
+  zfwKg: number
+  towKg: number
+  ldwKg: number
+  waypoints: DispatchWaypoint[]
+  ofpJson: string
+  /** Fleet aircraft whose registration matches `aircraftRegistration`, if any. */
+  matchedAircraftId: number | null
+}
+
+/**
+ * Display unit for weights app-wide (Fleet and Dispatch both). Storage stays SI (kg)
+ * regardless — see §5 — this only controls what the UI shows/accepts. Defaults to 'lb'
+ * if never set.
+ */
+export type WeightUnit = 'kg' | 'lb'
+
 export const IpcChannels = {
   aircraftList: 'aircraft:list',
   aircraftCreate: 'aircraft:create',
@@ -115,7 +211,15 @@ export const IpcChannels = {
   aircraftExport: 'aircraft:export',
   simTelemetry: 'sim:telemetry',
   simConnectionStatus: 'sim:connection-status',
-  simConnectionStatusGet: 'sim:connection-status:get'
+  simConnectionStatusGet: 'sim:connection-status:get',
+  flightList: 'flight:list',
+  flightCreate: 'flight:create',
+  dispatchFetchOfp: 'dispatch:fetch-ofp',
+  dispatchOpenSimBrief: 'dispatch:open-simbrief',
+  settingsGetSimbriefUsername: 'settings:get-simbrief-username',
+  settingsSetSimbriefUsername: 'settings:set-simbrief-username',
+  settingsGetWeightUnit: 'settings:get-weight-unit',
+  settingsSetWeightUnit: 'settings:set-weight-unit'
 } as const
 
 export interface FlightdeckApi {
@@ -135,4 +239,14 @@ export interface FlightdeckApi {
   getSimConnectionStatus: () => Promise<SimConnectionStatus>
   onSimTelemetry: (listener: (telemetry: SimTelemetry) => void) => () => void
   onSimConnectionStatus: (listener: (status: SimConnectionStatus) => void) => () => void
+  flightList: () => Promise<Flight[]>
+  flightCreate: (flight: NewFlight) => Promise<Flight>
+  /** Fetches the SimBrief user's latest OFP. Throws if no username is set or the fetch fails. */
+  dispatchFetchOfp: () => Promise<DispatchOfp>
+  /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */
+  dispatchOpenSimBrief: (simbriefAirframeId: string | null) => Promise<void>
+  settingsGetSimbriefUsername: () => Promise<string | null>
+  settingsSetSimbriefUsername: (username: string) => Promise<void>
+  settingsGetWeightUnit: () => Promise<WeightUnit>
+  settingsSetWeightUnit: (unit: WeightUnit) => Promise<void>
 }

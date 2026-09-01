@@ -15,6 +15,13 @@
       "when": 1788262800277,
       "tag": "0001_awesome_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788264979428,
+      "tag": "0002_blushing_spot",
+      "breakpoints": true
     }
   ]
 }

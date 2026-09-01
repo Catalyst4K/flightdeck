@@ -1,11 +1,26 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain } from 'electron'
-import { IpcChannels, type AircraftUpdate } from '@shared/ipc'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import {
+  IpcChannels,
+  type AircraftUpdate,
+  type DispatchOfp,
+  type NewFlight,
+  type WeightUnit
+} from '@shared/ipc'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
-import { createAircraft, deleteAircraft, listAircraft, updateAircraft } from './db/aircraft-repo'
+import {
+  createAircraft,
+  deleteAircraft,
+  getAircraftByRegistration,
+  listAircraft,
+  updateAircraft
+} from './db/aircraft-repo'
 import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
+import { createFlight, listFlights } from './db/flight-repo'
+import { getSimbriefUsername, getWeightUnit, setSimbriefUsername, setWeightUnit } from './db/settings-repo'
+import { fetchLatestOfp } from './simbrief/simbrief-client'
 import { SimConnectService } from './sim/SimConnectService'
 
 function createWindow(): BrowserWindow {
@@ -60,6 +75,33 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.aircraftImport, () => importAircraft(db, window))
   ipcMain.handle(IpcChannels.aircraftExport, () => exportAircraft(db, window))
+
+  ipcMain.handle(IpcChannels.flightList, () => listFlights(db))
+  ipcMain.handle(IpcChannels.flightCreate, (_event, input: NewFlight) => createFlight(db, input))
+
+  ipcMain.handle(IpcChannels.dispatchFetchOfp, async (): Promise<DispatchOfp> => {
+    const username = getSimbriefUsername(db)
+    if (!username) throw new Error('Set your SimBrief username first')
+    const ofp = await fetchLatestOfp(username)
+    const matched = getAircraftByRegistration(db, ofp.aircraftRegistration)
+    const { rawJson, ...rest } = ofp
+    return { ...rest, ofpJson: rawJson, matchedAircraftId: matched?.id ?? null }
+  })
+
+  ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, simbriefAirframeId: string | null) => {
+    const url = simbriefAirframeId
+      ? `https://dispatch.simbrief.com/options/custom?airframe=${encodeURIComponent(simbriefAirframeId)}`
+      : 'https://dispatch.simbrief.com/'
+    return shell.openExternal(url)
+  })
+
+  ipcMain.handle(IpcChannels.settingsGetSimbriefUsername, () => getSimbriefUsername(db) ?? null)
+  ipcMain.handle(IpcChannels.settingsSetSimbriefUsername, (_event, username: string) =>
+    setSimbriefUsername(db, username)
+  )
+
+  ipcMain.handle(IpcChannels.settingsGetWeightUnit, () => getWeightUnit(db))
+  ipcMain.handle(IpcChannels.settingsSetWeightUnit, (_event, unit: WeightUnit) => setWeightUnit(db, unit))
 
   const simConnectService = new SimConnectService()
   ipcMain.handle(IpcChannels.simConnectionStatusGet, () => simConnectService.getStatus())

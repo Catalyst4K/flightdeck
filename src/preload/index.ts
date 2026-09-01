@@ -4,8 +4,10 @@ import {
   type AircraftUpdate,
   type FlightdeckApi,
   type NewAircraft,
+  type NewFlight,
   type SimConnectionStatus,
-  type SimTelemetry
+  type SimTelemetry,
+  type WeightUnit
 } from '@shared/ipc'
 
 const api: FlightdeckApi = {
@@ -25,7 +27,17 @@ const api: FlightdeckApi = {
     const handler = (_event: Electron.IpcRendererEvent, status: SimConnectionStatus): void => listener(status)
     ipcRenderer.on(IpcChannels.simConnectionStatus, handler)
     return () => ipcRenderer.removeListener(IpcChannels.simConnectionStatus, handler)
-  }
+  },
+  flightList: () => ipcRenderer.invoke(IpcChannels.flightList),
+  flightCreate: (flight: NewFlight) => ipcRenderer.invoke(IpcChannels.flightCreate, flight),
+  dispatchFetchOfp: () => ipcRenderer.invoke(IpcChannels.dispatchFetchOfp),
+  dispatchOpenSimBrief: (simbriefAirframeId: string | null) =>
+    ipcRenderer.invoke(IpcChannels.dispatchOpenSimBrief, simbriefAirframeId),
+  settingsGetSimbriefUsername: () => ipcRenderer.invoke(IpcChannels.settingsGetSimbriefUsername),
+  settingsSetSimbriefUsername: (username: string) =>
+    ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username),
+  settingsGetWeightUnit: () => ipcRenderer.invoke(IpcChannels.settingsGetWeightUnit),
+  settingsSetWeightUnit: (unit: WeightUnit) => ipcRenderer.invoke(IpcChannels.settingsSetWeightUnit, unit)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)
