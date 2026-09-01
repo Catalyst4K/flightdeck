@@ -17,6 +17,7 @@ release/
 # Personal data exports (e.g. a logbook CSV for testing the CSV importer) — never commit
 # real flight history. Add a !path exception if a data file genuinely needs vendoring.
 *.csv
+!resources/*.csv
 
 # Env / secrets
 .env

@@ -50,7 +50,10 @@ const api: FlightdeckApi = {
   },
   logbookListCompletedFlights: () => ipcRenderer.invoke(IpcChannels.logbookListCompletedFlights),
   logbookFleetStats: () => ipcRenderer.invoke(IpcChannels.logbookFleetStats),
-  logbookImportCsv: () => ipcRenderer.invoke(IpcChannels.logbookImportCsv)
+  logbookImportCsv: () => ipcRenderer.invoke(IpcChannels.logbookImportCsv),
+  aircraftLookupByRegistration: (registration: string) =>
+    ipcRenderer.invoke(IpcChannels.aircraftLookupByRegistration, registration),
+  aircraftTypeSearch: (query: string) => ipcRenderer.invoke(IpcChannels.aircraftTypeSearch, query)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

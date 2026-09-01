@@ -68,6 +68,21 @@ export interface AircraftImportSummary {
   skipped: AircraftImportSkip[]
 }
 
+/** Result of a registration lookup (docs/decisions.md, adsbdb) — null means not found. */
+export interface AircraftLookupResult {
+  icaoType: string
+  operator: string | null
+  name: string
+}
+
+/** One match from the vendored ICAO Doc 8643 type-designator list (see resources/). */
+export interface AircraftTypeOption {
+  manufacturer: string
+  model: string
+  icaoType: string
+  wakeCat: string
+}
+
 /**
  * Live sim telemetry, in SI units throughout (meters, m/s, kg, degrees) per
  * docs/decisions.md §5 — convert to aviation units only at the UI layer.
@@ -282,7 +297,9 @@ export const IpcChannels = {
   trackPointList: 'track-point:list',
   logbookListCompletedFlights: 'logbook:list-completed-flights',
   logbookFleetStats: 'logbook:fleet-stats',
-  logbookImportCsv: 'logbook:import-csv'
+  logbookImportCsv: 'logbook:import-csv',
+  aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
+  aircraftTypeSearch: 'aircraft:type-search'
 } as const
 
 export interface FlightdeckApi {
@@ -323,4 +340,8 @@ export interface FlightdeckApi {
   logbookFleetStats: () => Promise<FleetStats[]>
   /** Opens a native file-open dialog in the main process; null if the user cancels. */
   logbookImportCsv: () => Promise<LogbookImportSummary | null>
+  /** Looks up an aircraft by registration via adsbdb.com. Null if not found (not an error). */
+  aircraftLookupByRegistration: (registration: string) => Promise<AircraftLookupResult | null>
+  /** Searches the vendored ICAO Doc 8643 type-designator list. Empty for a query under 2 chars. */
+  aircraftTypeSearch: (query: string) => Promise<AircraftTypeOption[]>
 }
