@@ -10,12 +10,33 @@ import {
   XAxis,
   YAxis
 } from 'recharts'
+import { ArrowLeft } from 'lucide-react'
+import { toast } from 'sonner'
 import type { Aircraft, Flight, LogbookImportSummary, TrackPoint, WeightUnit } from '@shared/ipc'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { FlightMap } from './FlightMap'
 import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
 import { formatWeight, mToFt, msToKt } from './units'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number }
+
+// Recharts SVG props take any CSS color, including our design-token custom properties —
+// this keeps the charts on the same palette as the rest of the app instead of hardcoded hex.
+const CHART_GRID_COLOR = 'var(--color-border)'
+const CHART_AXIS_COLOR = 'var(--color-muted-foreground)'
+const CHART_SERIES_1 = 'var(--color-primary)'
+const CHART_SERIES_2 = 'var(--color-success)'
+const CHART_TOOLTIP_STYLE = {
+  background: 'var(--color-popover)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 8,
+  color: 'var(--color-popover-foreground)',
+  fontSize: '0.8rem'
+}
 
 function formatMinutes(min: number | null): string {
   if (min == null) return '—'
@@ -26,6 +47,15 @@ function formatMinutes(min: number | null): string {
 
 function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : '—'
+}
+
+function DetailField(props: { label: string; value: React.ReactNode }): React.JSX.Element {
+  return (
+    <>
+      <dt className="text-muted-foreground">{props.label}</dt>
+      <dd className="text-foreground">{props.value}</dd>
+    </>
+  )
 }
 
 function FlightDetail(props: {
@@ -63,76 +93,115 @@ function FlightDetail(props: {
       : null
 
   return (
-    <div>
-      <button type="button" onClick={props.onBack}>
-        ← Back to logbook
-      </button>
-      <h2>
-        {flight.flightNumber ?? `Flight #${flight.id}`} — {flight.depIcao} → {flight.arrIcao}
-      </h2>
-      <dl style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '0.25rem 1.5rem' }}>
-        <dt>Aircraft</dt>
-        <dd>{aircraft?.registration ?? '—'}</dd>
-        <dt>Date</dt>
-        <dd>{formatDate(flight.actualOutUtc)}</dd>
-        <dt>Block time</dt>
-        <dd>{formatMinutes(flight.blockMinutes)}</dd>
-        <dt>Air time</dt>
-        <dd>{formatMinutes(flight.airMinutes)}</dd>
-        <dt>Fuel burn</dt>
-        <dd>{formatWeight(flight.fuelBurnKg, weightUnit)}</dd>
-        <dt>Fuel planned</dt>
-        <dd>{formatWeight(flight.fuelPlannedKg, weightUnit)}</dd>
-      </dl>
+    <div className="flex flex-col gap-4">
+      <Button type="button" variant="ghost" size="sm" onClick={props.onBack} className="w-fit">
+        <ArrowLeft />
+        Back to logbook
+      </Button>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>
+            {flight.flightNumber ?? `Flight #${flight.id}`} — {flight.depIcao} → {flight.arrIcao}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+            <DetailField label="Aircraft" value={aircraft?.registration ?? '—'} />
+            <DetailField label="Date" value={formatDate(flight.actualOutUtc)} />
+            <DetailField label="Block time" value={formatMinutes(flight.blockMinutes)} />
+            <DetailField label="Air time" value={formatMinutes(flight.airMinutes)} />
+            <DetailField label="Fuel burn" value={formatWeight(flight.fuelBurnKg, weightUnit)} />
+            <DetailField label="Fuel planned" value={formatWeight(flight.fuelPlannedKg, weightUnit)} />
+          </dl>
+        </CardContent>
+      </Card>
 
       <FlightMap live={false} route={route} waypoints={waypoints} trackPoints={trackPoints} />
 
       {profile.length > 1 && (
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
-          <div style={{ width: 420, height: 220 }}>
-            <h3>Altitude</h3>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={profile}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="tMin" unit=" min" />
-                <YAxis unit=" ft" width={70} />
-                <Tooltip formatter={(value) => `${value} ft`} labelFormatter={(label) => `${label} min`} />
-                <Line type="monotone" dataKey="altFt" stroke="#1a73e8" dot={false} name="Altitude" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div style={{ width: 420, height: 220 }}>
-            <h3>Speed (IAS)</h3>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={profile}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="tMin" unit=" min" />
-                <YAxis unit=" kt" width={60} />
-                <Tooltip formatter={(value) => `${value} kt`} labelFormatter={(label) => `${label} min`} />
-                <Line type="monotone" dataKey="iasKt" stroke="#d93025" dot={false} name="IAS" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        <div className="flex flex-wrap gap-4">
+          <Card className="w-[420px]">
+            <CardHeader>
+              <CardTitle className="text-sm">Altitude</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={profile}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
+                  <XAxis dataKey="tMin" unit=" min" stroke={CHART_AXIS_COLOR} tick={{ fill: CHART_AXIS_COLOR }} />
+                  <YAxis unit=" ft" width={70} stroke={CHART_AXIS_COLOR} tick={{ fill: CHART_AXIS_COLOR }} />
+                  <Tooltip
+                    formatter={(value) => `${value} ft`}
+                    labelFormatter={(label) => `${label} min`}
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                  />
+                  <Line type="monotone" dataKey="altFt" stroke={CHART_SERIES_1} dot={false} name="Altitude" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card className="w-[420px]">
+            <CardHeader>
+              <CardTitle className="text-sm">Speed (IAS)</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={profile}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
+                  <XAxis dataKey="tMin" unit=" min" stroke={CHART_AXIS_COLOR} tick={{ fill: CHART_AXIS_COLOR }} />
+                  <YAxis unit=" kt" width={60} stroke={CHART_AXIS_COLOR} tick={{ fill: CHART_AXIS_COLOR }} />
+                  <Tooltip
+                    formatter={(value) => `${value} kt`}
+                    labelFormatter={(label) => `${label} min`}
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                  />
+                  <Line type="monotone" dataKey="iasKt" stroke={CHART_SERIES_2} dot={false} name="IAS" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {fuelData && (
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ width: 280, height: 200 }}>
-            <h3>Fuel planned vs actual</h3>
+        <Card className="w-[280px]">
+          <CardHeader>
+            <CardTitle className="text-sm">Fuel planned vs actual</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={fuelData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis width={60} />
-                <Tooltip formatter={(value) => formatWeight(Number(value), weightUnit)} />
-                <Bar dataKey="kg" fill="#1a73e8" name="Fuel" />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
+                <XAxis dataKey="name" stroke={CHART_AXIS_COLOR} tick={{ fill: CHART_AXIS_COLOR }} />
+                <YAxis width={60} stroke={CHART_AXIS_COLOR} tick={{ fill: CHART_AXIS_COLOR }} />
+                <Tooltip
+                  formatter={(value) => formatWeight(Number(value), weightUnit)}
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                />
+                <Bar dataKey="kg" fill={CHART_SERIES_1} name="Fuel" />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
+  )
+}
+
+function LogbookRowsSkeleton(): React.JSX.Element {
+  return (
+    <>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <TableRow key={i}>
+          {[0, 1, 2, 3, 4, 5, 6].map((col) => (
+            <TableCell key={col}>
+              <Skeleton className="h-4 w-16" />
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
+    </>
   )
 }
 
@@ -141,7 +210,7 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [view, setView] = useState<View>({ kind: 'list' })
   const [aircraftFilter, setAircraftFilter] = useState<number | 'all'>('all')
-  const [importSummary, setImportSummary] = useState<LogbookImportSummary | null>(null)
+  const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
 
   function reload(): Promise<void> {
@@ -155,17 +224,30 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
   }
 
   useEffect(() => {
-    reload()
+    reload().finally(() => setLoading(false))
   }, [])
+
+  function summarizeImport(summary: LogbookImportSummary): string {
+    const flightsLabel = `${summary.imported} flight${summary.imported === 1 ? '' : 's'}`
+    const aircraftLabel =
+      summary.aircraftCreated > 0 ? ` (added ${summary.aircraftCreated} aircraft to your fleet)` : ''
+    const skippedLabel =
+      summary.skipped.length > 0
+        ? ` Skipped ${summary.skipped.length}: ${summary.skipped.map((s) => `${s.label} (${s.reason})`).join(', ')}`
+        : ''
+    return `Imported ${flightsLabel}${aircraftLabel}.${skippedLabel}`
+  }
 
   async function handleImport(): Promise<void> {
     setImporting(true)
     try {
       const summary = await window.flightdeck.logbookImportCsv()
       if (summary) {
-        setImportSummary(summary)
+        toast.success(summarizeImport(summary))
         await reload()
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setImporting(false)
     }
@@ -177,7 +259,7 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
 
   if (view.kind === 'detail') {
     const flight = flights.find((f) => f.id === view.id)
-    if (!flight) return <p>Flight not found.</p>
+    if (!flight) return <p className="text-sm text-muted-foreground">Flight not found.</p>
     return (
       <FlightDetail
         flight={flight}
@@ -192,84 +274,82 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
     aircraftFilter === 'all' ? flights : flights.filter((f) => f.aircraftId === aircraftFilter)
 
   return (
-    <div>
-      <h1>Logbook</h1>
-
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <button type="button" onClick={handleImport} disabled={importing}>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="font-heading text-2xl font-semibold text-foreground">Logbook</h1>
+        <Button type="button" variant="outline" size="sm" onClick={handleImport} disabled={importing}>
           {importing ? 'Importing…' : 'Import CSV'}
-        </button>
+        </Button>
       </div>
 
-      {importSummary && (
-        <p>
-          Imported {importSummary.imported} flight{importSummary.imported === 1 ? '' : 's'}
-          {importSummary.aircraftCreated > 0 &&
-            ` (added ${importSummary.aircraftCreated} aircraft to your fleet)`}
-          .
-          {importSummary.skipped.length > 0 && (
-            <>
-              {' '}
-              Skipped {importSummary.skipped.length}:{' '}
-              {importSummary.skipped.map((s) => `${s.label} (${s.reason})`).join(', ')}
-            </>
-          )}
-        </p>
-      )}
-
-      {flights.length === 0 ? (
-        <p>No completed flights yet — track one to see it here.</p>
+      {loading ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Flight</TableHead>
+              <TableHead>Route</TableHead>
+              <TableHead>Aircraft</TableHead>
+              <TableHead>Block</TableHead>
+              <TableHead>Air</TableHead>
+              <TableHead>Fuel burn</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <LogbookRowsSkeleton />
+          </TableBody>
+        </Table>
+      ) : flights.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No completed flights yet — track one to see it here.</p>
       ) : (
         <>
-          <div style={{ marginBottom: '1rem' }}>
-            <label>
-              Aircraft:{' '}
-              <select
-                value={aircraftFilter}
-                onChange={(e) => setAircraftFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              >
-                <option value="all">All aircraft</option>
+          <div className="flex flex-col gap-1.5">
+            <Select
+              value={aircraftFilter === 'all' ? 'all' : String(aircraftFilter)}
+              onValueChange={(v) => setAircraftFilter(v === 'all' ? 'all' : Number(v))}
+            >
+              <SelectTrigger className="w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All aircraft</SelectItem>
                 {aircraft.map((a) => (
-                  <option key={a.id} value={a.id}>
+                  <SelectItem key={a.id} value={String(a.id)}>
                     {a.registration}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-            </label>
+              </SelectContent>
+            </Select>
           </div>
 
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-                <th>Date</th>
-                <th>Flight</th>
-                <th>Route</th>
-                <th>Aircraft</th>
-                <th>Block</th>
-                <th>Air</th>
-                <th>Fuel burn</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Flight</TableHead>
+                <TableHead>Route</TableHead>
+                <TableHead>Aircraft</TableHead>
+                <TableHead>Block</TableHead>
+                <TableHead>Air</TableHead>
+                <TableHead>Fuel burn</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filteredFlights.map((f) => (
-                <tr
-                  key={f.id}
-                  onClick={() => setView({ kind: 'detail', id: f.id })}
-                  style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                >
-                  <td>{formatDate(f.actualOutUtc)}</td>
-                  <td>{f.flightNumber ?? '—'}</td>
-                  <td>
+                <TableRow key={f.id} onClick={() => setView({ kind: 'detail', id: f.id })} className="cursor-pointer">
+                  <TableCell>{formatDate(f.actualOutUtc)}</TableCell>
+                  <TableCell>{f.flightNumber ?? '—'}</TableCell>
+                  <TableCell>
                     {f.depIcao} → {f.arrIcao}
-                  </td>
-                  <td>{registrationFor(f.aircraftId)}</td>
-                  <td>{formatMinutes(f.blockMinutes)}</td>
-                  <td>{formatMinutes(f.airMinutes)}</td>
-                  <td>{formatWeight(f.fuelBurnKg, props.weightUnit)}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{registrationFor(f.aircraftId)}</TableCell>
+                  <TableCell>{formatMinutes(f.blockMinutes)}</TableCell>
+                  <TableCell>{formatMinutes(f.airMinutes)}</TableCell>
+                  <TableCell>{formatWeight(f.fuelBurnKg, props.weightUnit)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </>
       )}
     </div>
