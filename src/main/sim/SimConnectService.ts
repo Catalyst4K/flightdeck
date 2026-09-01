@@ -1,11 +1,18 @@
 import { EventEmitter } from 'node:events'
-import { open, Protocol, SimConnectConstants, SimConnectPeriod, type SimConnectConnection } from 'node-simconnect'
+import {
+  open,
+  Protocol,
+  SimConnectConstants,
+  SimConnectPeriod,
+  type SimConnectConnection
+} from 'node-simconnect'
 import type { SimConnectionStatus, SimTelemetry } from '@shared/ipc'
 import { SIM_VARS } from './simvars'
 
 const APP_NAME = 'Flightdeck'
 const DEFINITION_ID = 0
 const REQUEST_ID = 0
+const PAUSE_EVENT_ID = 1
 
 const INITIAL_RECONNECT_DELAY_MS = 2_000
 const MAX_RECONNECT_DELAY_MS = 30_000
@@ -16,6 +23,16 @@ export type OpenSimConnect = typeof open
 interface SimConnectServiceEvents {
   telemetry: [SimTelemetry]
   status: [SimConnectionStatus]
+  /**
+   * The sim's own pause state, via SimConnect's "Pause" system event — used by
+   * FlightRecorder to freeze phase detection (PLAN.md §7). NOT yet sim-confirmed on
+   * MSFS 2024 (needs a live check per CLAUDE.md's spike rule): a DevSupport report
+   * (devsupport.flightsimulator.com, "Pause reporting unpaused immediately after
+   * clicking Fly") suggests this event can misbehave on 2024. If it turns out
+   * unreliable, "Pause_EX1" is the documented alternative — also reportedly flaky
+   * (dwData stuck at zero in some cases). Watch docs/simconnect-notes.md.
+   */
+  paused: [boolean]
 }
 
 /**
@@ -29,6 +46,7 @@ export class SimConnectService extends EventEmitter<SimConnectServiceEvents> {
   private reconnectTimer: NodeJS.Timeout | undefined
   private stopped = false
   private status: SimConnectionStatus = { state: 'disconnected' }
+  private lastTelemetry: SimTelemetry | undefined
 
   constructor(private readonly openSimConnect: OpenSimConnect = open) {
     super()
@@ -41,6 +59,11 @@ export class SimConnectService extends EventEmitter<SimConnectServiceEvents> {
    */
   getStatus(): SimConnectionStatus {
     return this.status
+  }
+
+  /** Most recent telemetry sample, for snapshotting state (e.g. fuel) outside the 1 Hz stream. */
+  getLastTelemetry(): SimTelemetry | undefined {
+    return this.lastTelemetry
   }
 
   private setStatus(status: SimConnectionStatus): void {
@@ -94,7 +117,15 @@ export class SimConnectService extends EventEmitter<SimConnectServiceEvents> {
           }
           // SIM_VARS is a heterogeneous const array; per-field typing is enforced at its
           // declaration site, so a single cast here (rather than one per field) is fine.
-          this.emit('telemetry', fields as unknown as SimTelemetry)
+          const telemetry = fields as unknown as SimTelemetry
+          this.lastTelemetry = telemetry
+          this.emit('telemetry', telemetry)
+        })
+
+        handle.subscribeToSystemEvent(PAUSE_EVENT_ID, 'Pause')
+        handle.on('event', (recvEvent) => {
+          if (recvEvent.clientEventId !== PAUSE_EVENT_ID) return
+          this.emit('paused', recvEvent.data === 1)
         })
 
         handle.on('quit', () => this.handleDisconnect())

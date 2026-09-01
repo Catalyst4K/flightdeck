@@ -20,8 +20,10 @@ import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
 import { createFlight, listFlights } from './db/flight-repo'
 import { getSimbriefUsername, getWeightUnit, setSimbriefUsername, setWeightUnit } from './db/settings-repo'
+import { listTrackPoints } from './db/track-point-repo'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
 import { SimConnectService } from './sim/SimConnectService'
+import { TrackingController } from './tracking/TrackingController'
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -113,6 +115,16 @@ app.whenReady().then(() => {
   })
   simConnectService.start()
   app.on('before-quit', () => simConnectService.stop())
+
+  const trackingController = new TrackingController(db, simConnectService)
+  trackingController.on('point', (point) => {
+    if (!window.isDestroyed()) window.webContents.send(IpcChannels.trackingPoint, point)
+  })
+
+  ipcMain.handle(IpcChannels.trackingStart, (_event, flightId: number) => trackingController.start(flightId))
+  ipcMain.handle(IpcChannels.trackingStop, () => trackingController.stop())
+  ipcMain.handle(IpcChannels.trackingGetActive, () => trackingController.getActive() ?? null)
+  ipcMain.handle(IpcChannels.trackPointList, (_event, flightId: number) => listTrackPoints(db, flightId))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits

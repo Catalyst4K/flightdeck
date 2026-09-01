@@ -26,18 +26,19 @@
   "dependencies": {
     "better-sqlite3": "13.0.3",
     "drizzle-orm": "0.45.2",
+    "maplibre-gl": "^6.6.0",
     "node-simconnect": "4.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@electron/rebuild": "4.2.0",
     "@eslint/js": "10.0.1",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "26.4.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "5.2.0",
-    "@electron/rebuild": "4.2.0",
     "cross-env": "10.1.0",
     "drizzle-kit": "0.31.10",
     "electron": "44.1.0",

@@ -82,3 +82,30 @@ export const appSetting = sqliteTable('app_setting', {
   key: text('key').primaryKey(),
   value: text('value').notNull()
 })
+
+// track_point per PLAN.md §5 — "keep sparse; this table gets big". FlightRecorder
+// (src/main/tracking) downsamples cruise to ~15s intervals and writes every other phase
+// at the sim feed's own 1 Hz, so a short flight is a few hundred rows, not tens of
+// thousands. SI throughout per docs/decisions.md §5 — convert only at the UI layer.
+export const trackPoint = sqliteTable('track_point', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  flightId: integer('flight_id')
+    .notNull()
+    .references(() => flight.id),
+  tsUtc: text('ts_utc').notNull(),
+  latitude: real('latitude').notNull(),
+  longitude: real('longitude').notNull(),
+  altitudeM: real('altitude_m').notNull(),
+  altitudeAglM: real('altitude_agl_m').notNull(),
+  indicatedAirspeedMs: real('indicated_airspeed_ms').notNull(),
+  groundSpeedMs: real('ground_speed_ms').notNull(),
+  verticalSpeedMs: real('vertical_speed_ms').notNull(),
+  headingTrueDeg: real('heading_true_deg').notNull(),
+  pitchDeg: real('pitch_deg').notNull(),
+  bankDeg: real('bank_deg').notNull(),
+  phase: text('phase', {
+    enum: ['preflight', 'pushback', 'taxi', 'takeoff', 'climb', 'cruise', 'descent', 'landing', 'shutdown']
+  }).notNull(),
+  onGround: integer('on_ground', { mode: 'boolean' }).notNull(),
+  fuelKg: real('fuel_kg').notNull()
+})

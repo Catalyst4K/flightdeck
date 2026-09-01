@@ -7,6 +7,7 @@ import {
   type NewFlight,
   type SimConnectionStatus,
   type SimTelemetry,
+  type TrackPoint,
   type WeightUnit
 } from '@shared/ipc'
 
@@ -37,7 +38,16 @@ const api: FlightdeckApi = {
   settingsSetSimbriefUsername: (username: string) =>
     ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username),
   settingsGetWeightUnit: () => ipcRenderer.invoke(IpcChannels.settingsGetWeightUnit),
-  settingsSetWeightUnit: (unit: WeightUnit) => ipcRenderer.invoke(IpcChannels.settingsSetWeightUnit, unit)
+  settingsSetWeightUnit: (unit: WeightUnit) => ipcRenderer.invoke(IpcChannels.settingsSetWeightUnit, unit),
+  trackingStart: (flightId: number) => ipcRenderer.invoke(IpcChannels.trackingStart, flightId),
+  trackingStop: () => ipcRenderer.invoke(IpcChannels.trackingStop),
+  trackingGetActive: () => ipcRenderer.invoke(IpcChannels.trackingGetActive),
+  trackPointList: (flightId: number) => ipcRenderer.invoke(IpcChannels.trackPointList, flightId),
+  onTrackingPoint: (listener: (point: TrackPoint) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, point: TrackPoint): void => listener(point)
+    ipcRenderer.on(IpcChannels.trackingPoint, handler)
+    return () => ipcRenderer.removeListener(IpcChannels.trackingPoint, handler)
+  }
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

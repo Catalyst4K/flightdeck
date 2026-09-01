@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SimConnectionStatus, SimTelemetry, WeightUnit } from '@shared/ipc'
 import { DispatchView } from './DispatchView'
 import { FleetView } from './FleetView'
+import { TrackView } from './TrackView'
 
 const METERS_TO_FEET = 3.28084
 const MS_TO_KNOTS = 1.94384
@@ -17,7 +18,7 @@ function connectionStatusLabel(status: SimConnectionStatus): string {
   }
 }
 
-type Page = 'fleet' | 'dispatch'
+type Page = 'fleet' | 'dispatch' | 'track'
 
 export default function App(): React.JSX.Element {
   const [page, setPage] = useState<Page>('fleet')
@@ -74,6 +75,13 @@ export default function App(): React.JSX.Element {
           >
             Dispatch
           </button>
+          <button
+            type="button"
+            onClick={() => setPage('track')}
+            style={{ fontWeight: page === 'track' ? 'bold' : 'normal' }}
+          >
+            Track
+          </button>
         </div>
 
         <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.5rem' }}>
@@ -111,7 +119,9 @@ export default function App(): React.JSX.Element {
         )}
       </section>
 
-      {page === 'fleet' ? <FleetView weightUnit={weightUnit} /> : <DispatchView weightUnit={weightUnit} />}
+      {page === 'fleet' && <FleetView weightUnit={weightUnit} />}
+      {page === 'dispatch' && <DispatchView weightUnit={weightUnit} />}
+      {page === 'track' && <TrackView />}
     </main>
   )
 }

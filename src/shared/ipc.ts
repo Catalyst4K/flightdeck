@@ -102,11 +102,44 @@ export interface SimTelemetry {
 }
 
 export type SimConnectionStatus =
-  | { state: 'disconnected' }
-  | { state: 'connecting' }
-  | { state: 'connected'; simConnectVersion: string }
+  { state: 'disconnected' } | { state: 'connecting' } | { state: 'connected'; simConnectVersion: string }
 
 export type FlightStatus = 'planned' | 'active' | 'completed' | 'abandoned'
+
+/** PLAN.md §1: pushback → taxi → takeoff → climb → cruise → descent → landing → shutdown. */
+export type FlightPhase =
+  'preflight' | 'pushback' | 'taxi' | 'takeoff' | 'climb' | 'cruise' | 'descent' | 'landing' | 'shutdown'
+
+/**
+ * One recorded sample of an active flight. SI units throughout per §5 — convert only at
+ * the UI layer. Sparse by design (PLAN.md §5): downsampled to one point per ~15s during
+ * cruise, full rate (the sim feed's own 1 Hz) everywhere else.
+ */
+export interface TrackPoint {
+  id: number
+  flightId: number
+  tsUtc: string
+  latitude: number
+  longitude: number
+  altitudeM: number
+  altitudeAglM: number
+  indicatedAirspeedMs: number
+  groundSpeedMs: number
+  verticalSpeedMs: number
+  headingTrueDeg: number
+  pitchDeg: number
+  bankDeg: number
+  phase: FlightPhase
+  onGround: boolean
+  fuelKg: number
+}
+
+export type NewTrackPoint = Omit<TrackPoint, 'id'>
+
+export interface ActiveTracking {
+  flightId: number
+  phase: FlightPhase
+}
 
 export interface Flight {
   id: number
@@ -219,7 +252,12 @@ export const IpcChannels = {
   settingsGetSimbriefUsername: 'settings:get-simbrief-username',
   settingsSetSimbriefUsername: 'settings:set-simbrief-username',
   settingsGetWeightUnit: 'settings:get-weight-unit',
-  settingsSetWeightUnit: 'settings:set-weight-unit'
+  settingsSetWeightUnit: 'settings:set-weight-unit',
+  trackingStart: 'tracking:start',
+  trackingStop: 'tracking:stop',
+  trackingGetActive: 'tracking:get-active',
+  trackingPoint: 'tracking:point',
+  trackPointList: 'track-point:list'
 } as const
 
 export interface FlightdeckApi {
@@ -249,4 +287,11 @@ export interface FlightdeckApi {
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>
   settingsSetWeightUnit: (unit: WeightUnit) => Promise<void>
+  /** Begins tracking a planned flight. Throws if the sim isn't connected or another flight is already tracked. */
+  trackingStart: (flightId: number) => Promise<void>
+  /** Cancels tracking mid-flight; marks the flight 'abandoned' rather than 'completed'. */
+  trackingStop: () => Promise<void>
+  trackingGetActive: () => Promise<ActiveTracking | null>
+  trackPointList: (flightId: number) => Promise<TrackPoint[]>
+  onTrackingPoint: (listener: (point: TrackPoint) => void) => () => void
 }

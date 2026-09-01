@@ -18,15 +18,18 @@ function fakeHandle(): EventEmitter & {
   close: () => void
   addToDataDefinition: () => void
   requestDataOnSimObject: () => void
+  subscribeToSystemEvent: () => void
 } {
   const emitter = new EventEmitter() as EventEmitter & {
     close: () => void
     addToDataDefinition: () => void
     requestDataOnSimObject: () => void
+    subscribeToSystemEvent: () => void
   }
   emitter.close = vi.fn()
   emitter.addToDataDefinition = vi.fn()
   emitter.requestDataOnSimObject = vi.fn()
+  emitter.subscribeToSystemEvent = vi.fn()
   return emitter
 }
 
@@ -55,10 +58,7 @@ describe('SimConnectService', () => {
     service.start()
     await vi.waitFor(() => expect(openSimConnect).toHaveBeenCalledTimes(1))
 
-    expect(statuses).toEqual([
-      { state: 'connecting' },
-      { state: 'connected', simConnectVersion: '12.2' }
-    ])
+    expect(statuses).toEqual([{ state: 'connecting' }, { state: 'connected', simConnectVersion: '12.2' }])
     expect(handle.addToDataDefinition).toHaveBeenCalled()
     expect(handle.requestDataOnSimObject).toHaveBeenCalled()
     expect(service.getStatus()).toEqual({ state: 'connected', simConnectVersion: '12.2' })
@@ -68,7 +68,30 @@ describe('SimConnectService', () => {
     expect(telemetry).toHaveLength(1)
     expect(telemetry[0].title).toBe('Test Aircraft')
     expect(telemetry[0].onGround).toBe(true)
+    expect(service.getLastTelemetry()).toEqual(telemetry[0])
 
+    service.stop()
+  })
+
+  it('subscribes to the Pause system event and forwards it', async () => {
+    const handle = fakeHandle()
+    const openSimConnect = vi.fn(async () => ({
+      recvOpen: { simConnectVersionMajor: 12, simConnectVersionMinor: 2 },
+      handle
+    })) as unknown as OpenSimConnect
+
+    const service = new SimConnectService(openSimConnect)
+    const paused: boolean[] = []
+    service.on('paused', (p) => paused.push(p))
+
+    service.start()
+    await vi.waitFor(() => expect(handle.subscribeToSystemEvent).toHaveBeenCalled())
+
+    handle.emit('event', { clientEventId: 1, data: 1 })
+    handle.emit('event', { clientEventId: 1, data: 0 })
+    handle.emit('event', { clientEventId: 999, data: 1 }) // unrelated event, ignored
+
+    expect(paused).toEqual([true, false])
     service.stop()
   })
 

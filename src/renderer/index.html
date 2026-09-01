@@ -2,7 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'" />
+    <!--
+      M4: MapLibre needs cross-origin OpenFreeMap tile/style fetches (connect-src),
+      inline CSS injected by its own stylesheet (style-src), and Web Workers spawned from
+      blob: URLs for tile parsing (worker-src) — see docs/decisions.md's 2026-09-01 M4
+      tile-source entry for why OpenFreeMap specifically.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tiles.openfreemap.org; connect-src 'self' https://tiles.openfreemap.org; worker-src 'self' blob:"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flightdeck</title>
   </head>
