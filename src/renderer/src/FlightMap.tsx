@@ -280,19 +280,9 @@ export function FlightMap({
   }, [mapReady, trackPoints, live])
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div ref={mapContainerRef} style={{ width: '100%', height: '500px', border: '1px solid #ccc' }} />
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 8,
-          left: 8,
-          background: 'rgba(255, 255, 255, 0.85)',
-          padding: '2px 8px',
-          borderRadius: 4,
-          fontSize: '0.75rem'
-        }}
-      >
+    <div className="relative">
+      <div ref={mapContainerRef} className="h-[500px] w-full overflow-hidden rounded-xl border border-border" />
+      <div className="absolute bottom-3 left-3 rounded-full border border-border bg-popover/85 px-3 py-1 font-mono text-xs text-popover-foreground backdrop-blur-sm">
         Speed: {telemetry ? `${Math.round(msToKt(telemetry.indicatedAirspeedMs))} kt` : 'N/A'} · Altitude:{' '}
         {telemetry ? `${Math.round(mToFt(telemetry.altitudeM)).toLocaleString()} ft` : 'N/A'} · Heading:{' '}
         {telemetry ? `${Math.round(telemetry.headingTrueDeg)}°` : 'N/A'}
