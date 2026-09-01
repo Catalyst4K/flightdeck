@@ -5,7 +5,14 @@
  *
  *   GET https://api.adsbdb.com/v0/aircraft/G-XWBS
  *   { "response": { "aircraft": { "type": "A350-1041", "icao_type": "A35K",
- *       "manufacturer": "Airbus Sas", "registered_owner": "British Airways", ... } } }
+ *       "manufacturer": "Airbus Sas", "registered_owner": "British Airways",
+ *       "registered_owner_operator_flag_code": "BAW", ... } } }
+ *
+ * `registered_owner_operator_flag_code` (verified on real Cathay Pacific/British Airways
+ * responses) is the operator's actual ICAO code — used to resolve the exact vendored
+ * airline entry rather than fuzzy-matching `registered_owner`'s free-text name against it
+ * (which breaks on real mismatches like adsbdb's "Cathay Pacific Airways" vs. the vendored
+ * data's "Cathay Pacific" — a shorter name is never a substring match for a longer query).
  *
  * A registration with no match returns a plain HTTP 404 with no body (verified against a
  * made-up registration) — treated here as a normal "not found" outcome (`null`), not an
@@ -20,6 +27,7 @@ class AdsbdbError extends Error {}
 interface AdsbdbAircraft {
   icao_type?: unknown
   registered_owner?: unknown
+  registered_owner_operator_flag_code?: unknown
 }
 
 export async function fetchAircraftByRegistration(
@@ -41,6 +49,10 @@ export async function fetchAircraftByRegistration(
 
   return {
     icaoType: aircraft.icao_type,
-    operator: typeof aircraft.registered_owner === 'string' ? aircraft.registered_owner : null
+    operator: typeof aircraft.registered_owner === 'string' ? aircraft.registered_owner : null,
+    operatorIcao:
+      typeof aircraft.registered_owner_operator_flag_code === 'string'
+        ? aircraft.registered_owner_operator_flag_code
+        : null
   }
 }

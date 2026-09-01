@@ -307,3 +307,15 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     shortly-before-shutdown carriers as they come up, rather than guessing a list up
     front — most defunct airlines (TWA, Pan Am, Swissair, Ansett...) shut down under
     their own long-standing name and are already findable as-is.
+- 2026-09-01: Fixed the registration-lookup-fills-airline flow to stop losing the logo
+  on a real mismatch — reported case: a Cathay Pacific registration filled "Cathay
+  Pacific Airways" (adsbdb's `registered_owner` free-text name), which doesn't
+  substring-match the vendored data's "Cathay Pacific" (shorter names can't contain a
+  longer query), so the fuzzy name-matching added the day before found nothing and the
+  logo never showed. adsbdb's aircraft response turns out to already include
+  `registered_owner_operator_flag_code` — the operator's actual ICAO code (verified on
+  a live Cathay Pacific and a live British Airways response: "CPA" and "BAW") — so
+  `fetchAircraftByRegistration` now returns that as `operatorIcao`, and the lookup flow
+  resolves the exact vendored airline entry by that code instead of fuzzy-matching a
+  name. No more substring-matching footgun; falls back to the raw adsbdb name with no
+  logo only if adsbdb has no operator code for that aircraft at all.
