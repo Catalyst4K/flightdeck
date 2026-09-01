@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "cross-env ELECTRON_RUN_AS_NODE=1 electron ./node_modules/tsx/dist/cli.mjs scripts/db-migrate.ts",
+    "spike:simconnect": "tsx scripts/spike-simconnect.ts",
     "package": "electron-vite build && electron-builder --publish=never",
     "package:win": "electron-vite build && electron-builder --win --publish=never",
     "package:mac": "electron-vite build && electron-builder --mac --publish=never",
@@ -25,6 +26,7 @@
   "dependencies": {
     "better-sqlite3": "13.0.3",
     "drizzle-orm": "0.45.2",
+    "node-simconnect": "4.2.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
