@@ -34,7 +34,24 @@ describe('fetchAircraftByRegistration', () => {
 
     const result = await fetchAircraftByRegistration('G-XWBS')
 
-    expect(result).toEqual({ icaoType: 'A35K', operator: 'British Airways' })
+    expect(result).toEqual({ icaoType: 'A35K', operator: 'British Airways', operatorIcao: 'BAW' })
+  })
+
+  it('returns a null operatorIcao when adsbdb has no operator flag code for this aircraft', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { aircraft: { icao_type: 'A35K', registered_owner: 'British Airways' } }
+        })
+      }))
+    )
+
+    const result = await fetchAircraftByRegistration('G-XWBS')
+
+    expect(result).toEqual({ icaoType: 'A35K', operator: 'British Airways', operatorIcao: null })
   })
 
   it('returns null (not an error) for a 404 — a made-up or unrecognised registration', async () => {
