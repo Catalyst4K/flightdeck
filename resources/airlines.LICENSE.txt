@@ -1,0 +1,23 @@
+Source: https://github.com/jpatokal/openflights/blob/master/data/airlines.dat
+        (OpenFlights Airline Database, fetched 2026-09-01)
+License: Open Database License (ODbL) 1.0 — https://opendatacommons.org/licenses/odbl/1-0/
+         Attribution required; any redistributed derivative of the database must remain
+         under a free/open license. This attribution file plus a NOTICE entry (see
+         docs/decisions.md) satisfy that requirement for this trimmed slice; the app's
+         own MIT-licensed source code is not itself put under ODbL by this — the license
+         applies to the airlines.csv database file, not to the application.
+
+Trimmed from the full 6,162-row, 8-column upstream file down to a name/ICAO/IATA search
+slice for Fleet's airline-search feature (docs/decisions.md, 2026-09-01 entry): dropped
+the two placeholder rows ("Unknown"/"Private flight"), dropped rows with no usable ICAO
+code, and projected down to name,icao,iata — 5,886 rows, 136 KB. Airline ID, alias,
+callsign, country, and active-status columns from the original are not included. Not
+filtered by the upstream "active" flag — that field is known to be stale for a database
+that hasn't been actively maintained, so filtering on it would silently drop real
+airlines; correctness of the ICAO/IATA codes themselves was spot-checked against several
+well-known carriers instead.
+
+Airline logos are not part of this dataset (OpenFlights doesn't provide any) — the app
+fetches those live from images.kiwi.com by IATA code, see docs/decisions.md. Rows with no
+IATA code (about 4,600 of the 5,886) can still be found and selected by name/ICAO; they
+simply show no logo.

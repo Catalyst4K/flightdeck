@@ -15,6 +15,10 @@ export function Combobox<T>(props: {
   getOptionKey: (item: T) => string
   getOptionValue: (item: T) => string
   getOptionLabel: (item: T) => string
+  /** Fired with the full picked item, alongside onChange — for a field that needs more
+   *  than just the text value out of a pick (e.g. also capturing a code for a logo
+   *  lookup). Not called for free-typed text, only an actual dropdown pick. */
+  onSelectItem?: (item: T) => void
   placeholder?: string
   className?: string
 }): React.JSX.Element {
@@ -52,6 +56,7 @@ export function Combobox<T>(props: {
 
   function handlePick(item: T): void {
     props.onChange(props.getOptionValue(item))
+    props.onSelectItem?.(item)
     setQuery(null)
     setResults([])
   }

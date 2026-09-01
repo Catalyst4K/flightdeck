@@ -11,6 +11,7 @@ export const aircraft = sqliteTable('aircraft', {
   registration: text('registration').notNull().unique(),
   icaoType: text('icao_type').notNull(),
   operator: text('operator'),
+  operatorIata: text('operator_iata'),
   simbriefAirframeId: text('simbrief_airframe_id'),
   currentIcao: text('current_icao'),
   createdAt: text('created_at')

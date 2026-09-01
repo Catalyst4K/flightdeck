@@ -265,12 +265,13 @@ local file. DB backup-on-launch. Then **fly with it for two weeks and fix what a
 before writing a single new feature.
 
 **Before a public flightsim.to release** (separate from M7, do this once the app is
-actually ready to give away): ship the LGPL NOTICE file from M1, drop in a "not
-affiliated with or endorsed by Microsoft or Asobo Studio" disclaimer, re-read
+actually ready to give away): ship the LGPL NOTICE file from M1, ship the ODbL attribution
+for the vendored airline database (resources/airlines.LICENSE.txt) alongside it, drop in
+a "not affiliated with or endorsed by Microsoft or Asobo Studio" disclaimer, re-read
 flightsim.to's current Terms of Service directly (their content-license clause caused a
 developer boycott in 2023 — check it hasn't regressed), and consider a listing title that
 doesn't collide with flightsim.to's own "FlightDeck" creator-analytics product. Full
-context in `docs/decisions.md`'s 2026-09-01 licence-audit entry.
+context in `docs/decisions.md`'s 2026-09-01 licence-audit and airline-search entries.
 
 ---
 
