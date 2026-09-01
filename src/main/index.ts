@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
@@ -11,6 +11,7 @@ import {
 import { fetchAircraftByRegistration } from './aircraft-lookup/adsbdb-client'
 import { searchAircraftTypes } from './aircraft-lookup/icao-types'
 import { searchAirports } from './airports/airport-search'
+import { buildAppMenu } from './menu'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import {
@@ -22,7 +23,14 @@ import {
 } from './db/aircraft-repo'
 import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
-import { createFlight, getFleetStats, listCompletedFlights, listFlights } from './db/flight-repo'
+import {
+  abandonAllPlanned,
+  abandonFlight,
+  createFlight,
+  getFleetStats,
+  listCompletedFlights,
+  listFlights
+} from './db/flight-repo'
 import { importLogbookCsv } from './db/logbook-import'
 import { getSimbriefUsername, getWeightUnit, setSimbriefUsername, setWeightUnit } from './db/settings-repo'
 import { listTrackPoints } from './db/track-point-repo'
@@ -57,6 +65,7 @@ app.whenReady().then(() => {
   migrateDb(dbPath)
   const { db } = createDb(dbPath)
 
+  Menu.setApplicationMenu(buildAppMenu())
   const window = createWindow()
 
   ipcMain.handle(IpcChannels.aircraftList, () => listAircraft(db))
@@ -84,7 +93,6 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.aircraftExport, () => exportAircraft(db, window))
 
   ipcMain.handle(IpcChannels.flightList, () => listFlights(db))
-  ipcMain.handle(IpcChannels.flightCreate, (_event, input: NewFlight) => createFlight(db, input))
 
   ipcMain.handle(IpcChannels.dispatchFetchOfp, async (): Promise<DispatchOfp> => {
     const username = getSimbriefUsername(db)
@@ -138,8 +146,21 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.trackingStart, (_event, flightId: number) => trackingController.start(flightId))
   ipcMain.handle(IpcChannels.trackingStop, () => trackingController.stop())
+  ipcMain.handle(IpcChannels.trackingFinish, () => trackingController.finish())
   ipcMain.handle(IpcChannels.trackingGetActive, () => trackingController.getActive() ?? null)
   ipcMain.handle(IpcChannels.trackPointList, (_event, flightId: number) => listTrackPoints(db, flightId))
+
+  // Only one flight is ever meant to be "in progress" (planned or active) at once —
+  // pressing "Fly" on a new plan replaces whatever was already planned or being tracked,
+  // rather than letting flights pile up alongside each other.
+  ipcMain.handle(IpcChannels.flightCreate, (_event, input: NewFlight) => {
+    trackingController.stop()
+    abandonAllPlanned(db)
+    return createFlight(db, input)
+  })
+  ipcMain.handle(IpcChannels.flightCancel, (_event, id: number) => {
+    abandonFlight(db, id)
+  })
 
   ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))
   ipcMain.handle(IpcChannels.logbookFleetStats, () => getFleetStats(db))

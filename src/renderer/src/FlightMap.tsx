@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { GeoJSONSource, LngLatBounds, Map as MapLibreMap, Marker, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
-import type { TrackPoint } from '@shared/ipc'
+import type { SimTelemetry, TrackPoint } from '@shared/ipc'
 import type { Waypoint } from './route'
+import { mToFt, msToKt } from './units'
 
 // maplibre-gl ships its tile-parsing worker as a separate chunk and locates it via its
 // own import.meta.url at runtime — a resolution that doesn't survive Vite's dependency
@@ -74,6 +75,9 @@ export interface FlightMapProps {
    * more useful for review than a zoomed-in single point.
    */
   live: boolean
+  /** Live sim telemetry — shown as a small IAS/altitude/heading overlay at the map's
+   *  bottom edge when present (TrackView only; Logbook/Dispatch don't pass it). */
+  telemetry?: SimTelemetry | null
 }
 
 // Stable reference for the default so the route/waypoint effect below doesn't re-fire on
@@ -84,7 +88,8 @@ export function FlightMap({
   route,
   waypoints = EMPTY_WAYPOINTS,
   trackPoints,
-  live
+  live,
+  telemetry
 }: FlightMapProps): React.JSX.Element {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -194,8 +199,11 @@ export function FlightMap({
       markerRef.current.setRotation(last.headingTrueDeg)
       if (!markerRef.current.getElement().isConnected) markerRef.current.addTo(mapRef.current)
     }
-    fitBoundsTo(mapRef.current, coords)
-  }, [mapReady, trackPoints, live])
+    // No flown trail to fit to yet (e.g. Dispatch's fetched-but-not-flown OFP preview) —
+    // fall back to the planned route so the map still zooms to something useful instead
+    // of sitting at the whole-world default view.
+    fitBoundsTo(mapRef.current, coords.length > 0 ? coords : route)
+  }, [mapReady, trackPoints, route, live])
 
   // Live (TrackView) mode: trail + marker follow the accumulated track points. The
   // marker/camera position animates across the real gap between the last two samples
@@ -271,5 +279,24 @@ export function FlightMap({
     return () => cancelAnimationFrame(frame)
   }, [mapReady, trackPoints, live])
 
-  return <div ref={mapContainerRef} style={{ width: '100%', height: '500px', border: '1px solid #ccc' }} />
+  return (
+    <div style={{ position: 'relative' }}>
+      <div ref={mapContainerRef} style={{ width: '100%', height: '500px', border: '1px solid #ccc' }} />
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 8,
+          left: 8,
+          background: 'rgba(255, 255, 255, 0.85)',
+          padding: '2px 8px',
+          borderRadius: 4,
+          fontSize: '0.75rem'
+        }}
+      >
+        Speed: {telemetry ? `${Math.round(msToKt(telemetry.indicatedAirspeedMs))} kt` : 'N/A'} · Altitude:{' '}
+        {telemetry ? `${Math.round(mToFt(telemetry.altitudeM)).toLocaleString()} ft` : 'N/A'} · Heading:{' '}
+        {telemetry ? `${Math.round(telemetry.headingTrueDeg)}°` : 'N/A'}
+      </div>
+    </div>
+  )
 }

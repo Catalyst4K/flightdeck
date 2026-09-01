@@ -78,4 +78,18 @@ export class TrackingController extends EventEmitter<TrackingControllerEvents> {
     abandonFlight(this.db, this.recorder.getFlightId())
     this.recorder = undefined
   }
+
+  /**
+   * User manually ends and saves the flight now, rather than waiting for the phase
+   * machine to reach 'shutdown' on its own — a safety net for cases where automatic
+   * shutdown detection doesn't fire (e.g. the aircraft is left running, or the user just
+   * wants to log what's been flown so far). Mirrors the phase === 'shutdown' completion
+   * path above, using whatever fuel figure the sim last reported.
+   */
+  finish(): void {
+    if (!this.recorder) return
+    const telemetry = this.simConnectService.getLastTelemetry()
+    completeFlight(this.db, this.recorder.getFlightId(), telemetry?.fuelTotalKg ?? 0)
+    this.recorder = undefined
+  }
 }

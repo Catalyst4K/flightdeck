@@ -3,6 +3,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { createDb, type FlightdeckDb } from './client'
 import { createAircraft, getAircraftByRegistration } from './aircraft-repo'
 import {
+  abandonAllPlanned,
   abandonFlight,
   completeFlight,
   createFlight,
@@ -147,6 +148,19 @@ describe('flight repo', () => {
       startFlight(db, created.id, 10000)
       const abandoned = abandonFlight(db, created.id)
       expect(abandoned?.status).toBe('abandoned')
+    })
+
+    it('abandonAllPlanned abandons every planned flight, leaving other statuses untouched', () => {
+      const planned = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' })
+      const alsoPlanned = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'EDDF' })
+      const active = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'LFPG' })
+      startFlight(db, active.id, 10000)
+
+      abandonAllPlanned(db)
+
+      expect(getFlight(db, planned.id)?.status).toBe('abandoned')
+      expect(getFlight(db, alsoPlanned.id)?.status).toBe('abandoned')
+      expect(getFlight(db, active.id)?.status).toBe('active')
     })
   })
 

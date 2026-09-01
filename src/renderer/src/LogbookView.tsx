@@ -52,10 +52,6 @@ function FlightDetail(props: {
     iasKt: Math.round(msToKt(p.indicatedAirspeedMs))
   }))
 
-  const timeData = [
-    { name: 'Block', minutes: flight.blockMinutes ?? 0 },
-    { name: 'Air', minutes: flight.airMinutes ?? 0 }
-  ]
   // Only meaningful for flights dispatched with a planned fuel figure (SimBrief OFP) —
   // ad-hoc flights created directly from the Track view have no fuelPlannedKg.
   const fuelData =
@@ -120,20 +116,8 @@ function FlightDetail(props: {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-        <div style={{ width: 280, height: 200 }}>
-          <h3>Block vs air time</h3>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={timeData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis unit="m" width={40} />
-              <Tooltip formatter={(value) => `${value} min`} />
-              <Bar dataKey="minutes" fill="#1a73e8" name="Minutes" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        {fuelData && (
+      {fuelData && (
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
           <div style={{ width: 280, height: 200 }}>
             <h3>Fuel planned vs actual</h3>
             <ResponsiveContainer width="100%" height="100%">
@@ -146,8 +130,8 @@ function FlightDetail(props: {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

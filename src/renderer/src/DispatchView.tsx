@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Aircraft, DispatchOfp, Flight, WeightUnit } from '@shared/ipc'
+import type { Aircraft, DispatchOfp, FleetStats, WeightUnit } from '@shared/ipc'
 import { AirportSearch } from './AirportSearch'
 import { formatWeight, mToFt } from './units'
 
@@ -15,9 +15,11 @@ export function DispatchView(props: {
   weightUnit: WeightUnit
   /** Called after a planned flight is saved, so the app can switch to Track to preview it. */
   onPlanned?: () => void
+  /** Called whenever the fetched-but-not-yet-saved OFP changes, so Track can preview it too. */
+  onOfpJsonChange?: (ofpJson: string | null) => void
 }): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
-  const [flights, setFlights] = useState<Flight[]>([])
+  const [fleetStats, setFleetStats] = useState<FleetStats[]>([])
   const [username, setUsername] = useState('')
   const [usernameSaved, setUsernameSaved] = useState(false)
   const [ofp, setOfp] = useState<DispatchOfp | null>(null)
@@ -29,13 +31,16 @@ export function DispatchView(props: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function reloadFlights(): Promise<void> {
-    return window.flightdeck.flightList().then(setFlights)
-  }
+  // Dispatch never renders a map itself — Track is the only place a route/waypoints
+  // preview shows up (both for a saved flight and, via this, a fetched-but-unsaved OFP).
+  useEffect(() => {
+    props.onOfpJsonChange?.(ofp?.ofpJson ?? null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ofp?.ofpJson])
 
   useEffect(() => {
     window.flightdeck.aircraftList().then(setAircraft)
-    reloadFlights()
+    window.flightdeck.logbookFleetStats().then(setFleetStats)
     window.flightdeck.settingsGetSimbriefUsername().then((u) => setUsername(u ?? ''))
   }, [])
 
@@ -49,7 +54,12 @@ export function DispatchView(props: {
   function handlePlanAircraftChange(id: number | null): void {
     setPlanAircraftId(id)
     const selected = aircraft.find((a) => a.id === id)
-    setDepIcao(selected?.currentIcao ?? '')
+    // Same fallback as the Fleet detail page's "Current airport": stored currentIcao
+    // first, then the last completed flight's arrival airport — most of an imported
+    // fleet has no currentIcao set (CSV import deliberately doesn't backfill it) but
+    // does have real flight history to derive a location from.
+    const lastArrIcao = fleetStats.find((s) => s.aircraftId === id)?.lastArrIcao
+    setDepIcao(selected?.currentIcao ?? lastArrIcao ?? '')
     if (id != null) setSelectedAircraftId(id)
   }
 
@@ -111,7 +121,6 @@ export function DispatchView(props: {
       setPlanAircraftId(null)
       setDepIcao('')
       setDestIcao('')
-      await reloadFlights()
       props.onPlanned?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -172,11 +181,16 @@ export function DispatchView(props: {
         </div>
       </section>
 
-      <div style={{ display: 'flex', gap: '0.5rem', margin: '1rem 0' }}>
+      <section style={{ border: '1px solid #ccc', padding: '1rem', margin: '1rem 0', maxWidth: 480 }}>
+        <h2 style={{ marginTop: 0 }}>Or import an existing plan</h2>
+        <p style={{ fontSize: '0.85rem', marginTop: 0 }}>
+          Pulls your latest OFP from SimBrief — useful if you planned it there directly, or
+          want to re-fetch after adjusting it on SimBrief's site.
+        </p>
         <button type="button" onClick={handleFetch} disabled={fetching}>
           {fetching ? 'Fetching…' : 'Fetch latest OFP'}
         </button>
-      </div>
+      </section>
 
       {error && <p style={{ color: '#b00020' }}>{error}</p>}
 
@@ -236,40 +250,10 @@ export function DispatchView(props: {
 
           <div style={{ marginTop: '0.75rem' }}>
             <button type="button" onClick={handleSaveFlight} disabled={saving || selectedAircraftId == null}>
-              {saving ? 'Saving…' : 'Save as planned flight'}
+              {saving ? 'Starting…' : 'Fly'}
             </button>
           </div>
         </section>
-      )}
-
-      <h2>Planned flights</h2>
-      {flights.length === 0 ? (
-        <p>No flights yet.</p>
-      ) : (
-        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-              <th>Flight</th>
-              <th>Route</th>
-              <th>Aircraft</th>
-              <th>Status</th>
-              <th>Scheduled out</th>
-            </tr>
-          </thead>
-          <tbody>
-            {flights.map((f) => (
-              <tr key={f.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td>{f.flightNumber ?? '—'}</td>
-                <td>
-                  {f.depIcao} → {f.arrIcao}
-                </td>
-                <td>{aircraft.find((a) => a.id === f.aircraftId)?.registration ?? f.aircraftId}</td>
-                <td>{f.status}</td>
-                <td>{f.schedOutUtc ? formatUtc(f.schedOutUtc) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       )}
     </div>
   )

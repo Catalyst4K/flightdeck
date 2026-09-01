@@ -186,4 +186,24 @@ describe('TrackingController', () => {
     expect(getFlight(db, flightId)?.status).toBe('abandoned')
     expect(controller.getActive()).toBeUndefined()
   })
+
+  it('completes the flight on finish() using the last known fuel figure, without waiting for shutdown', () => {
+    sim.setLastTelemetry(telemetry({ fuelTotalKg: 9000 }))
+    const controller = new TrackingController(db, sim)
+    controller.start(flightId)
+
+    sim.setLastTelemetry(telemetry({ fuelTotalKg: 4000 }))
+    controller.finish()
+
+    const finished = getFlight(db, flightId)
+    expect(finished?.status).toBe('completed')
+    expect(finished?.fuelInKg).toBe(4000)
+    expect(controller.getActive()).toBeUndefined()
+  })
+
+  it('finish() is a no-op when nothing is being tracked', () => {
+    const controller = new TrackingController(db, sim)
+    expect(() => controller.finish()).not.toThrow()
+    expect(getFlight(db, flightId)?.status).toBe('planned')
+  })
 })

@@ -167,6 +167,15 @@ export function abandonFlight(db: FlightdeckDb, id: number): Flight | undefined 
   return row ? toFlight(row) : undefined
 }
 
+/**
+ * The app only ever means one flight to be "in progress" (planned or active) at a time —
+ * pressing "Fly" on a new plan replaces whatever was already planned rather than piling
+ * up alongside it. Called before creating a new flight; a no-op if nothing is planned.
+ */
+export function abandonAllPlanned(db: FlightdeckDb): void {
+  db.update(flight).set({ status: 'abandoned' }).where(eq(flight.status, 'planned')).run()
+}
+
 export function listCompletedFlights(db: FlightdeckDb): Flight[] {
   return db
     .select()

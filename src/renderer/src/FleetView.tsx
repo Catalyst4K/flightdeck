@@ -30,14 +30,12 @@ function AircraftDetail(props: {
         <dd>{a.operator ?? '—'}</dd>
         <dt>SimBrief profile</dt>
         <dd>{a.simbriefAirframeId ?? '—'}</dd>
-        <dt>Current ICAO</dt>
-        <dd>{a.currentIcao ?? '—'}</dd>
+        <dt>Current airport</dt>
+        <dd>{a.currentIcao ?? s?.lastArrIcao ?? '—'}</dd>
         <dt>Total hours</dt>
         <dd>{s ? s.totalHours.toFixed(1) : '0.0'}</dd>
-        <dt>Total cycles</dt>
+        <dt>Flights</dt>
         <dd>{s?.totalCycles ?? 0}</dd>
-        <dt>Last location</dt>
-        <dd>{s?.lastArrIcao ?? '—'}</dd>
         <dt>Last flight</dt>
         <dd>{formatDate(s?.lastFlightInUtc ?? null)}</dd>
       </dl>
@@ -180,7 +178,7 @@ export function FleetView(): React.JSX.Element {
               <th>Type</th>
               <th>Airline</th>
               <th>Hours</th>
-              <th>Cycles</th>
+              <th>Flights</th>
             </tr>
           </thead>
           <tbody>

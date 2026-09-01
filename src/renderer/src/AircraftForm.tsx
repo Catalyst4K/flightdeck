@@ -234,7 +234,7 @@ export function AircraftForm(props: {
       />
 
       <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem' }}>
-        Current ICAO
+        Current airport
         <AirportSearch value={form.currentIcao} onChange={(v) => set('currentIcao', v)} />
       </label>
 

@@ -253,6 +253,9 @@ export interface DispatchOfp {
  */
 export type WeightUnit = 'kg' | 'lb'
 
+/** The app's tabs — also the native menu bar's top-level items, see main/menu.ts. */
+export type AppPage = 'fleet' | 'dispatch' | 'track' | 'logbook' | 'settings'
+
 /**
  * Opens SimBrief's dispatch form pre-filled with a route and airframe. `simbriefAirframeId`
  * takes priority over `icaoType` when set (SimBrief uses the saved custom profile);
@@ -286,7 +289,9 @@ export const IpcChannels = {
   settingsSetWeightUnit: 'settings:set-weight-unit',
   trackingStart: 'tracking:start',
   trackingStop: 'tracking:stop',
+  trackingFinish: 'tracking:finish',
   trackingGetActive: 'tracking:get-active',
+  flightCancel: 'flight:cancel',
   trackingPoint: 'tracking:point',
   trackPointList: 'track-point:list',
   logbookListCompletedFlights: 'logbook:list-completed-flights',
@@ -294,7 +299,8 @@ export const IpcChannels = {
   logbookImportCsv: 'logbook:import-csv',
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
   aircraftTypeSearch: 'aircraft:type-search',
-  airportSearch: 'airport:search'
+  airportSearch: 'airport:search',
+  menuNavigate: 'menu:navigate'
 } as const
 
 export interface FlightdeckApi {
@@ -315,7 +321,14 @@ export interface FlightdeckApi {
   onSimTelemetry: (listener: (telemetry: SimTelemetry) => void) => () => void
   onSimConnectionStatus: (listener: (status: SimConnectionStatus) => void) => () => void
   flightList: () => Promise<Flight[]>
+  /**
+   * Creates a new planned flight. Enforces the app's single-flight-in-progress model:
+   * abandons any existing planned flight and stops (abandoning) any actively tracked one
+   * first, rather than letting flights pile up alongside each other.
+   */
   flightCreate: (flight: NewFlight) => Promise<Flight>
+  /** Abandons a flight (planned or active) by id — "Cancel flight" before or during tracking. */
+  flightCancel: (id: number) => Promise<void>
   /** Fetches the SimBrief user's latest OFP. Throws if no username is set or the fetch fails. */
   dispatchFetchOfp: () => Promise<DispatchOfp>
   /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */
@@ -328,6 +341,8 @@ export interface FlightdeckApi {
   trackingStart: (flightId: number) => Promise<void>
   /** Cancels tracking mid-flight; marks the flight 'abandoned' rather than 'completed'. */
   trackingStop: () => Promise<void>
+  /** Manually completes the actively tracked flight now, rather than waiting for automatic shutdown detection. */
+  trackingFinish: () => Promise<void>
   trackingGetActive: () => Promise<ActiveTracking | null>
   trackPointList: (flightId: number) => Promise<TrackPoint[]>
   onTrackingPoint: (listener: (point: TrackPoint) => void) => () => void
@@ -341,4 +356,6 @@ export interface FlightdeckApi {
   aircraftTypeSearch: (query: string) => Promise<AircraftTypeOption[]>
   /** Searches the vendored OurAirports name/ICAO list. Empty for a query under 2 chars. */
   airportSearch: (query: string) => Promise<AirportOption[]>
+  /** Fires when the native menu bar's tab items are clicked — see main/menu.ts. */
+  onMenuNavigate: (listener: (page: AppPage) => void) => () => void
 }

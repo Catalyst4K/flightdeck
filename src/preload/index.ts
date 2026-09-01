@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
+  type AppPage,
   type DispatchOpenSimBriefParams,
   type FlightdeckApi,
   type NewAircraft,
@@ -32,6 +33,7 @@ const api: FlightdeckApi = {
   },
   flightList: () => ipcRenderer.invoke(IpcChannels.flightList),
   flightCreate: (flight: NewFlight) => ipcRenderer.invoke(IpcChannels.flightCreate, flight),
+  flightCancel: (id: number) => ipcRenderer.invoke(IpcChannels.flightCancel, id),
   dispatchFetchOfp: () => ipcRenderer.invoke(IpcChannels.dispatchFetchOfp),
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) =>
     ipcRenderer.invoke(IpcChannels.dispatchOpenSimBrief, params),
@@ -42,6 +44,7 @@ const api: FlightdeckApi = {
   settingsSetWeightUnit: (unit: WeightUnit) => ipcRenderer.invoke(IpcChannels.settingsSetWeightUnit, unit),
   trackingStart: (flightId: number) => ipcRenderer.invoke(IpcChannels.trackingStart, flightId),
   trackingStop: () => ipcRenderer.invoke(IpcChannels.trackingStop),
+  trackingFinish: () => ipcRenderer.invoke(IpcChannels.trackingFinish),
   trackingGetActive: () => ipcRenderer.invoke(IpcChannels.trackingGetActive),
   trackPointList: (flightId: number) => ipcRenderer.invoke(IpcChannels.trackPointList, flightId),
   onTrackingPoint: (listener: (point: TrackPoint) => void) => {
@@ -55,7 +58,12 @@ const api: FlightdeckApi = {
   aircraftLookupByRegistration: (registration: string) =>
     ipcRenderer.invoke(IpcChannels.aircraftLookupByRegistration, registration),
   aircraftTypeSearch: (query: string) => ipcRenderer.invoke(IpcChannels.aircraftTypeSearch, query),
-  airportSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airportSearch, query)
+  airportSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airportSearch, query),
+  onMenuNavigate: (listener: (page: AppPage) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, page: AppPage): void => listener(page)
+    ipcRenderer.on(IpcChannels.menuNavigate, handler)
+    return () => ipcRenderer.removeListener(IpcChannels.menuNavigate, handler)
+  }
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)
