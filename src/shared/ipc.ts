@@ -14,6 +14,10 @@ export interface Aircraft {
   icaoType: string
   /** Airline/operator, shown as "Airline" in the UI. */
   operator: string | null
+  /** IATA code of the operator, if picked from the airline search — used to fetch a
+   *  logo (docs/decisions.md, 2026-09-01 airline-search entry). Null for an operator
+   *  typed free-hand or filled in from a registration lookup, which has no code. */
+  operatorIata: string | null
   /** SimBrief saved-airframe internal ID, shown as "SimBrief profile" in the UI. */
   simbriefAirframeId: string | null
   currentIcao: string | null
@@ -24,6 +28,7 @@ export interface NewAircraft {
   registration: string
   icaoType: string
   operator?: string | null
+  operatorIata?: string | null
   simbriefAirframeId?: string | null
   currentIcao?: string | null
 }
@@ -62,6 +67,14 @@ export interface AircraftTypeOption {
   model: string
   icaoType: string
   wakeCat: string
+}
+
+/** One match from the vendored OpenFlights airline database (see resources/airlines.csv). */
+export interface AirlineOption {
+  name: string
+  icao: string
+  /** IATA code — empty string if the airline has none (some cargo/charter carriers don't). */
+  iata: string
 }
 
 /**
@@ -299,7 +312,8 @@ export const IpcChannels = {
   logbookImportCsv: 'logbook:import-csv',
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
   aircraftTypeSearch: 'aircraft:type-search',
-  airportSearch: 'airport:search'
+  airportSearch: 'airport:search',
+  airlineSearch: 'airline:search'
 } as const
 
 export interface FlightdeckApi {
@@ -355,4 +369,6 @@ export interface FlightdeckApi {
   aircraftTypeSearch: (query: string) => Promise<AircraftTypeOption[]>
   /** Searches the vendored OurAirports name/ICAO list. Empty for a query under 2 chars. */
   airportSearch: (query: string) => Promise<AirportOption[]>
+  /** Searches the vendored OpenFlights airline list. Empty for a query under 2 chars. */
+  airlineSearch: (query: string) => Promise<AirlineOption[]>
 }

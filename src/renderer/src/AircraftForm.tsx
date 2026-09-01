@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Aircraft, AircraftTypeOption, NewAircraft } from '@shared/ipc'
+import type { Aircraft, AircraftTypeOption, AirlineOption, NewAircraft } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,7 @@ interface FormState {
   registration: string
   icaoType: string
   operator: string
+  operatorIata: string
   simbriefAirframeId: string
   currentIcao: string
 }
@@ -18,6 +19,7 @@ const EMPTY_FORM: FormState = {
   registration: '',
   icaoType: '',
   operator: '',
+  operatorIata: '',
   simbriefAirframeId: '',
   currentIcao: ''
 }
@@ -27,6 +29,7 @@ function toFormState(a: Aircraft): FormState {
     registration: a.registration,
     icaoType: a.icaoType,
     operator: a.operator ?? '',
+    operatorIata: a.operatorIata ?? '',
     simbriefAirframeId: a.simbriefAirframeId ?? '',
     currentIcao: a.currentIcao ?? ''
   }
@@ -39,6 +42,7 @@ function toNewAircraft(f: FormState): NewAircraft {
     registration: f.registration.trim(),
     icaoType: f.icaoType.trim(),
     operator: str(f.operator),
+    operatorIata: str(f.operatorIata),
     simbriefAirframeId: str(f.simbriefAirframeId),
     currentIcao: str(f.currentIcao)
   }
@@ -152,7 +156,22 @@ export function AircraftForm(props: {
         </p>
       </div>
 
-      <Field label="Airline" value={form.operator} onChange={(v) => set('operator', v)} />
+      <div className="flex flex-col gap-1.5">
+        <Label>Airline</Label>
+        <Combobox
+          value={form.operator}
+          onChange={(value) => {
+            set('operator', value)
+            set('operatorIata', '')
+          }}
+          onSelectItem={(item: AirlineOption) => set('operatorIata', item.iata)}
+          search={(query) => window.flightdeck.airlineSearch(query)}
+          getOptionKey={(r: AirlineOption) => `${r.icao}-${r.name}`}
+          getOptionValue={(r) => r.name}
+          getOptionLabel={(r) => `${r.name} (${r.icao}${r.iata ? `/${r.iata}` : ''})`}
+          placeholder="e.g. British Airways, BAW, or type a name"
+        />
+      </div>
       <Field
         label="SimBrief profile"
         value={form.simbriefAirframeId}
