@@ -1,0 +1,104 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Design tokens for the "Glass Cockpit / MFD" direction — see the 2026-09-01
+ * design-system entry in docs/decisions.md for the full rationale and the exact
+ * values these are transcribed from. Change values here, not in components.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-heading: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #0ea5e9;
+  --primary-foreground: #0a0e14;
+  --secondary: #eef2f7;
+  --secondary-foreground: #0f172a;
+  --muted: #eef2f7;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #10b981;
+  --success-foreground: #052e1c;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #0ea5e9;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #0a0e14;
+  --foreground: #e6f1ff;
+  --card: #111823;
+  --card-foreground: #e6f1ff;
+  --popover: #111823;
+  --popover-foreground: #e6f1ff;
+  --primary: #22d3ee;
+  --primary-foreground: #0a0e14;
+  --secondary: #16202e;
+  --secondary-foreground: #e6f1ff;
+  --muted: #111823;
+  --muted-foreground: #7d96b3;
+  --accent: #16202e;
+  --accent-foreground: #e6f1ff;
+  --destructive: #f87171;
+  --destructive-foreground: #0a0e14;
+  --success: #34d399;
+  --success-foreground: #052e1c;
+  --border: #1e2a3a;
+  --input: #1e2a3a;
+  --ring: #22d3ee;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
