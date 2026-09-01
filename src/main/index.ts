@@ -19,6 +19,7 @@ import {
 import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
 import { createFlight, getFleetStats, listCompletedFlights, listFlights } from './db/flight-repo'
+import { importLogbookCsv } from './db/logbook-import'
 import { getSimbriefUsername, getWeightUnit, setSimbriefUsername, setWeightUnit } from './db/settings-repo'
 import { listTrackPoints } from './db/track-point-repo'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
@@ -128,6 +129,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))
   ipcMain.handle(IpcChannels.logbookFleetStats, () => getFleetStats(db))
+  ipcMain.handle(IpcChannels.logbookImportCsv, () => importLogbookCsv(db, window))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits

@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis
 } from 'recharts'
-import type { Aircraft, Flight, FleetStats, TrackPoint, WeightUnit } from '@shared/ipc'
+import type { Aircraft, Flight, LogbookImportSummary, TrackPoint, WeightUnit } from '@shared/ipc'
 import { FlightMap } from './FlightMap'
 import { parseRouteFromOfpJson } from './route'
 import { formatWeight, mToFt, msToKt } from './units'
@@ -154,21 +154,37 @@ function FlightDetail(props: {
 export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Element {
   const [flights, setFlights] = useState<Flight[]>([])
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
-  const [stats, setStats] = useState<FleetStats[]>([])
   const [view, setView] = useState<View>({ kind: 'list' })
   const [aircraftFilter, setAircraftFilter] = useState<number | 'all'>('all')
+  const [importSummary, setImportSummary] = useState<LogbookImportSummary | null>(null)
+  const [importing, setImporting] = useState(false)
 
-  useEffect(() => {
-    Promise.all([
+  function reload(): Promise<void> {
+    return Promise.all([
       window.flightdeck.logbookListCompletedFlights(),
-      window.flightdeck.aircraftList(),
-      window.flightdeck.logbookFleetStats()
-    ]).then(([flightList, aircraftList, fleetStats]) => {
+      window.flightdeck.aircraftList()
+    ]).then(([flightList, aircraftList]) => {
       setFlights(flightList)
       setAircraft(aircraftList)
-      setStats(fleetStats)
     })
+  }
+
+  useEffect(() => {
+    reload()
   }, [])
+
+  async function handleImport(): Promise<void> {
+    setImporting(true)
+    try {
+      const summary = await window.flightdeck.logbookImportCsv()
+      if (summary) {
+        setImportSummary(summary)
+        await reload()
+      }
+    } finally {
+      setImporting(false)
+    }
+  }
 
   function registrationFor(aircraftId: number): string {
     return aircraft.find((a) => a.id === aircraftId)?.registration ?? `#${aircraftId}`
@@ -194,29 +210,26 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
     <div>
       <h1>Logbook</h1>
 
-      {stats.length > 0 && (
-        <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '1.5rem' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-              <th>Registration</th>
-              <th>Hours</th>
-              <th>Cycles</th>
-              <th>Last location</th>
-              <th>Last flight</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stats.map((s) => (
-              <tr key={s.aircraftId} style={{ borderBottom: '1px solid #eee' }}>
-                <td>{s.registration}</td>
-                <td>{s.totalHours.toFixed(1)}</td>
-                <td>{s.totalCycles}</td>
-                <td>{s.lastArrIcao}</td>
-                <td>{formatDate(s.lastFlightInUtc)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        <button type="button" onClick={handleImport} disabled={importing}>
+          {importing ? 'Importing…' : 'Import CSV'}
+        </button>
+      </div>
+
+      {importSummary && (
+        <p>
+          Imported {importSummary.imported} flight{importSummary.imported === 1 ? '' : 's'}
+          {importSummary.aircraftCreated > 0 &&
+            ` (added ${importSummary.aircraftCreated} aircraft to your fleet)`}
+          .
+          {importSummary.skipped.length > 0 && (
+            <>
+              {' '}
+              Skipped {importSummary.skipped.length}:{' '}
+              {importSummary.skipped.map((s) => `${s.label} (${s.reason})`).join(', ')}
+            </>
+          )}
+        </p>
       )}
 
       {flights.length === 0 ? (

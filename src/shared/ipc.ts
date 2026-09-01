@@ -186,6 +186,18 @@ export interface FleetStats {
   lastFlightInUtc: string | null
 }
 
+export interface LogbookImportSkip {
+  label: string
+  reason: string
+}
+
+export interface LogbookImportSummary {
+  imported: number
+  /** Aircraft auto-created for a registration not already in the fleet — see logbook-import.ts. */
+  aircraftCreated: number
+  skipped: LogbookImportSkip[]
+}
+
 export interface NewFlight {
   aircraftId: number
   status?: FlightStatus
@@ -269,7 +281,8 @@ export const IpcChannels = {
   trackingPoint: 'tracking:point',
   trackPointList: 'track-point:list',
   logbookListCompletedFlights: 'logbook:list-completed-flights',
-  logbookFleetStats: 'logbook:fleet-stats'
+  logbookFleetStats: 'logbook:fleet-stats',
+  logbookImportCsv: 'logbook:import-csv'
 } as const
 
 export interface FlightdeckApi {
@@ -308,4 +321,6 @@ export interface FlightdeckApi {
   onTrackingPoint: (listener: (point: TrackPoint) => void) => () => void
   logbookListCompletedFlights: () => Promise<Flight[]>
   logbookFleetStats: () => Promise<FleetStats[]>
+  /** Opens a native file-open dialog in the main process; null if the user cancels. */
+  logbookImportCsv: () => Promise<LogbookImportSummary | null>
 }

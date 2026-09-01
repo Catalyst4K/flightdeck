@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react'
-import type { Aircraft, AircraftImportSummary, NewAircraft, WeightUnit } from '@shared/ipc'
+import type { Aircraft, AircraftImportSummary, FleetStats, NewAircraft, WeightUnit } from '@shared/ipc'
 import { AircraftForm } from './AircraftForm'
 import { formatWeight } from './units'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number } | { kind: 'new' } | { kind: 'edit'; id: number }
 
+function formatDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString() : '—'
+}
+
 function AircraftDetail(props: {
   aircraft: Aircraft
+  stats: FleetStats | undefined
   weightUnit: WeightUnit
   onEdit: () => void
   onDelete: () => void
   onBack: () => void
 }): React.JSX.Element {
   const a = props.aircraft
+  const s = props.stats
   return (
     <div style={{ maxWidth: 720 }}>
       <button type="button" onClick={props.onBack}>
@@ -52,9 +58,13 @@ function AircraftDetail(props: {
         <dt>Current ICAO</dt>
         <dd>{a.currentIcao ?? '—'}</dd>
         <dt>Total hours</dt>
-        <dd>{a.totalHours}</dd>
+        <dd>{s ? s.totalHours.toFixed(1) : '0.0'}</dd>
         <dt>Total cycles</dt>
-        <dd>{a.totalCycles}</dd>
+        <dd>{s?.totalCycles ?? 0}</dd>
+        <dt>Last location</dt>
+        <dd>{s?.lastArrIcao ?? '—'}</dd>
+        <dt>Last flight</dt>
+        <dd>{formatDate(s?.lastFlightInUtc ?? null)}</dd>
         <dt>Active</dt>
         <dd>{a.isActive ? 'Yes' : 'No'}</dd>
         <dt>Notes</dt>
@@ -74,11 +84,17 @@ function AircraftDetail(props: {
 
 export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
+  const [stats, setStats] = useState<FleetStats[]>([])
   const [view, setView] = useState<View>({ kind: 'list' })
   const [importSummary, setImportSummary] = useState<AircraftImportSummary | null>(null)
 
   function reload(): Promise<void> {
-    return window.flightdeck.aircraftList().then(setAircraft)
+    return Promise.all([window.flightdeck.aircraftList(), window.flightdeck.logbookFleetStats()]).then(
+      ([aircraftList, fleetStats]) => {
+        setAircraft(aircraftList)
+        setStats(fleetStats)
+      }
+    )
   }
 
   useEffect(() => {
@@ -151,6 +167,7 @@ export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element 
     return (
       <AircraftDetail
         aircraft={existing}
+        stats={stats.find((s) => s.aircraftId === existing.id)}
         weightUnit={props.weightUnit}
         onEdit={() => setView({ kind: 'edit', id: view.id })}
         onDelete={() => handleDelete(view.id)}
@@ -199,24 +216,29 @@ export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element 
               <th>Name</th>
               <th>Operator</th>
               <th>Hours</th>
+              <th>Cycles</th>
               <th>Active</th>
             </tr>
           </thead>
           <tbody>
-            {aircraft.map((a) => (
-              <tr
-                key={a.id}
-                onClick={() => setView({ kind: 'detail', id: a.id })}
-                style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
-              >
-                <td>{a.registration}</td>
-                <td>{a.icaoType}</td>
-                <td>{a.name}</td>
-                <td>{a.operator ?? '—'}</td>
-                <td>{a.totalHours}</td>
-                <td>{a.isActive ? 'Yes' : 'No'}</td>
-              </tr>
-            ))}
+            {aircraft.map((a) => {
+              const s = stats.find((stat) => stat.aircraftId === a.id)
+              return (
+                <tr
+                  key={a.id}
+                  onClick={() => setView({ kind: 'detail', id: a.id })}
+                  style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                >
+                  <td>{a.registration}</td>
+                  <td>{a.icaoType}</td>
+                  <td>{a.name}</td>
+                  <td>{a.operator ?? '—'}</td>
+                  <td>{s ? s.totalHours.toFixed(1) : '0.0'}</td>
+                  <td>{s?.totalCycles ?? 0}</td>
+                  <td>{a.isActive ? 'Yes' : 'No'}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
