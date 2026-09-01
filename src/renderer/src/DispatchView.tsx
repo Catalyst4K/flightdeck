@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import type { Aircraft, DispatchOfp, FleetStats, WeightUnit } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AirportSearch } from './AirportSearch'
@@ -35,7 +34,6 @@ export function DispatchView(props: {
 }): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [fleetStats, setFleetStats] = useState<FleetStats[]>([])
-  const [username, setUsername] = useState('')
   const [ofp, setOfp] = useState<DispatchOfp | null>(null)
   const [selectedAircraftId, setSelectedAircraftId] = useState<number | null>(null)
   const [planAircraftId, setPlanAircraftId] = useState<number | null>(null)
@@ -54,14 +52,7 @@ export function DispatchView(props: {
   useEffect(() => {
     window.flightdeck.aircraftList().then(setAircraft)
     window.flightdeck.logbookFleetStats().then(setFleetStats)
-    window.flightdeck.settingsGetSimbriefUsername().then((u) => setUsername(u ?? ''))
   }, [])
-
-  async function handleSaveUsername(event: React.FormEvent): Promise<void> {
-    event.preventDefault()
-    await window.flightdeck.settingsSetSimbriefUsername(username.trim())
-    toast.success('SimBrief username saved.')
-  }
 
   function handlePlanAircraftChange(id: number): void {
     setPlanAircraftId(id)
@@ -141,23 +132,7 @@ export function DispatchView(props: {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="font-heading text-2xl font-semibold text-foreground">Dispatch</h1>
-        <form onSubmit={handleSaveUsername} className="flex items-end gap-2">
-          <Label className="flex flex-col items-start gap-1.5 text-sm">
-            SimBrief username
-            <Input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Navigraph Alias"
-              className="w-48"
-            />
-          </Label>
-          <Button type="submit" variant="outline" size="sm">
-            Save
-          </Button>
-        </form>
-      </div>
+      <h1 className="font-heading text-2xl font-semibold text-foreground">Dispatch</h1>
 
       <div className="flex flex-wrap gap-4">
         <Card className="max-w-md flex-1">
