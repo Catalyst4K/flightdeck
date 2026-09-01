@@ -4,18 +4,16 @@
  * this becomes SimConnectService in src/main. Delete or leave inert once M1 is folded
  * into the real service — it's not meant to survive as production code.
  *
- * IMPORTANT — this has NOT been run against a live sim yet. It was written on macOS
- * with no MSFS access (MSFS is Windows-only), so the API calls below are verified
- * against node-simconnect's shipped .d.ts files and its own samples/typescript/*.ts —
- * NOT against real sim output. Run it against a running MSFS 2024 and record what
- * actually happens (or diverges from below) in docs/simconnect-notes.md — that's the
- * actual point of this script, per CLAUDE.md.
- *
+ * Sim-confirmed against a live MSFS 2024 session on Windows (2026-09-01) — see
+ * docs/simconnect-notes.md for the full list of findings/divergences from the plan.
  * One correction already found by cross-checking the MSFS 2024 SDK docs against
  * PLAN.md §6's list: the parking-brake SimVar is `BRAKE PARKING POSITION`, not
- * `PARKING BRAKE POSITION` (word order) — used below. Everything else in the list is
- * still only doc-checked at best, not sim-confirmed. Watch the console for `exception`
- * events — those name exactly which request SimConnect rejected.
+ * `PARKING BRAKE POSITION` (word order) — used below. A second, sim-confirmed
+ * correction: `SIM RATE` is not a recognized SimVar in MSFS 2024, `SIMULATION RATE`
+ * is. Watch the console for `exception` events — those name which request SimConnect
+ * rejected, but note the exception's `index` field is NOT the position of the failing
+ * SimVar in this array (see docs/simconnect-notes.md) — match by `sendId` order or,
+ * more reliably, isolate the suspect var in its own data definition and retest.
  *
  * Usage:
  *   npm run spike:simconnect
@@ -80,7 +78,9 @@ const SIM_VARS: SimVarSpec[] = [
     { name: 'ATC ID', unit: null, dataType: SimConnectDataType.STRING32, read: (d) => d.readString32() },
     { name: 'ATC MODEL', unit: null, dataType: SimConnectDataType.STRING32, read: (d) => d.readString32() },
     { name: 'TITLE', unit: null, dataType: SimConnectDataType.STRING128, read: (d) => d.readString128() },
-    { name: 'SIM RATE', unit: 'number', dataType: SimConnectDataType.FLOAT64, read: (d) => d.readFloat64() },
+    // NOTE: was 'SIM RATE' — sim-confirmed as NAME_UNRECOGNIZED in MSFS 2024, see
+    // docs/simconnect-notes.md. 'SIMULATION RATE' is the correct name.
+    { name: 'SIMULATION RATE', unit: 'number', dataType: SimConnectDataType.FLOAT64, read: (d) => d.readFloat64() },
     { name: 'IS SLEW ACTIVE', unit: 'bool', dataType: SimConnectDataType.INT32, read: asBool },
 ];
 

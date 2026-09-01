@@ -4,6 +4,7 @@ import { IpcChannels, type NewAircraft } from '@shared/ipc'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import { createAircraft, listAircraft } from './db/aircraft-repo'
+import { SimConnectService } from './sim/SimConnectService'
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -38,6 +39,17 @@ app.whenReady().then(() => {
   )
 
   const window = createWindow()
+
+  const simConnectService = new SimConnectService()
+  ipcMain.handle(IpcChannels.simConnectionStatusGet, () => simConnectService.getStatus())
+  simConnectService.on('telemetry', (telemetry) => {
+    if (!window.isDestroyed()) window.webContents.send(IpcChannels.simTelemetry, telemetry)
+  })
+  simConnectService.on('status', (status) => {
+    if (!window.isDestroyed()) window.webContents.send(IpcChannels.simConnectionStatus, status)
+  })
+  simConnectService.start()
+  app.on('before-quit', () => simConnectService.stop())
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits
