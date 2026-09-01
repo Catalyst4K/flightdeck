@@ -9,6 +9,20 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Radix sets data-state="active|inactive|open|closed" and
+ * data-orientation="horizontal|vertical" (never bare data-active etc.) — the copied
+ * shadcn components assume these bare-word variants exist, and Tailwind only auto-derives
+ * bare data-* variants from a literally-named attribute (like Radix's own bare
+ * data-disabled/data-placeholder), not from a valued one like data-state. Without these,
+ * classes like data-horizontal:flex-col silently never match.
+ */
+@custom-variant data-active (&[data-state='active']);
+@custom-variant data-open (&[data-state='open']);
+@custom-variant data-closed (&[data-state='closed']);
+@custom-variant data-horizontal (&[data-orientation='horizontal']);
+@custom-variant data-vertical (&[data-orientation='vertical']);
+
 @theme inline {
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-heading: 'Space Grotesk', 'Inter', system-ui, sans-serif;
