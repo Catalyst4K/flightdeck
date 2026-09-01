@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
-  type AppPage,
   type DispatchOpenSimBriefParams,
   type FlightdeckApi,
   type NewAircraft,
@@ -58,12 +57,7 @@ const api: FlightdeckApi = {
   aircraftLookupByRegistration: (registration: string) =>
     ipcRenderer.invoke(IpcChannels.aircraftLookupByRegistration, registration),
   aircraftTypeSearch: (query: string) => ipcRenderer.invoke(IpcChannels.aircraftTypeSearch, query),
-  airportSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airportSearch, query),
-  onMenuNavigate: (listener: (page: AppPage) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, page: AppPage): void => listener(page)
-    ipcRenderer.on(IpcChannels.menuNavigate, handler)
-    return () => ipcRenderer.removeListener(IpcChannels.menuNavigate, handler)
-  }
+  airportSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airportSearch, query)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

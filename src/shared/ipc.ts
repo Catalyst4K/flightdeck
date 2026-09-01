@@ -299,8 +299,7 @@ export const IpcChannels = {
   logbookImportCsv: 'logbook:import-csv',
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
   aircraftTypeSearch: 'aircraft:type-search',
-  airportSearch: 'airport:search',
-  menuNavigate: 'menu:navigate'
+  airportSearch: 'airport:search'
 } as const
 
 export interface FlightdeckApi {
@@ -356,6 +355,4 @@ export interface FlightdeckApi {
   aircraftTypeSearch: (query: string) => Promise<AircraftTypeOption[]>
   /** Searches the vendored OurAirports name/ICAO list. Empty for a query under 2 chars. */
   airportSearch: (query: string) => Promise<AirportOption[]>
-  /** Fires when the native menu bar's tab items are clicked — see main/menu.ts. */
-  onMenuNavigate: (listener: (page: AppPage) => void) => () => void
 }
