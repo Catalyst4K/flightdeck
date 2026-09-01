@@ -337,3 +337,24 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   METAR text plus a decoded flight category (VFR/MVFR/IFR/LIFR); an all-unknown-code
   request returns HTTP 204, not an error. All four slots are fetched in one batched
   request rather than one per tab.
+- 2026-09-02: Moved the METAR panel from Track to Dispatch (Callum's call — it fits
+  better next to the flight's weights/info than next to the map) and made it a
+  controlled component (`className` prop removed) since it only has the one call site
+  now. `parseAirportsFromOfpJson` (route.ts) is gone with it — Dispatch already has
+  the OFP's dep/arr/altn as plain typed fields, it never needed the raw-JSON parse
+  Track's preview-before-saving case required.
+- 2026-09-02: Dispatch's fetched/created OFP now survives navigating away and back —
+  lifted `ofp` (renamed `dispatchOfp`) from DispatchView's local state up to App.tsx,
+  same pattern already used for `dispatchOfpJson`/Track's preview (in fact this
+  replaces that: App now derives `dispatchOfp?.ofpJson` directly instead of a separate
+  callback). Motivation: Callum wants Dispatch to double as a weights/info reference
+  for whatever's currently dispatched, not just a one-shot planning form that clears
+  itself the moment you press Fly. Pressing Fly no longer clears the OFP — only the
+  "Plan a flight" panel's own selection resets, ready for the next one. A second piece
+  of lifted state, `dispatchedOfpId`, tracks whether the currently-shown OFP has
+  already been turned into a flight — when it has, the Fleet-aircraft picker and Fly
+  button hide (re-flying an already-created flight makes no sense) in favor of a
+  "Flying" badge, and the details become pure reference. Fetching a genuinely new OFP
+  (different ofpId) naturally drops back into the interactive pre-fly state with no
+  explicit reset needed — no code path clears `dispatchedOfpId` directly, it's just
+  compared against the current OFP's id.

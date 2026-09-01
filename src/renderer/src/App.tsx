@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BookOpen, Plane, Radar, Route, Settings as SettingsIcon } from 'lucide-react'
-import type { AppPage, SimConnectionStatus, SimTelemetry, WeightUnit } from '@shared/ipc'
+import type { AppPage, DispatchOfp, SimConnectionStatus, SimTelemetry, WeightUnit } from '@shared/ipc'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
@@ -45,8 +45,15 @@ export default function App(): React.JSX.Element {
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
   const [simStatus, setSimStatus] = useState<SimConnectionStatus>({ state: 'disconnected' })
   const [telemetry, setTelemetry] = useState<SimTelemetry | null>(null)
-  // Lifted out of DispatchView so Track can preview a fetched-but-not-yet-saved OFP too.
-  const [dispatchOfpJson, setDispatchOfpJson] = useState<string | null>(null)
+  // Lifted out of DispatchView (rather than local state there) for two reasons: Track
+  // needs to preview a fetched-but-not-yet-saved OFP, and Dispatch itself needs the OFP
+  // to survive switching away to Track and back — Dispatch doubles as a weights/info
+  // reference for whatever's currently dispatched, not just a one-shot planning form.
+  const [dispatchOfp, setDispatchOfp] = useState<DispatchOfp | null>(null)
+  // ofpId of the OFP that's already been turned into a flight — lets Dispatch tell "still
+  // planning this" from "already flying this, showing it for reference" apart, and that
+  // distinction has to survive the same tab-switch-and-back as dispatchOfp itself.
+  const [dispatchedOfpId, setDispatchedOfpId] = useState<string | null>(null)
 
   useEffect(() => {
     window.flightdeck.settingsGetWeightUnit().then(setWeightUnit)
@@ -93,10 +100,13 @@ export default function App(): React.JSX.Element {
             <DispatchView
               weightUnit={weightUnit}
               onPlanned={() => setPage('track')}
-              onOfpJsonChange={setDispatchOfpJson}
+              ofp={dispatchOfp}
+              onOfpChange={setDispatchOfp}
+              dispatchedOfpId={dispatchedOfpId}
+              onDispatchedOfpIdChange={setDispatchedOfpId}
             />
           )}
-          {page === 'track' && <TrackView previewOfpJson={dispatchOfpJson} telemetry={telemetry} />}
+          {page === 'track' && <TrackView previewOfpJson={dispatchOfp?.ofpJson ?? null} telemetry={telemetry} />}
           {page === 'logbook' && <LogbookView weightUnit={weightUnit} />}
           {page === 'settings' && (
             <SettingsView weightUnit={weightUnit} onWeightUnitChange={handleWeightUnitChange} />
