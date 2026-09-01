@@ -106,7 +106,16 @@ export default function App(): React.JSX.Element {
               onDispatchedOfpIdChange={setDispatchedOfpId}
             />
           )}
-          {page === 'track' && <TrackView previewOfpJson={dispatchOfp?.ofpJson ?? null} telemetry={telemetry} />}
+          {page === 'track' && (
+            <TrackView
+              previewOfpJson={dispatchOfp?.ofpJson ?? null}
+              telemetry={telemetry}
+              onFlightCancelled={() => {
+                setDispatchOfp(null)
+                setDispatchedOfpId(null)
+              }}
+            />
+          )}
           {page === 'logbook' && <LogbookView weightUnit={weightUnit} />}
           {page === 'settings' && (
             <SettingsView weightUnit={weightUnit} onWeightUnitChange={handleWeightUnitChange} />
