@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Aircraft, AircraftTypeOption, NewAircraft } from '@shared/ipc'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { AirportSearch } from './AirportSearch'
+import { Combobox } from './components/Combobox'
 
 interface FormState {
   registration: string
@@ -47,85 +51,10 @@ function Field(props: {
   required?: boolean
 }): React.JSX.Element {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem' }}>
+    <Label className="flex flex-col items-start gap-1.5">
       {props.label}
-      <input
-        type="text"
-        value={props.value}
-        required={props.required}
-        onChange={(e) => props.onChange(e.target.value)}
-      />
-    </label>
-  )
-}
-
-/**
- * Manual fallback for when a registration lookup fails or the registration is fictional
- * — searches the vendored ICAO Doc 8643 type-designator list (docs/decisions.md).
- * Debounced so it doesn't fire on every keystroke.
- */
-function AircraftTypeSearch(props: { onSelect: (option: AircraftTypeOption) => void }): React.JSX.Element {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<AircraftTypeOption[]>([])
-  const [searching, setSearching] = useState(false)
-
-  useEffect(() => {
-    const q = query.trim()
-    const timer = setTimeout(() => {
-      if (q.length < 2) {
-        setResults([])
-        return
-      }
-      setSearching(true)
-      window.flightdeck
-        .aircraftTypeSearch(q)
-        .then(setResults)
-        .finally(() => setSearching(false))
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [query])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem' }}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        Search aircraft type
-        <input
-          type="text"
-          value={query}
-          placeholder="e.g. A350, Boeing, B77W"
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </label>
-      {searching && <span>Searching…</span>}
-      {results.length > 0 && (
-        <ul
-          style={{
-            listStyle: 'none',
-            margin: 0,
-            padding: 0,
-            border: '1px solid #ccc',
-            maxHeight: 160,
-            overflowY: 'auto'
-          }}
-        >
-          {results.map((r) => (
-            <li key={`${r.icaoType}-${r.manufacturer}-${r.model}`}>
-              <button
-                type="button"
-                onClick={() => {
-                  props.onSelect(r)
-                  setQuery('')
-                  setResults([])
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.25rem 0.5rem' }}
-              >
-                {r.manufacturer} — {r.model} ({r.icaoType})
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+      <Input type="text" value={props.value} required={props.required} onChange={(e) => props.onChange(e.target.value)} />
+    </Label>
   )
 }
 
@@ -172,13 +101,6 @@ export function AircraftForm(props: {
     }
   }
 
-  function handleTypeSelect(option: AircraftTypeOption): void {
-    // A type-search pick is an explicit, single-target choice, unlike the registration
-    // lookup above which fills several blanks at once and shouldn't clobber an
-    // in-progress edit.
-    set('icaoType', option.icaoType)
-  }
-
   async function handleSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault()
     setSubmitting(true)
@@ -193,35 +115,39 @@ export function AircraftForm(props: {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: 480 }}
-    >
-      {error && <p style={{ color: '#b00020' }}>{error}</p>}
+    <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-5">
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem' }}>
+      <Label className="flex flex-col items-start gap-1.5">
         Registration
-        <div style={{ display: 'flex', gap: '0.25rem' }}>
-          <input
+        <div className="flex w-full gap-1.5">
+          <Input
             type="text"
             value={form.registration}
             required
             onChange={(e) => set('registration', e.target.value)}
-            style={{ flex: 1, minWidth: 0 }}
+            className="flex-1"
           />
-          <button type="button" onClick={handleLookup} disabled={lookingUp}>
+          <Button type="button" variant="outline" size="sm" onClick={handleLookup} disabled={lookingUp}>
             {lookingUp ? '…' : 'Look up'}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Label>
 
-      <Field label="ICAO type" value={form.icaoType} onChange={(v) => set('icaoType', v)} required />
+      {lookupStatus && <p className="text-sm text-muted-foreground">{lookupStatus}</p>}
 
-      {lookupStatus && <p style={{ fontSize: '0.85rem' }}>{lookupStatus}</p>}
-
-      <div>
-        <AircraftTypeSearch onSelect={handleTypeSelect} />
-        <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
+      <div className="flex flex-col gap-1.5">
+        <Label>ICAO type</Label>
+        <Combobox
+          value={form.icaoType}
+          onChange={(value) => set('icaoType', value.toUpperCase())}
+          search={(query) => window.flightdeck.aircraftTypeSearch(query)}
+          getOptionKey={(r: AircraftTypeOption) => `${r.icaoType}-${r.manufacturer}-${r.model}`}
+          getOptionValue={(r) => r.icaoType}
+          getOptionLabel={(r) => `${r.manufacturer} — ${r.model} (${r.icaoType})`}
+          placeholder="e.g. A350, Boeing, B77W, or type an ICAO code"
+        />
+        <p className="text-xs text-muted-foreground">
           Registration lookup and aircraft type data via adsbdb.com (PlaneBase).
         </p>
       </div>
@@ -233,18 +159,18 @@ export function AircraftForm(props: {
         onChange={(v) => set('simbriefAirframeId', v)}
       />
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem' }}>
-        Current airport
+      <div className="flex flex-col gap-1.5">
+        <Label>Current airport</Label>
         <AirportSearch value={form.currentIcao} onChange={(v) => set('currentIcao', v)} />
-      </label>
+      </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <button type="submit" disabled={submitting}>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={submitting}>
           {submitting ? 'Saving…' : 'Save'}
-        </button>
-        <button type="button" onClick={props.onCancel} disabled={submitting}>
+        </Button>
+        <Button type="button" variant="outline" onClick={props.onCancel} disabled={submitting}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   )
