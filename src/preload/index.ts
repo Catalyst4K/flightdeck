@@ -49,7 +49,8 @@ const api: FlightdeckApi = {
     return () => ipcRenderer.removeListener(IpcChannels.trackingPoint, handler)
   },
   logbookListCompletedFlights: () => ipcRenderer.invoke(IpcChannels.logbookListCompletedFlights),
-  logbookFleetStats: () => ipcRenderer.invoke(IpcChannels.logbookFleetStats)
+  logbookFleetStats: () => ipcRenderer.invoke(IpcChannels.logbookFleetStats),
+  logbookImportCsv: () => ipcRenderer.invoke(IpcChannels.logbookImportCsv)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

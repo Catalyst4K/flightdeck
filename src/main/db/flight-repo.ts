@@ -59,6 +59,40 @@ export function createFlight(db: FlightdeckDb, input: NewFlight): Flight {
   return toFlight(row)
 }
 
+export interface HistoricalFlightInput {
+  aircraftId: number
+  depIcao: string
+  arrIcao: string
+  flightNumber: string | null
+  actualOutUtc: string
+  actualInUtc: string
+}
+
+/**
+ * Inserts a flight that already happened — CSV logbook import (logbook-import.ts), not
+ * the live start/off/on/complete tracking lifecycle above. Goes straight to 'completed'
+ * with block time derived from the two timestamps; there's no off/on or fuel data in a
+ * summary logbook export, so those stay null same as any other field the source doesn't
+ * provide.
+ */
+export function createHistoricalFlight(db: FlightdeckDb, input: HistoricalFlightInput): Flight {
+  const [row] = db
+    .insert(flight)
+    .values({
+      aircraftId: input.aircraftId,
+      status: 'completed',
+      flightNumber: input.flightNumber,
+      depIcao: input.depIcao,
+      arrIcao: input.arrIcao,
+      actualOutUtc: input.actualOutUtc,
+      actualInUtc: input.actualInUtc,
+      blockMinutes: minutesBetween(input.actualOutUtc, input.actualInUtc)
+    })
+    .returning()
+    .all()
+  return toFlight(row)
+}
+
 /** Block-out: the flight goes 'active' and tracking begins. */
 export function startFlight(
   db: FlightdeckDb,

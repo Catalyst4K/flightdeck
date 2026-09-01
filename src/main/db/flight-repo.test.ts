@@ -6,6 +6,7 @@ import {
   abandonFlight,
   completeFlight,
   createFlight,
+  createHistoricalFlight,
   getFleetStats,
   getFlight,
   listCompletedFlights,
@@ -78,6 +79,23 @@ describe('flight repo', () => {
     const created = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' })
     expect(getFlight(db, created.id)).toEqual(created)
     expect(getFlight(db, 99999)).toBeUndefined()
+  })
+
+  it('inserts a historical flight already completed, with block time derived from its timestamps', () => {
+    const created = createHistoricalFlight(db, {
+      aircraftId,
+      depIcao: 'EGLL',
+      arrIcao: 'RKSI',
+      flightNumber: 'KAL667',
+      actualOutUtc: '2026-08-21T22:16:00.000Z',
+      actualInUtc: '2026-08-22T10:50:00.000Z'
+    })
+
+    expect(created.status).toBe('completed')
+    expect(created.flightNumber).toBe('KAL667')
+    expect(created.blockMinutes).toBe(754) // 22:16 -> next day 10:50
+    expect(created.airMinutes).toBeNull() // no off/on data in a summary logbook export
+    expect(created.fuelBurnKg).toBeNull()
   })
 
   describe('tracking lifecycle', () => {
