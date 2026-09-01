@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { Aircraft, NewAircraft, WeightUnit } from '@shared/ipc'
+import { useEffect, useState } from 'react'
+import type { Aircraft, AircraftTypeOption, NewAircraft, WeightUnit } from '@shared/ipc'
 import { kgToUnit, unitToKg } from './units'
 
 interface FormState {
@@ -130,6 +130,76 @@ function Field(props: {
   )
 }
 
+/**
+ * Manual fallback for when a registration lookup fails or the registration is fictional
+ * — searches the vendored ICAO Doc 8643 type-designator list (docs/decisions.md).
+ * Debounced so it doesn't fire on every keystroke.
+ */
+function AircraftTypeSearch(props: { onSelect: (option: AircraftTypeOption) => void }): React.JSX.Element {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<AircraftTypeOption[]>([])
+  const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    const q = query.trim()
+    const timer = setTimeout(() => {
+      if (q.length < 2) {
+        setResults([])
+        return
+      }
+      setSearching(true)
+      window.flightdeck
+        .aircraftTypeSearch(q)
+        .then(setResults)
+        .finally(() => setSearching(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem' }}>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        Search aircraft type
+        <input
+          type="text"
+          value={query}
+          placeholder="e.g. A350, Boeing, B77W"
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </label>
+      {searching && <span>Searching…</span>}
+      {results.length > 0 && (
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            border: '1px solid #ccc',
+            maxHeight: 160,
+            overflowY: 'auto'
+          }}
+        >
+          {results.map((r) => (
+            <li key={`${r.icaoType}-${r.manufacturer}-${r.model}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  props.onSelect(r)
+                  setQuery('')
+                  setResults([])
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.25rem 0.5rem' }}
+              >
+                {r.manufacturer} — {r.model} ({r.icaoType})
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function AircraftForm(props: {
   initial?: Aircraft
   weightUnit: WeightUnit
@@ -141,9 +211,52 @@ export function AircraftForm(props: {
   )
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [lookupStatus, setLookupStatus] = useState<string | null>(null)
+  const [lookingUp, setLookingUp] = useState(false)
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  async function handleLookup(): Promise<void> {
+    const registration = form.registration.trim()
+    if (!registration) {
+      setLookupStatus('Enter a registration first.')
+      return
+    }
+    setLookingUp(true)
+    setLookupStatus(null)
+    try {
+      const result = await window.flightdeck.aircraftLookupByRegistration(registration)
+      if (!result) {
+        setLookupStatus(`No match for "${registration}" — search for the type below.`)
+        return
+      }
+      // Fills blanks only — never overwrites something already typed/edited.
+      setForm((current) => ({
+        ...current,
+        icaoType: current.icaoType || result.icaoType,
+        name: current.name || result.name,
+        operator: current.operator || result.operator || current.operator
+      }))
+      setLookupStatus(`Found: ${result.operator ?? 'unknown operator'}, ${result.name}`)
+    } catch (err) {
+      setLookupStatus(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLookingUp(false)
+    }
+  }
+
+  function handleTypeSelect(option: AircraftTypeOption): void {
+    // A type-search pick is an explicit, single-target choice — it sets icaoType/wakeCat
+    // directly rather than only filling blanks (unlike the registration lookup above,
+    // which fills several fields at once and shouldn't clobber an in-progress edit).
+    setForm((current) => ({
+      ...current,
+      icaoType: option.icaoType,
+      wakeCat: option.wakeCat,
+      name: current.name || `${option.manufacturer} ${option.model}`
+    }))
   }
 
   async function handleSubmit(event: React.FormEvent): Promise<void> {
@@ -174,12 +287,21 @@ export function AircraftForm(props: {
 
       <fieldset style={fieldsetStyle}>
         <legend>Basic</legend>
-        <Field
-          label="Registration"
-          value={form.registration}
-          onChange={(v) => set('registration', v)}
-          required
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.85rem' }}>
+          Registration
+          <div style={{ display: 'flex', gap: '0.25rem' }}>
+            <input
+              type="text"
+              value={form.registration}
+              required
+              onChange={(e) => set('registration', e.target.value)}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <button type="button" onClick={handleLookup} disabled={lookingUp}>
+              {lookingUp ? '…' : 'Look up'}
+            </button>
+          </div>
+        </div>
         <Field label="ICAO type" value={form.icaoType} onChange={(v) => set('icaoType', v)} required />
         <Field label="Name" value={form.name} onChange={(v) => set('name', v)} required />
         <Field label="Operator" value={form.operator} onChange={(v) => set('operator', v)} />
@@ -190,6 +312,15 @@ export function AircraftForm(props: {
           onChange={(v) => set('simbriefAirframeId', v)}
         />
       </fieldset>
+
+      {lookupStatus && <p style={{ fontSize: '0.85rem' }}>{lookupStatus}</p>}
+
+      <div>
+        <AircraftTypeSearch onSelect={handleTypeSelect} />
+        <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
+          Registration lookup and aircraft type data via adsbdb.com (PlaneBase).
+        </p>
+      </div>
 
       <fieldset style={fieldsetStyle}>
         <legend>Performance ({props.weightUnit})</legend>

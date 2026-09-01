@@ -154,3 +154,32 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   `DESCENT_SUSTAIN_SAMPLES` too, so without this the recorder would commit a flight to
   "descent" — and its 1s-interval, high-precision recording — for the rest of the flight
   after the first step-down, long before any real approach.
+- 2026-09-01: Fleet aircraft-add now offers a registration lookup plus a manual type
+  search, instead of typing every field by hand. Two data sources, both keyless/free —
+  same "no accounts, no backend" reasoning as OpenFreeMap (M4) and SimBrief's
+  username-based fetch (M3):
+  - **Registration lookup**: [adsbdb](https://github.com/mrjackwills/adsbdb) — no API key,
+    no documented rate limit, 262-star actively-maintained open-source public API.
+    Verified live (not assumed from docs) against a real registration from the user's own
+    imported fleet: `GET https://api.adsbdb.com/v0/aircraft/G-XWBS` returns type,
+    icao_type, and registered_owner; an unrecognised/fictional registration returns a
+    plain 404 (verified). Its terms require attribution for aircraft data ("PlaneBase") —
+    shown as a small credit line in the Fleet form, same treatment as OpenFreeMap's
+    required `AttributionControl`.
+  - **Manual type search fallback**: vendored
+    [ColtJD45/icao-aircraft-designator-list](https://github.com/ColtJD45/icao-aircraft-designator-list)
+    (MIT, sourced from ICAO Doc 8643) as `resources/icao-aircraft-types.csv` — verified
+    the real file (7389 rows, 7 consistent columns, no quoted fields) before vendoring.
+    Bundled into the main-process bundle via Vite's `?raw` import (same mechanism M4 used
+    for the maplibre worker URL) rather than a runtime filesystem read, so it works
+    identically in dev and packaged builds with no `extraResources` handling needed. This
+    is the first use of the "vendor a reference CSV" pattern — PLAN.md's M6 (OurAirports)
+    will reuse the same approach. Parsed/searched entirely in the main process
+    (`aircraft-lookup/icao-types.ts`) and exposed via a typed IPC search channel, per
+    CLAUDE.md's "renderer never touches the filesystem" rule — not shipped to the
+    renderer for client-side filtering, even though the file is small enough that would
+    have worked technically.
+    Both fill blank form fields only, never overwrite something already typed — the
+    registration lookup can fill several fields at once (icaoType/name/operator) so it must
+    not clobber an in-progress edit; a type-search pick is a single explicit choice so it
+    sets icaoType/wakeCat directly once selected.

@@ -7,6 +7,8 @@ import {
   type NewFlight,
   type WeightUnit
 } from '@shared/ipc'
+import { fetchAircraftByRegistration } from './aircraft-lookup/adsbdb-client'
+import { searchAircraftTypes } from './aircraft-lookup/icao-types'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import {
@@ -130,6 +132,11 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))
   ipcMain.handle(IpcChannels.logbookFleetStats, () => getFleetStats(db))
   ipcMain.handle(IpcChannels.logbookImportCsv, () => importLogbookCsv(db, window))
+
+  ipcMain.handle(IpcChannels.aircraftLookupByRegistration, (_event, registration: string) =>
+    fetchAircraftByRegistration(registration)
+  )
+  ipcMain.handle(IpcChannels.aircraftTypeSearch, (_event, query: string) => searchAircraftTypes(query))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits
