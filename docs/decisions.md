@@ -227,3 +227,35 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     conversation for the drafted email) and shipped this round against the keyless
     `dispatch.simbrief.com` redirect; real in-app generation is a follow-up once a key
     and SimBrief's integration files are actually in hand.
+- 2026-09-01: Started a design-system/UI-redesign initiative — M0–M6 shipped fully
+  working but with zero visual design investment (no CSS files, no shared components,
+  every view hand-rolling its own inline styles; only in-app navigation was the native
+  OS menu bar). Full plan in the `feat/design-system-foundation` branch history; three
+  decisions made up front: **Tailwind + shadcn/ui** as the component toolkit (matches
+  PLAN.md's original recommendation, never adopted until now — shadcn's components are
+  copied into the repo rather than an npm runtime dependency, staying ownable/editable),
+  **light + dark both from day one** (following the OS setting by default, not
+  dark-first), and **a top tab bar** as primary in-app navigation (Fleet/Dispatch/Track/
+  Logbook/Settings), with the native menu trimmed back to standard OS items only.
+  - **Visual direction: "Glass Cockpit / MFD"**, chosen from 4 explored concepts (the
+    others — a neutral Linear/Notion-style SaaS look, a warm analogue-cockpit amber/brass
+    look, and a phosphor-green radar-scope look — were genuinely considered, not padding;
+    all four are visible on the design canvas's "Alternates" page if revisited). Cool
+    blues/cyans on near-black in dark mode, brightened (not just inverted) for light mode
+    after live feedback that a first light-mode pass read as too heavy/dim — light mode
+    uses a more saturated sky-blue accent and near-white surfaces rather than a darkened
+    teal on dim blue-grey. Fonts: **Space Grotesk** (headings), **Inter** (body),
+    **IBM Plex Mono** (numeric/data readouts — speeds, altitudes, fuel, hours). Exact
+    token values below are the source of truth for the Tailwind/shadcn setup — the
+    canvas link is a reference, not the record.
+
+    ```
+    dark:  bg #0a0e14   surface #111823   border #1e2a3a
+           text #e6f1ff  text-secondary #7d96b3
+           accent #22d3ee  accent-2 #3b82f6
+           success #34d399  danger #f87171
+    light: bg #f8fafc   surface #ffffff   border #e2e8f0
+           text #0f172a  text-secondary #64748b
+           accent #0ea5e9  accent-2 #3b82f6
+           success #10b981  danger #ef4444
+    ```
