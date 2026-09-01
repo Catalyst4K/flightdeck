@@ -4,6 +4,7 @@ import type { MetarReport } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 import { AirportSearch } from './AirportSearch'
 
 type Slot = 'departure' | 'destination' | 'alternate' | 'custom'
@@ -59,6 +60,9 @@ export function MetarPanel(props: {
   depIcao: string | null
   arrIcao: string | null
   altnIcao: string | null
+  /** Defaults to filling its container (a flex-col parent stretches it full width) —
+   *  pass e.g. "w-96" to size it explicitly instead, for a row layout that wouldn't. */
+  className?: string
 }): React.JSX.Element {
   const [tab, setTab] = useState<Slot>('departure')
   const [customIcao, setCustomIcao] = useState('')
@@ -107,7 +111,7 @@ export function MetarPanel(props: {
   }
 
   return (
-    <Card size="sm" className="w-96">
+    <Card size="sm" className={cn(props.className)}>
       <CardContent>
         <Tabs value={tab} onValueChange={(v) => setTab(v as Slot)} className="gap-2">
           <div className="flex items-center gap-2">
