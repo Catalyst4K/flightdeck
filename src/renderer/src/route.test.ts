@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAirportsFromOfpJson, parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
+import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
 
 describe('parseRouteFromOfpJson', () => {
   it('extracts [lon, lat] pairs from navlog fixes', () => {
@@ -61,29 +61,5 @@ describe('parseWaypointsFromOfpJson', () => {
       navlog: { fix: [{ pos_lat: '51.5', pos_long: '-0.5' }, { ident: 'X', pos_lat: 'n/a', pos_long: '-0.5' }] }
     })
     expect(parseWaypointsFromOfpJson(ofp)).toEqual([])
-  })
-})
-
-describe('parseAirportsFromOfpJson', () => {
-  it('extracts dep/arr/altn ICAO codes', () => {
-    const ofp = JSON.stringify({
-      origin: { icao_code: 'EGLL' },
-      destination: { icao_code: 'VHHH' },
-      alternate: { icao_code: 'VMMC' }
-    })
-    expect(parseAirportsFromOfpJson(ofp)).toEqual({ depIcao: 'EGLL', arrIcao: 'VHHH', altnIcao: 'VMMC' })
-  })
-
-  it('handles a missing alternate — genuinely optional in a real OFP', () => {
-    const ofp = JSON.stringify({ origin: { icao_code: 'EGLL' }, destination: { icao_code: 'VHHH' } })
-    expect(parseAirportsFromOfpJson(ofp)).toEqual({ depIcao: 'EGLL', arrIcao: 'VHHH', altnIcao: null })
-  })
-
-  it('returns all null for null input', () => {
-    expect(parseAirportsFromOfpJson(null)).toEqual({ depIcao: null, arrIcao: null, altnIcao: null })
-  })
-
-  it('returns all null for invalid JSON', () => {
-    expect(parseAirportsFromOfpJson('not json')).toEqual({ depIcao: null, arrIcao: null, altnIcao: null })
   })
 })

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { Aircraft, DispatchOfp, FleetStats, WeightUnit } from '@shared/ipc'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AirportSearch } from './AirportSearch'
@@ -30,25 +31,25 @@ export function DispatchView(props: {
   weightUnit: WeightUnit
   /** Called after a planned flight is saved, so the app can switch to Track to preview it. */
   onPlanned?: () => void
-  /** Called whenever the fetched-but-not-yet-saved OFP changes, so Track can preview it too. */
-  onOfpJsonChange?: (ofpJson: string | null) => void
+  /** The currently fetched/created OFP — lifted to App so it survives switching away to
+   *  another tab and back, and so Track can preview it before it's saved as a flight. */
+  ofp: DispatchOfp | null
+  onOfpChange: (ofp: DispatchOfp | null) => void
+  /** ofpId of the OFP that's already been turned into a flight, if any — also lifted, so
+   *  "still planning this" vs. "already flying this, shown for reference" survives a
+   *  tab switch the same way `ofp` does. */
+  dispatchedOfpId: string | null
+  onDispatchedOfpIdChange: (ofpId: string | null) => void
 }): React.JSX.Element {
+  const { ofp } = props
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [fleetStats, setFleetStats] = useState<FleetStats[]>([])
-  const [ofp, setOfp] = useState<DispatchOfp | null>(null)
   const [selectedAircraftId, setSelectedAircraftId] = useState<number | null>(null)
   const [planAircraftId, setPlanAircraftId] = useState<number | null>(null)
   const [depIcao, setDepIcao] = useState('')
   const [destIcao, setDestIcao] = useState('')
   const [fetching, setFetching] = useState(false)
   const [saving, setSaving] = useState(false)
-
-  // Dispatch never renders a map itself — Track is the only place a route/waypoints
-  // preview shows up (both for a saved flight and, via this, a fetched-but-unsaved OFP).
-  useEffect(() => {
-    props.onOfpJsonChange?.(ofp?.ofpJson ?? null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ofp?.ofpJson])
 
   useEffect(() => {
     window.flightdeck.aircraftList().then(setAircraft)
@@ -80,10 +81,10 @@ export function DispatchView(props: {
 
   async function handleFetch(): Promise<void> {
     setFetching(true)
-    setOfp(null)
+    props.onOfpChange(null)
     try {
       const fetched = await window.flightdeck.dispatchFetchOfp()
-      setOfp(fetched)
+      props.onOfpChange(fetched)
       // A flight already chosen in the "Plan a flight" panel above takes priority over the
       // registration-match heuristic — that heuristic stays as a fallback for anyone who
       // fetches without going through that panel first.
@@ -118,7 +119,10 @@ export function DispatchView(props: {
         ofpId: ofp.ofpId,
         ofpJson: ofp.ofpJson
       })
-      setOfp(null)
+      // The OFP itself stays put — Dispatch doubles as a weights/info reference for
+      // whatever's currently dispatched until it's overwritten by the next fetch (see
+      // alreadyFlown below) or the app closes. Only the "start a new plan" side resets.
+      props.onDispatchedOfpIdChange(ofp.ofpId)
       setSelectedAircraftId(null)
       setPlanAircraftId(null)
       setDepIcao('')
@@ -134,6 +138,7 @@ export function DispatchView(props: {
   const metarAirports = ofp
     ? { depIcao: ofp.depIcao, arrIcao: ofp.arrIcao, altnIcao: ofp.altnIcao }
     : { depIcao: depIcao || null, arrIcao: destIcao || null, altnIcao: null }
+  const alreadyFlown = ofp != null && ofp.ofpId === props.dispatchedOfpId
 
   return (
     <div className="flex flex-col gap-6">
@@ -207,6 +212,11 @@ export function DispatchView(props: {
                 <CardTitle>
                   {ofp.flightNumber}: {ofp.depIcao} → {ofp.arrIcao} (altn {ofp.altnIcao})
                 </CardTitle>
+                {alreadyFlown && (
+                  <CardAction>
+                    <Badge variant="secondary">Flying</Badge>
+                  </CardAction>
+                )}
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
@@ -234,35 +244,39 @@ export function DispatchView(props: {
                 </dl>
                 <p className="max-h-16 overflow-auto text-sm text-muted-foreground">{ofp.routeString}</p>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label>Fleet aircraft</Label>
-                  <Select
-                    value={selectedAircraftId != null ? String(selectedAircraftId) : undefined}
-                    onValueChange={(v) => setSelectedAircraftId(Number(v))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="— select —" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {aircraft.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {a.registration} — {a.icaoType}
-                          {a.registration === ofp.aircraftRegistration ? ' (matched)' : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {ofp.matchedAircraftId == null && selectedAircraftId == null && (
-                  <p className="text-sm text-muted-foreground">
-                    No fleet aircraft matches tail {ofp.aircraftRegistration || '(none in OFP)'} — pick
-                    one manually.
-                  </p>
-                )}
+                {!alreadyFlown && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Fleet aircraft</Label>
+                      <Select
+                        value={selectedAircraftId != null ? String(selectedAircraftId) : undefined}
+                        onValueChange={(v) => setSelectedAircraftId(Number(v))}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="— select —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {aircraft.map((a) => (
+                            <SelectItem key={a.id} value={String(a.id)}>
+                              {a.registration} — {a.icaoType}
+                              {a.registration === ofp.aircraftRegistration ? ' (matched)' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {ofp.matchedAircraftId == null && selectedAircraftId == null && (
+                      <p className="text-sm text-muted-foreground">
+                        No fleet aircraft matches tail {ofp.aircraftRegistration || '(none in OFP)'} — pick
+                        one manually.
+                      </p>
+                    )}
 
-                <Button type="button" onClick={handleSaveFlight} disabled={saving || selectedAircraftId == null}>
-                  {saving ? 'Starting…' : 'Fly'}
-                </Button>
+                    <Button type="button" onClick={handleSaveFlight} disabled={saving || selectedAircraftId == null}>
+                      {saving ? 'Starting…' : 'Fly'}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           ) : (
