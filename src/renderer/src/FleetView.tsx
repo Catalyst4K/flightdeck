@@ -1,11 +1,35 @@
 import { useEffect, useState } from 'react'
+import { ArrowLeft, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { toast } from 'sonner'
 import type { Aircraft, AircraftImportSummary, FleetStats, NewAircraft } from '@shared/ipc'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AircraftForm } from './AircraftForm'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number } | { kind: 'new' } | { kind: 'edit'; id: number }
 
 function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : '—'
+}
+
+function DetailField(props: { label: string; value: string | number }): React.JSX.Element {
+  return (
+    <>
+      <dt className="text-muted-foreground">{props.label}</dt>
+      <dd className="text-foreground">{props.value}</dd>
+    </>
+  )
 }
 
 function AircraftDetail(props: {
@@ -18,35 +42,39 @@ function AircraftDetail(props: {
   const a = props.aircraft
   const s = props.stats
   return (
-    <div style={{ maxWidth: 480 }}>
-      <button type="button" onClick={props.onBack}>
-        ← Back to fleet
-      </button>
-      <h2>
-        {a.registration} — {a.icaoType}
-      </h2>
-      <dl style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '0.25rem 1.5rem' }}>
-        <dt>Airline</dt>
-        <dd>{a.operator ?? '—'}</dd>
-        <dt>SimBrief profile</dt>
-        <dd>{a.simbriefAirframeId ?? '—'}</dd>
-        <dt>Current airport</dt>
-        <dd>{a.currentIcao ?? s?.lastArrIcao ?? '—'}</dd>
-        <dt>Total hours</dt>
-        <dd>{s ? s.totalHours.toFixed(1) : '0.0'}</dd>
-        <dt>Flights</dt>
-        <dd>{s?.totalCycles ?? 0}</dd>
-        <dt>Last flight</dt>
-        <dd>{formatDate(s?.lastFlightInUtc ?? null)}</dd>
-      </dl>
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
-        <button type="button" onClick={props.onEdit}>
-          Edit
-        </button>
-        <button type="button" onClick={props.onDelete}>
-          Delete
-        </button>
-      </div>
+    <div className="flex max-w-lg flex-col gap-4">
+      <Button type="button" variant="ghost" size="sm" onClick={props.onBack} className="w-fit">
+        <ArrowLeft />
+        Back to fleet
+      </Button>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">
+            {a.registration} — {a.icaoType}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+            <DetailField label="Airline" value={a.operator ?? '—'} />
+            <DetailField label="SimBrief profile" value={a.simbriefAirframeId ?? '—'} />
+            <DetailField label="Current airport" value={a.currentIcao ?? s?.lastArrIcao ?? '—'} />
+            <DetailField label="Total hours" value={s ? s.totalHours.toFixed(1) : '0.0'} />
+            <DetailField label="Flights" value={s?.totalCycles ?? 0} />
+            <DetailField label="Last flight" value={formatDate(s?.lastFlightInUtc ?? null)} />
+          </dl>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={props.onEdit}>
+              <Pencil />
+              Edit
+            </Button>
+            <Button type="button" variant="destructive" size="sm" onClick={props.onDelete}>
+              <Trash2 />
+              Delete
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -55,7 +83,7 @@ export function FleetView(): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [stats, setStats] = useState<FleetStats[]>([])
   const [view, setView] = useState<View>({ kind: 'list' })
-  const [importSummary, setImportSummary] = useState<AircraftImportSummary | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Aircraft | null>(null)
 
   function reload(): Promise<void> {
     return Promise.all([window.flightdeck.aircraftList(), window.flightdeck.logbookFleetStats()]).then(
@@ -82,29 +110,51 @@ export function FleetView(): React.JSX.Element {
     setView({ kind: 'detail', id })
   }
 
-  async function handleDelete(id: number): Promise<void> {
-    if (!confirm('Delete this aircraft? This cannot be undone.')) return
-    await window.flightdeck.aircraftDelete(id)
-    await reload()
-    setView({ kind: 'list' })
+  async function handleConfirmDelete(): Promise<void> {
+    if (!deleteTarget) return
+    const target = deleteTarget
+    setDeleteTarget(null)
+    try {
+      await window.flightdeck.aircraftDelete(target.id)
+      await reload()
+      setView({ kind: 'list' })
+      toast.success(`Deleted ${target.registration}.`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  function summarizeImport(summary: AircraftImportSummary): string {
+    if (summary.skipped.length === 0) return `Imported ${summary.imported} aircraft.`
+    const skipped = summary.skipped.map((s) => `${s.registration} (${s.reason})`).join(', ')
+    return `Imported ${summary.imported} aircraft. Skipped ${summary.skipped.length}: ${skipped}`
   }
 
   async function handleImport(): Promise<void> {
-    const summary = await window.flightdeck.aircraftImport()
-    if (summary) {
-      setImportSummary(summary)
-      await reload()
+    try {
+      const summary = await window.flightdeck.aircraftImport()
+      if (summary) {
+        toast.success(summarizeImport(summary))
+        await reload()
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
     }
   }
 
   async function handleExport(): Promise<void> {
-    await window.flightdeck.aircraftExport()
+    try {
+      const saved = await window.flightdeck.aircraftExport()
+      if (saved) toast.success('Fleet exported.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
   }
 
   if (view.kind === 'new') {
     return (
-      <div>
-        <h1>New aircraft</h1>
+      <div className="flex flex-col gap-6">
+        <h1 className="font-heading text-2xl font-semibold text-foreground">New aircraft</h1>
         <AircraftForm onSubmit={handleCreate} onCancel={() => setView({ kind: 'list' })} />
       </div>
     )
@@ -112,10 +162,10 @@ export function FleetView(): React.JSX.Element {
 
   if (view.kind === 'edit') {
     const existing = aircraft.find((a) => a.id === view.id)
-    if (!existing) return <p>Aircraft not found.</p>
+    if (!existing) return <p className="text-sm text-muted-foreground">Aircraft not found.</p>
     return (
-      <div>
-        <h1>Edit {existing.registration}</h1>
+      <div className="flex flex-col gap-6">
+        <h1 className="font-heading text-2xl font-semibold text-foreground">Edit {existing.registration}</h1>
         <AircraftForm
           initial={existing}
           onSubmit={(data) => handleUpdate(view.id, data)}
@@ -127,79 +177,86 @@ export function FleetView(): React.JSX.Element {
 
   if (view.kind === 'detail') {
     const existing = aircraft.find((a) => a.id === view.id)
-    if (!existing) return <p>Aircraft not found.</p>
+    if (!existing) return <p className="text-sm text-muted-foreground">Aircraft not found.</p>
     return (
-      <AircraftDetail
-        aircraft={existing}
-        stats={stats.find((s) => s.aircraftId === existing.id)}
-        onEdit={() => setView({ kind: 'edit', id: view.id })}
-        onDelete={() => handleDelete(view.id)}
-        onBack={() => setView({ kind: 'list' })}
-      />
+      <>
+        <AircraftDetail
+          aircraft={existing}
+          stats={stats.find((s) => s.aircraftId === existing.id)}
+          onEdit={() => setView({ kind: 'edit', id: view.id })}
+          onDelete={() => setDeleteTarget(existing)}
+          onBack={() => setView({ kind: 'list' })}
+        />
+        <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {deleteTarget?.registration}?</AlertDialogTitle>
+              <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
     )
   }
 
   return (
-    <div>
-      <h1>Fleet</h1>
-
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <button type="button" onClick={() => setView({ kind: 'new' })}>
-          New aircraft
-        </button>
-        <button type="button" onClick={handleImport}>
-          Import JSON
-        </button>
-        <button type="button" onClick={handleExport}>
-          Export JSON
-        </button>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="font-heading text-2xl font-semibold text-foreground">Fleet</h1>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={handleImport}>
+            <Upload />
+            Import JSON
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleExport}>
+            <Download />
+            Export JSON
+          </Button>
+          <Button type="button" size="sm" onClick={() => setView({ kind: 'new' })}>
+            <Plus />
+            New aircraft
+          </Button>
+        </div>
       </div>
 
-      {importSummary && (
-        <p>
-          Imported {importSummary.imported} aircraft.
-          {importSummary.skipped.length > 0 && (
-            <>
-              {' '}
-              Skipped {importSummary.skipped.length}:{' '}
-              {importSummary.skipped.map((s) => `${s.registration} (${s.reason})`).join(', ')}
-            </>
-          )}
-        </p>
-      )}
-
       {aircraft.length === 0 ? (
-        <p>No aircraft yet — add one or import a fleet.</p>
+        <p className="text-sm text-muted-foreground">No aircraft yet — add one or import a fleet.</p>
       ) : (
-        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
-              <th>Registration</th>
-              <th>Type</th>
-              <th>Airline</th>
-              <th>Hours</th>
-              <th>Flights</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Registration</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Airline</TableHead>
+              <TableHead>Hours</TableHead>
+              <TableHead>Flights</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {aircraft.map((a) => {
               const s = stats.find((stat) => stat.aircraftId === a.id)
               return (
-                <tr
+                <TableRow
                   key={a.id}
                   onClick={() => setView({ kind: 'detail', id: a.id })}
-                  style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                  className="cursor-pointer"
                 >
-                  <td>{a.registration}</td>
-                  <td>{a.icaoType}</td>
-                  <td>{a.operator ?? '—'}</td>
-                  <td>{s ? s.totalHours.toFixed(1) : '0.0'}</td>
-                  <td>{s?.totalCycles ?? 0}</td>
-                </tr>
+                  <TableCell className="font-medium">{a.registration}</TableCell>
+                  <TableCell>{a.icaoType}</TableCell>
+                  <TableCell>{a.operator ?? '—'}</TableCell>
+                  <TableCell>{s ? s.totalHours.toFixed(1) : '0.0'}</TableCell>
+                  <TableCell>{s?.totalCycles ?? 0}</TableCell>
+                </TableRow>
               )
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </div>
   )
