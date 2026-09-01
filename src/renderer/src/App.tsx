@@ -127,8 +127,10 @@ export default function App(): React.JSX.Element {
         )}
       </section>
 
-      {page === 'fleet' && <FleetView weightUnit={weightUnit} />}
-      {page === 'dispatch' && <DispatchView weightUnit={weightUnit} />}
+      {page === 'fleet' && <FleetView />}
+      {page === 'dispatch' && (
+        <DispatchView weightUnit={weightUnit} onPlanned={() => setPage('track')} />
+      )}
       {page === 'track' && <TrackView />}
       {page === 'logbook' && <LogbookView weightUnit={weightUnit} />}
     </main>

@@ -10,25 +10,9 @@ function toExportRecord(a: Aircraft): NewAircraft {
   return {
     registration: a.registration,
     icaoType: a.icaoType,
-    name: a.name,
     operator: a.operator,
-    livery: a.livery,
     simbriefAirframeId: a.simbriefAirframeId,
-    oewKg: a.oewKg,
-    mzfwKg: a.mzfwKg,
-    mtowKg: a.mtowKg,
-    mlwKg: a.mlwKg,
-    maxFuelKg: a.maxFuelKg,
-    maxPax: a.maxPax,
-    equip: a.equip,
-    transponder: a.transponder,
-    pbn: a.pbn,
-    wakeCat: a.wakeCat,
-    currentIcao: a.currentIcao,
-    totalHours: a.totalHours,
-    totalCycles: a.totalCycles,
-    isActive: a.isActive,
-    notes: a.notes
+    currentIcao: a.currentIcao
   }
 }
 

@@ -23,13 +23,12 @@ describe('aircraft repo', () => {
   })
 
   it('writes a row and reads it back, with defaults applied', () => {
-    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' })
+    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' })
 
     expect(created.id).toBeTypeOf('number')
-    expect(created.isActive).toBe(true)
-    expect(created.totalHours).toBe(0)
-    expect(created.totalCycles).toBe(0)
     expect(created.operator).toBeNull()
+    expect(created.simbriefAirframeId).toBeNull()
+    expect(created.currentIcao).toBeNull()
     expect(listAircraft(db)).toEqual([created])
   })
 
@@ -37,50 +36,41 @@ describe('aircraft repo', () => {
     const created = createAircraft(db, {
       registration: 'G-ABCD',
       icaoType: 'A320',
-      name: 'Test',
       operator: 'Test Air',
-      oewKg: 42600,
-      mtowKg: 78000,
-      maxPax: 180,
-      wakeCat: 'M',
-      totalHours: 1234.5,
-      totalCycles: 987
+      simbriefAirframeId: '123456_1582090020',
+      currentIcao: 'EGLL'
     })
 
     expect(created.operator).toBe('Test Air')
-    expect(created.oewKg).toBe(42600)
-    expect(created.mtowKg).toBe(78000)
-    expect(created.maxPax).toBe(180)
-    expect(created.wakeCat).toBe('M')
-    expect(created.totalHours).toBe(1234.5)
-    expect(created.totalCycles).toBe(987)
+    expect(created.simbriefAirframeId).toBe('123456_1582090020')
+    expect(created.currentIcao).toBe('EGLL')
   })
 
   it('rejects a duplicate registration', () => {
-    createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' })
-    expect(() => createAircraft(db, { registration: 'G-ABCD', icaoType: 'B738', name: 'Other' })).toThrow()
+    createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' })
+    expect(() => createAircraft(db, { registration: 'G-ABCD', icaoType: 'B738' })).toThrow()
   })
 
   it('finds an aircraft by registration', () => {
-    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' })
+    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' })
     expect(getAircraftByRegistration(db, 'G-ABCD')).toEqual(created)
     expect(getAircraftByRegistration(db, 'G-NOPE')).toBeUndefined()
   })
 
   it('updates an aircraft', () => {
-    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' })
+    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' })
     const updated = updateAircraft(db, {
       id: created.id,
       registration: 'G-ABCD',
       icaoType: 'A320',
-      name: 'Renamed'
+      operator: 'Renamed Air'
     })
-    expect(updated?.name).toBe('Renamed')
+    expect(updated?.operator).toBe('Renamed Air')
     expect(listAircraft(db)).toEqual([updated])
   })
 
   it('deletes an aircraft', () => {
-    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' })
+    const created = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' })
     deleteAircraft(db, created.id)
     expect(listAircraft(db)).toEqual([])
   })

@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import type { Aircraft, Flight, LogbookImportSummary, TrackPoint, WeightUnit } from '@shared/ipc'
 import { FlightMap } from './FlightMap'
-import { parseRouteFromOfpJson } from './route'
+import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
 import { formatWeight, mToFt, msToKt } from './units'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number }
@@ -42,6 +42,7 @@ function FlightDetail(props: {
   }, [flight.id])
 
   const route = useMemo(() => parseRouteFromOfpJson(flight.ofpJson), [flight.ofpJson])
+  const waypoints = useMemo(() => parseWaypointsFromOfpJson(flight.ofpJson), [flight.ofpJson])
 
   // Elapsed minutes since the first sample reads better on a chart than raw timestamps.
   const startMs = trackPoints.length ? new Date(trackPoints[0].tsUtc).getTime() : 0
@@ -88,7 +89,7 @@ function FlightDetail(props: {
         <dd>{formatWeight(flight.fuelPlannedKg, weightUnit)}</dd>
       </dl>
 
-      <FlightMap live={false} route={route} trackPoints={trackPoints} />
+      <FlightMap live={false} route={route} waypoints={waypoints} trackPoints={trackPoints} />
 
       {profile.length > 1 && (
         <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>

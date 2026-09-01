@@ -40,7 +40,7 @@ export async function importLogbookCsv(
     // fleet entry so the import doesn't skip almost everything; flesh it out in Fleet later.
     let aircraft = getAircraftByRegistration(db, registration)
     if (!aircraft) {
-      aircraft = createAircraft(db, { registration, icaoType, name: registration })
+      aircraft = createAircraft(db, { registration, icaoType })
       summary.aircraftCreated++
     }
 

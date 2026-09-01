@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { createDb, type FlightdeckDb } from './client'
-import { createAircraft } from './aircraft-repo'
+import { createAircraft, getAircraftByRegistration } from './aircraft-repo'
 import {
   abandonFlight,
   completeFlight,
@@ -24,7 +24,7 @@ describe('flight repo', () => {
     const created = createDb(':memory:')
     migrate(created.db, { migrationsFolder: 'drizzle' })
     db = created.db
-    aircraftId = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' }).id
+    aircraftId = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' }).id
   })
 
   it('starts empty', () => {
@@ -134,6 +134,14 @@ describe('flight repo', () => {
       expect(completed?.fuelBurnKg).toBe(6000) // 10000 - 4000
     })
 
+    it("updates the aircraft's currentIcao to the arrival airport on completion", () => {
+      const created = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' })
+      startFlight(db, created.id, 10000)
+      completeFlight(db, created.id, 4000)
+
+      expect(getAircraftByRegistration(db, 'G-ABCD')?.currentIcao).toBe('VHHH')
+    })
+
     it('marks a cancelled flight abandoned rather than completed', () => {
       const created = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' })
       startFlight(db, created.id, 10000)
@@ -186,8 +194,7 @@ describe('flight repo', () => {
     it('aggregates hours/cycles per aircraft from completed flights only', () => {
       const secondAircraftId = createAircraft(db, {
         registration: 'G-WXYZ',
-        icaoType: 'B738',
-        name: 'Two'
+        icaoType: 'B738'
       }).id
 
       flyAndComplete(aircraftId, 'EGCC', 60, 500) // 1h
@@ -216,7 +223,7 @@ describe('flight repo', () => {
     })
 
     it('omits an aircraft with no completed flights, even if it has a planned one', () => {
-      createAircraft(db, { registration: 'G-IDLE', icaoType: 'A320', name: 'Idle' })
+      createAircraft(db, { registration: 'G-IDLE', icaoType: 'A320' })
       flyAndComplete(aircraftId, 'EGCC', 30, 500)
 
       const stats = getFleetStats(db)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ActiveTracking, Aircraft, Flight, TrackPoint } from '@shared/ipc'
 import { FlightMap } from './FlightMap'
-import { parseRouteFromOfpJson } from './route'
+import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
 
 export function TrackView(): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
@@ -59,13 +59,22 @@ export function TrackView(): React.JSX.Element {
 
   const plannedFlights = flights.filter((f) => f.status === 'planned')
   const activeFlight = active ? flights.find((f) => f.id === active.flightId) : undefined
-  // Falls back to nothing if the active flight has no stored OFP. Keyed on ofpJson rather
+  // Before tracking starts, preview the most recently planned flight (flightList already
+  // orders newest-first) so a freshly-dispatched plan shows up on the map immediately
+  // rather than only after "Start tracking" is clicked.
+  const previewFlight = activeFlight ?? plannedFlights[0]
+  // Falls back to nothing if the preview flight has no stored OFP. Keyed on ofpJson rather
   // than the whole flight object so a `flights` reload with unchanged OFP data doesn't
   // hand FlightMap a new array reference and re-trigger its route-drawing effect.
   const route = useMemo(
-    () => (activeFlight ? parseRouteFromOfpJson(activeFlight.ofpJson) : []),
+    () => (previewFlight ? parseRouteFromOfpJson(previewFlight.ofpJson) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeFlight?.ofpJson]
+    [previewFlight?.ofpJson]
+  )
+  const waypoints = useMemo(
+    () => (previewFlight ? parseWaypointsFromOfpJson(previewFlight.ofpJson) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [previewFlight?.ofpJson]
   )
 
   return (
@@ -96,7 +105,7 @@ export function TrackView(): React.JSX.Element {
         </div>
       )}
 
-      <FlightMap live route={route} trackPoints={trackPoints} />
+      <FlightMap live route={route} waypoints={waypoints} trackPoints={trackPoints} />
     </div>
   )
 }

@@ -3,55 +3,29 @@
  * these — no direct filesystem, network, or SimConnect access (see CLAUDE.md).
  */
 
+/**
+ * Identity + linkage only (docs/decisions.md, 2026-09-01 Fleet-simplification entry) —
+ * performance data lives in the linked SimBrief profile, not here. Hours/cycles are
+ * computed live from flight history, see FleetStats below.
+ */
 export interface Aircraft {
   id: number
   registration: string
   icaoType: string
-  name: string
+  /** Airline/operator, shown as "Airline" in the UI. */
   operator: string | null
-  livery: string | null
+  /** SimBrief saved-airframe internal ID, shown as "SimBrief profile" in the UI. */
   simbriefAirframeId: string | null
-  /** All weights in kg — SI internally, converted to lb only at the UI layer (§5). */
-  oewKg: number | null
-  mzfwKg: number | null
-  mtowKg: number | null
-  mlwKg: number | null
-  maxFuelKg: number | null
-  maxPax: number | null
-  equip: string | null
-  transponder: string | null
-  pbn: string | null
-  wakeCat: string | null
   currentIcao: string | null
-  totalHours: number
-  totalCycles: number
-  isActive: boolean
-  notes: string | null
   createdAt: string
 }
 
 export interface NewAircraft {
   registration: string
   icaoType: string
-  name: string
   operator?: string | null
-  livery?: string | null
   simbriefAirframeId?: string | null
-  oewKg?: number | null
-  mzfwKg?: number | null
-  mtowKg?: number | null
-  mlwKg?: number | null
-  maxFuelKg?: number | null
-  maxPax?: number | null
-  equip?: string | null
-  transponder?: string | null
-  pbn?: string | null
-  wakeCat?: string | null
   currentIcao?: string | null
-  totalHours?: number
-  totalCycles?: number
-  isActive?: boolean
-  notes?: string | null
 }
 
 export interface AircraftUpdate extends NewAircraft {
@@ -72,7 +46,14 @@ export interface AircraftImportSummary {
 export interface AircraftLookupResult {
   icaoType: string
   operator: string | null
+}
+
+/** One match from the vendored OurAirports name/ICAO search — see resources/airports.csv. */
+export interface AirportOption {
+  icao: string
   name: string
+  municipality: string | null
+  isoCountry: string
 }
 
 /** One match from the vendored ICAO Doc 8643 type-designator list (see resources/). */
@@ -272,6 +253,19 @@ export interface DispatchOfp {
  */
 export type WeightUnit = 'kg' | 'lb'
 
+/**
+ * Opens SimBrief's dispatch form pre-filled with a route and airframe. `simbriefAirframeId`
+ * takes priority over `icaoType` when set (SimBrief uses the saved custom profile);
+ * otherwise SimBrief falls back to its own default airframe for that type — Flightdeck
+ * doesn't need to implement that fallback itself.
+ */
+export interface DispatchOpenSimBriefParams {
+  origIcao: string
+  destIcao: string
+  icaoType: string
+  simbriefAirframeId: string | null
+}
+
 export const IpcChannels = {
   aircraftList: 'aircraft:list',
   aircraftCreate: 'aircraft:create',
@@ -299,7 +293,8 @@ export const IpcChannels = {
   logbookFleetStats: 'logbook:fleet-stats',
   logbookImportCsv: 'logbook:import-csv',
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
-  aircraftTypeSearch: 'aircraft:type-search'
+  aircraftTypeSearch: 'aircraft:type-search',
+  airportSearch: 'airport:search'
 } as const
 
 export interface FlightdeckApi {
@@ -324,7 +319,7 @@ export interface FlightdeckApi {
   /** Fetches the SimBrief user's latest OFP. Throws if no username is set or the fetch fails. */
   dispatchFetchOfp: () => Promise<DispatchOfp>
   /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */
-  dispatchOpenSimBrief: (simbriefAirframeId: string | null) => Promise<void>
+  dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) => Promise<void>
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>
@@ -344,4 +339,6 @@ export interface FlightdeckApi {
   aircraftLookupByRegistration: (registration: string) => Promise<AircraftLookupResult | null>
   /** Searches the vendored ICAO Doc 8643 type-designator list. Empty for a query under 2 chars. */
   aircraftTypeSearch: (query: string) => Promise<AircraftTypeOption[]>
+  /** Searches the vendored OurAirports name/ICAO list. Empty for a query under 2 chars. */
+  airportSearch: (query: string) => Promise<AirportOption[]>
 }

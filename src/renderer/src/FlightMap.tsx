@@ -3,6 +3,7 @@ import { GeoJSONSource, LngLatBounds, Map as MapLibreMap, Marker, setWorkerUrl }
 import 'maplibre-gl/dist/maplibre-gl.css'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import type { TrackPoint } from '@shared/ipc'
+import type { Waypoint } from './route'
 
 // maplibre-gl ships its tile-parsing worker as a separate chunk and locates it via its
 // own import.meta.url at runtime — a resolution that doesn't survive Vite's dependency
@@ -16,6 +17,7 @@ setWorkerUrl(maplibreWorkerUrl)
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/positron'
 const ROUTE_SOURCE_ID = 'planned-route'
 const TRAIL_SOURCE_ID = 'breadcrumb-trail'
+const WAYPOINT_SOURCE_ID = 'planned-waypoints'
 // Regional view — wide enough that the aircraft doesn't outrun the viewport between
 // track points (zoom 13 was street-level, well under a minute of flight across it).
 const FOLLOW_ZOOM = 11
@@ -30,6 +32,26 @@ function lineString(coords: [number, number][]): LineStringFeature {
   return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } }
 }
 
+interface WaypointFeatureCollection {
+  type: 'FeatureCollection'
+  features: {
+    type: 'Feature'
+    properties: { ident: string }
+    geometry: { type: 'Point'; coordinates: [number, number] }
+  }[]
+}
+
+function waypointFeatures(waypoints: Waypoint[]): WaypointFeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: waypoints.map((w) => ({
+      type: 'Feature',
+      properties: { ident: w.ident },
+      geometry: { type: 'Point', coordinates: [w.lon, w.lat] }
+    }))
+  }
+}
+
 function fitBoundsTo(map: MapLibreMap, coords: [number, number][]): void {
   if (coords.length > 1) {
     const bounds = coords.reduce((b, coord) => b.extend(coord), new LngLatBounds(coords[0], coords[0]))
@@ -42,6 +64,8 @@ function fitBoundsTo(map: MapLibreMap, coords: [number, number][]): void {
 export interface FlightMapProps {
   /** Planned route (from the flight's stored OFP), GeoJSON [lon, lat] order. */
   route: [number, number][]
+  /** Per-fix waypoint pins along the planned route (ident labels), same source as `route`. */
+  waypoints?: Waypoint[]
   trackPoints: TrackPoint[]
   /**
    * true (TrackView): animated marker/camera follow as new points arrive.
@@ -52,7 +76,16 @@ export interface FlightMapProps {
   live: boolean
 }
 
-export function FlightMap({ route, trackPoints, live }: FlightMapProps): React.JSX.Element {
+// Stable reference for the default so the route/waypoint effect below doesn't re-fire on
+// every render just because callers that don't pass `waypoints` get a fresh `[]` each time.
+const EMPTY_WAYPOINTS: Waypoint[] = []
+
+export function FlightMap({
+  route,
+  waypoints = EMPTY_WAYPOINTS,
+  trackPoints,
+  live
+}: FlightMapProps): React.JSX.Element {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markerRef = useRef<Marker | null>(null)
@@ -94,6 +127,26 @@ export function FlightMap({ route, trackPoints, live }: FlightMapProps): React.J
         paint: { 'line-color': '#1a73e8', 'line-width': 3 }
       })
 
+      map.addSource(WAYPOINT_SOURCE_ID, { type: 'geojson', data: waypointFeatures([]) })
+      map.addLayer({
+        id: `${WAYPOINT_SOURCE_ID}-circle`,
+        type: 'circle',
+        source: WAYPOINT_SOURCE_ID,
+        paint: { 'circle-radius': 3, 'circle-color': '#888', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
+      })
+      map.addLayer({
+        id: `${WAYPOINT_SOURCE_ID}-label`,
+        type: 'symbol',
+        source: WAYPOINT_SOURCE_ID,
+        layout: {
+          'text-field': ['get', 'ident'],
+          'text-size': 11,
+          'text-offset': [0, 1],
+          'text-anchor': 'top'
+        },
+        paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 1 }
+      })
+
       // A text glyph (e.g. '✈') isn't drawn pointing true north in every font, so
       // setRotation(heading) comes out offset by whatever the glyph's own heading is.
       // This SVG is authored nose-up (pointing north at 0 rotation), so it lines up exactly.
@@ -116,13 +169,16 @@ export function FlightMap({ route, trackPoints, live }: FlightMapProps): React.J
     }
   }, [])
 
-  // Draw the planned route — falls back to nothing if the flight has no stored OFP.
+  // Draw the planned route and its waypoint pins — falls back to nothing if the flight
+  // has no stored OFP.
   useEffect(() => {
     if (!mapReady || !mapRef.current) return
-    const source = mapRef.current.getSource<GeoJSONSource>(ROUTE_SOURCE_ID)
-    source?.setData(lineString(route))
+    const routeSource = mapRef.current.getSource<GeoJSONSource>(ROUTE_SOURCE_ID)
+    routeSource?.setData(lineString(route))
+    const waypointSource = mapRef.current.getSource<GeoJSONSource>(WAYPOINT_SOURCE_ID)
+    waypointSource?.setData(waypointFeatures(waypoints))
     if (live) fitBoundsTo(mapRef.current, route)
-  }, [mapReady, route, live])
+  }, [mapReady, route, waypoints, live])
 
   // Static (Logbook) mode: draw the whole trail once and fit the view to it. No follow,
   // no animation — the flight already happened.

@@ -35,7 +35,7 @@ describe('track point repo', () => {
     const created = createDb(':memory:')
     migrate(created.db, { migrationsFolder: 'drizzle' })
     db = created.db
-    const aircraftId = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' }).id
+    const aircraftId = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' }).id
     flightId = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' }).id
   })
 
@@ -54,7 +54,7 @@ describe('track point repo', () => {
   })
 
   it('only returns points for the requested flight', () => {
-    const aircraftId = createAircraft(db, { registration: 'G-EFGH', icaoType: 'B738', name: 'Other' }).id
+    const aircraftId = createAircraft(db, { registration: 'G-EFGH', icaoType: 'B738' }).id
     const otherFlightId = createFlight(db, { aircraftId, depIcao: 'KJFK', arrIcao: 'KLAX' }).id
     createTrackPoint(db, samplePoint(flightId))
     createTrackPoint(db, samplePoint(otherFlightId))

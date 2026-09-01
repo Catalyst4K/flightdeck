@@ -4,11 +4,13 @@ import {
   IpcChannels,
   type AircraftUpdate,
   type DispatchOfp,
+  type DispatchOpenSimBriefParams,
   type NewFlight,
   type WeightUnit
 } from '@shared/ipc'
 import { fetchAircraftByRegistration } from './aircraft-lookup/adsbdb-client'
 import { searchAircraftTypes } from './aircraft-lookup/icao-types'
+import { searchAirports } from './airports/airport-search'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import {
@@ -93,10 +95,20 @@ app.whenReady().then(() => {
     return { ...rest, ofpJson: rawJson, matchedAircraftId: matched?.id ?? null }
   })
 
-  ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, simbriefAirframeId: string | null) => {
-    const url = simbriefAirframeId
-      ? `https://dispatch.simbrief.com/options/custom?airframe=${encodeURIComponent(simbriefAirframeId)}`
-      : 'https://dispatch.simbrief.com/'
+  ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, params: DispatchOpenSimBriefParams) => {
+    const { origIcao, destIcao, icaoType, simbriefAirframeId } = params
+    if (!origIcao || !destIcao || (!icaoType && !simbriefAirframeId)) {
+      return shell.openExternal('https://dispatch.simbrief.com/')
+    }
+    // `airframe=` takes priority when a saved SimBrief profile exists; otherwise `type=`
+    // lets SimBrief fall back to its own default airframe for that type ICAO — SimBrief's
+    // own behavior, nothing Flightdeck implements itself (docs/decisions.md).
+    const airframeParam = simbriefAirframeId
+      ? `airframe=${encodeURIComponent(simbriefAirframeId)}`
+      : `type=${encodeURIComponent(icaoType)}`
+    const url =
+      `https://dispatch.simbrief.com/options/custom?orig=${encodeURIComponent(origIcao)}` +
+      `&dest=${encodeURIComponent(destIcao)}&${airframeParam}`
     return shell.openExternal(url)
   })
 
@@ -137,6 +149,7 @@ app.whenReady().then(() => {
     fetchAircraftByRegistration(registration)
   )
   ipcMain.handle(IpcChannels.aircraftTypeSearch, (_event, query: string) => searchAircraftTypes(query))
+  ipcMain.handle(IpcChannels.airportSearch, (_event, query: string) => searchAirports(query))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits

@@ -66,7 +66,7 @@ describe('TrackingController', () => {
     migrate(created.db, { migrationsFolder: 'drizzle' })
     db = created.db
     sim = fakeSimConnectService()
-    const aircraftId = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320', name: 'Test' }).id
+    const aircraftId = createAircraft(db, { registration: 'G-ABCD', icaoType: 'A320' }).id
     flightId = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' }).id
   })
 

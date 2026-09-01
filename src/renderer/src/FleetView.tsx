@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Aircraft, AircraftImportSummary, FleetStats, NewAircraft, WeightUnit } from '@shared/ipc'
+import type { Aircraft, AircraftImportSummary, FleetStats, NewAircraft } from '@shared/ipc'
 import { AircraftForm } from './AircraftForm'
-import { formatWeight } from './units'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number } | { kind: 'new' } | { kind: 'edit'; id: number }
 
@@ -12,7 +11,6 @@ function formatDate(iso: string | null): string {
 function AircraftDetail(props: {
   aircraft: Aircraft
   stats: FleetStats | undefined
-  weightUnit: WeightUnit
   onEdit: () => void
   onDelete: () => void
   onBack: () => void
@@ -20,41 +18,18 @@ function AircraftDetail(props: {
   const a = props.aircraft
   const s = props.stats
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 480 }}>
       <button type="button" onClick={props.onBack}>
         ← Back to fleet
       </button>
       <h2>
         {a.registration} — {a.icaoType}
       </h2>
-      <p>{a.name}</p>
       <dl style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '0.25rem 1.5rem' }}>
-        <dt>Operator</dt>
+        <dt>Airline</dt>
         <dd>{a.operator ?? '—'}</dd>
-        <dt>Livery</dt>
-        <dd>{a.livery ?? '—'}</dd>
-        <dt>SimBrief airframe</dt>
+        <dt>SimBrief profile</dt>
         <dd>{a.simbriefAirframeId ?? '—'}</dd>
-        <dt>OEW</dt>
-        <dd>{formatWeight(a.oewKg, props.weightUnit)}</dd>
-        <dt>MZFW</dt>
-        <dd>{formatWeight(a.mzfwKg, props.weightUnit)}</dd>
-        <dt>MTOW</dt>
-        <dd>{formatWeight(a.mtowKg, props.weightUnit)}</dd>
-        <dt>MLW</dt>
-        <dd>{formatWeight(a.mlwKg, props.weightUnit)}</dd>
-        <dt>Max fuel</dt>
-        <dd>{formatWeight(a.maxFuelKg, props.weightUnit)}</dd>
-        <dt>Max pax</dt>
-        <dd>{a.maxPax ?? '—'}</dd>
-        <dt>Equip</dt>
-        <dd>{a.equip ?? '—'}</dd>
-        <dt>Transponder</dt>
-        <dd>{a.transponder ?? '—'}</dd>
-        <dt>PBN</dt>
-        <dd>{a.pbn ?? '—'}</dd>
-        <dt>Wake category</dt>
-        <dd>{a.wakeCat ?? '—'}</dd>
         <dt>Current ICAO</dt>
         <dd>{a.currentIcao ?? '—'}</dd>
         <dt>Total hours</dt>
@@ -65,10 +40,6 @@ function AircraftDetail(props: {
         <dd>{s?.lastArrIcao ?? '—'}</dd>
         <dt>Last flight</dt>
         <dd>{formatDate(s?.lastFlightInUtc ?? null)}</dd>
-        <dt>Active</dt>
-        <dd>{a.isActive ? 'Yes' : 'No'}</dd>
-        <dt>Notes</dt>
-        <dd>{a.notes ?? '—'}</dd>
       </dl>
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
         <button type="button" onClick={props.onEdit}>
@@ -82,7 +53,7 @@ function AircraftDetail(props: {
   )
 }
 
-export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element {
+export function FleetView(): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [stats, setStats] = useState<FleetStats[]>([])
   const [view, setView] = useState<View>({ kind: 'list' })
@@ -136,11 +107,7 @@ export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element 
     return (
       <div>
         <h1>New aircraft</h1>
-        <AircraftForm
-          weightUnit={props.weightUnit}
-          onSubmit={handleCreate}
-          onCancel={() => setView({ kind: 'list' })}
-        />
+        <AircraftForm onSubmit={handleCreate} onCancel={() => setView({ kind: 'list' })} />
       </div>
     )
   }
@@ -153,7 +120,6 @@ export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element 
         <h1>Edit {existing.registration}</h1>
         <AircraftForm
           initial={existing}
-          weightUnit={props.weightUnit}
           onSubmit={(data) => handleUpdate(view.id, data)}
           onCancel={() => setView({ kind: 'detail', id: view.id })}
         />
@@ -168,7 +134,6 @@ export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element 
       <AircraftDetail
         aircraft={existing}
         stats={stats.find((s) => s.aircraftId === existing.id)}
-        weightUnit={props.weightUnit}
         onEdit={() => setView({ kind: 'edit', id: view.id })}
         onDelete={() => handleDelete(view.id)}
         onBack={() => setView({ kind: 'list' })}
@@ -213,11 +178,9 @@ export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element 
             <tr style={{ textAlign: 'left', borderBottom: '1px solid #ccc' }}>
               <th>Registration</th>
               <th>Type</th>
-              <th>Name</th>
-              <th>Operator</th>
+              <th>Airline</th>
               <th>Hours</th>
               <th>Cycles</th>
-              <th>Active</th>
             </tr>
           </thead>
           <tbody>
@@ -231,11 +194,9 @@ export function FleetView(props: { weightUnit: WeightUnit }): React.JSX.Element 
                 >
                   <td>{a.registration}</td>
                   <td>{a.icaoType}</td>
-                  <td>{a.name}</td>
                   <td>{a.operator ?? '—'}</td>
                   <td>{s ? s.totalHours.toFixed(1) : '0.0'}</td>
                   <td>{s?.totalCycles ?? 0}</td>
-                  <td>{a.isActive ? 'Yes' : 'No'}</td>
                 </tr>
               )
             })}

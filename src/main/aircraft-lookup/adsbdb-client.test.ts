@@ -26,7 +26,7 @@ describe('fetchAircraftByRegistration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('maps a found aircraft to icaoType/operator/name', async () => {
+  it('maps a found aircraft to icaoType/operator', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: true, status: 200, json: async () => REAL_RESPONSE }))
@@ -34,7 +34,7 @@ describe('fetchAircraftByRegistration', () => {
 
     const result = await fetchAircraftByRegistration('G-XWBS')
 
-    expect(result).toEqual({ icaoType: 'A35K', operator: 'British Airways', name: 'A350-1041' })
+    expect(result).toEqual({ icaoType: 'A35K', operator: 'British Airways' })
   })
 
   it('returns null (not an error) for a 404 — a made-up or unrecognised registration', async () => {

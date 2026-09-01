@@ -150,6 +150,14 @@ export function completeFlight(db: FlightdeckDb, id: number, fuelInKg: number): 
     .where(eq(flight.id, id))
     .returning()
     .all()
+
+  // Keeps the Dispatch "plan a flight" departure-airport autofill accurate over time —
+  // otherwise it'd only ever reflect wherever the aircraft was manually set to once.
+  // Only wired into the real-time completion path (TrackingController → completeFlight),
+  // not CSV-imported historical flights (logbook-import.ts's createHistoricalFlight),
+  // since an import isn't guaranteed to process rows in chronological order.
+  if (row) db.update(aircraft).set({ currentIcao: existing.arrIcao }).where(eq(aircraft.id, existing.aircraftId)).run()
+
   return row ? toFlight(row) : undefined
 }
 

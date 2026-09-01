@@ -18,7 +18,6 @@ import type { AircraftLookupResult } from '@shared/ipc'
 class AdsbdbError extends Error {}
 
 interface AdsbdbAircraft {
-  type?: unknown
   icao_type?: unknown
   registered_owner?: unknown
 }
@@ -42,7 +41,6 @@ export async function fetchAircraftByRegistration(
 
   return {
     icaoType: aircraft.icao_type,
-    operator: typeof aircraft.registered_owner === 'string' ? aircraft.registered_owner : null,
-    name: typeof aircraft.type === 'string' && aircraft.type ? aircraft.type : aircraft.icao_type
+    operator: typeof aircraft.registered_owner === 'string' ? aircraft.registered_owner : null
   }
 }

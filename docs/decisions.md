@@ -183,3 +183,47 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     registration lookup can fill several fields at once (icaoType/name/operator) so it must
     not clobber an in-progress edit; a type-search pick is a single explicit choice so it
     sets icaoType/wakeCat directly once selected.
+- 2026-09-01: Fleet simplified to identity + linkage only — registration, ICAO type,
+  airline (operator), SimBrief profile (simbriefAirframeId), current ICAO. Dropped every
+  performance/status field (name, livery, weights, equip/transponder/PBN/wake cat,
+  totalHours/totalCycles, isActive, notes) via a real column-drop migration
+  (`drizzle/0004_sparkling_screwball.sql`) — performance data belongs in the linked
+  SimBrief profile, not duplicated here; totalHours/totalCycles were already dead columns
+  (FleetStats computes live from flight history, nothing wrote to them). Real data loss
+  on the dropped columns for the existing fleet, intentional per Callum's request.
+- 2026-09-01: Dispatch rebuilt around aircraft-first planning — pick an aircraft, dep ICAO
+  autofills from its `currentIcao` (editable), search/enter a destination, "Plan on
+  SimBrief…" opens `dispatch.simbrief.com/options/custom?orig=&dest=&airframe=-or-type=`
+  (extended from the airframe-only form M3 already verified live) rather than the bare
+  dispatch page. Verified live: the constructed URL responds 200 and SimBrief's own
+  `type=`/`airframe=` fallback behavior (no code needed on our side for "use the type's
+  default airframe when no profile is set").
+  - **Airport search**: vendored a trimmed OurAirports slice (`resources/airports.csv`,
+    43,400 rows / 2.4 MB, from the real 12.7 MB/19-column source, kept to rows with a
+    4-letter icao_code-or-gps_code and non-closed type, projected to
+    icao/name/municipality/iso_country/type). First vendored source with quoted CSV
+    fields (`"Total RF Heliport"`) — generalized `db/csv.ts`'s `parseCsvRows` to be
+    RFC4180-minimal (quotes, `""` escaping, commas-in-quotes) rather than forking a
+    second parser; verified this doesn't change behavior for the two existing quote-free
+    sources (logbook CSV, ICAO type list). Same "vendor + Vite `?raw` + main-process-only
+    search IPC" pattern as the ICAO aircraft-type list.
+  - **`aircraft.currentIcao` now self-updates** on flight completion
+    (`flight-repo.ts`'s `completeFlight`, real-time path only — not CSV-imported
+    historical flights, which aren't guaranteed chronological) — otherwise the new dep
+    autofill would quietly go stale after the first flight.
+  - **Track scene auto-preview**: a freshly-planned flight's route and per-waypoint pins
+    (new `parseWaypointsFromOfpJson` in `route.ts`, new waypoint circle+label layers in
+    `FlightMap.tsx`) now show up in Track immediately — previewing the most recent
+    planned flight — rather than only after "Start tracking". Dispatch's save handler
+    switches the app to the Track page on success (`App.tsx`'s `onPlanned`). Live-verified
+    via a synthetic OFP (RKSI–MOLKA–RJTT) — route line and all three labelled waypoints
+    rendered on first load, no "Start tracking" click needed; test flight and a
+    test-only `currentIcao` edit were both cleaned up from the dev DB afterward.
+  - **SimBrief's real generation API is not a simple REST call.** Confirmed via research
+    (Navigraph forum/dev portal): it's a browser-popup widget
+    (`simbrief.apiv1.js`/`.php`) meant for websites with a server backend, and the key
+    itself is still a manual email request to SimBrief support — not self-service, and
+    the signing scheme isn't published. Per Callum's decision: sent the key request (see
+    conversation for the drafted email) and shipped this round against the keyless
+    `dispatch.simbrief.com` redirect; real in-app generation is a follow-up once a key
+    and SimBrief's integration files are actually in hand.
