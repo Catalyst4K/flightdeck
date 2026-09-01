@@ -358,3 +358,12 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   (different ofpId) naturally drops back into the interactive pre-fly state with no
   explicit reset needed — no code path clears `dispatchedOfpId` directly, it's just
   compared against the current OFP's id.
+- 2026-09-02: Cancelling a flight in Track (active or still-planned) now also clears
+  Dispatch's persisted OFP reference — a gap from the previous entry's persistence
+  change: without this, cancelling left Dispatch still showing a "Flying" badge for a
+  flight that no longer existed. `TrackView` takes a new `onFlightCancelled` callback
+  (fired for both cancel paths, not "Finish & save" — finishing normally isn't
+  cancelling, and the just-completed flight's weights/info stay useful as a reference)
+  that App wires to clearing `dispatchOfp`/`dispatchedOfpId`. Also dropped Track's
+  "Previewing the OFP fetched in Dispatch…" empty-state text — unnecessary; the map
+  already shows the preview route without needing a caption to explain it.
