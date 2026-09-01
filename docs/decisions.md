@@ -99,3 +99,13 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     use Microsoft/Asobo logos or MSFS box art as the app icon, and carry a brief "not
     affiliated with or endorsed by Microsoft or Asobo Studio" disclaimer before public
     release.
+- 2026-09-01: Callum asked that plans for future monetization (subscription + cloud
+  storage, raised the same day) not be visible on the public repo. The notes on what
+  that would actually require still exist, kept as `docs/future-monetization.md`
+  locally — deliberately untracked (see `.gitignore`), never to be committed. A prior
+  commit had briefly added that file and a one-line pointer in PLAN.md's non-goals
+  section; both were removed by resetting `main` to before that commit and
+  force-pushing, so it isn't recoverable from the public commit history either. If
+  you're a future session and can see this note but not the file, that's expected —
+  ask Callum for the content rather than reconstructing it, and don't recreate it as a
+  tracked file.

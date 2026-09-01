@@ -36,3 +36,6 @@ coverage/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Kept local-only on purpose — not for the public repo (see docs/decisions.md)
+docs/future-monetization.md
