@@ -9,3 +9,9 @@ export function kgToLb(kg: number): number {
 export function lbToKg(lb: number): number {
   return lb * KG_PER_LB
 }
+
+const M_PER_FT = 0.3048
+
+export function mToFt(m: number): number {
+  return m / M_PER_FT
+}
