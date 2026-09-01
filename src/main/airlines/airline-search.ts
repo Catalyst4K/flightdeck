@@ -5,10 +5,20 @@
 // quoted/embedded-comma fields except a handful of airline names, so parseCsvRows'
 // quote-aware parsing still applies (same as icao-types.ts/airport-search.ts).
 //
+// resources/airline-aliases.csv (same columns, hand-maintained, not from OpenFlights) adds
+// a handful of well-known rebrand/historical names that a frozen upstream dataset doesn't
+// have under that name — e.g. Cathay Dragon flew under that name for its last four years
+// but is only in OpenFlights as "Dragonair" (its pre-2016 name), so searching the actual
+// name people fly it under today found nothing. adsbdb.com's own /v0/airline endpoint was
+// considered as a replacement (docs/decisions.md) but only does exact ICAO/IATA lookup, no
+// name search, so it can't back this dropdown — it's used elsewhere, for resolving an
+// already-known code.
+//
 // Bundled via Vite's `?raw` import, same pattern as the other two vendored CSVs.
 import type { AirlineOption } from '@shared/ipc'
 import { columnIndex, parseCsvRows } from '../db/csv'
 import airlinesRaw from '../../../resources/airlines.csv?raw'
+import airlineAliasesRaw from '../../../resources/airline-aliases.csv?raw'
 
 export function loadAirlines(raw: string): AirlineOption[] {
   const [header, ...rows] = parseCsvRows(raw)
@@ -42,7 +52,7 @@ export function searchAirlineList(airlines: AirlineOption[], query: string): Air
   return results
 }
 
-const ALL_AIRLINES = loadAirlines(airlinesRaw)
+const ALL_AIRLINES = [...loadAirlines(airlinesRaw), ...loadAirlines(airlineAliasesRaw)]
 
 export function searchAirlines(query: string): AirlineOption[] {
   return searchAirlineList(ALL_AIRLINES, query)

@@ -54,4 +54,9 @@ describe('searchAirlines (real vendored data)', () => {
     const results = searchAirlines('British Airways')
     expect(results.some((r) => r.icao === 'BAW' && r.iata === 'BA')).toBe(true)
   })
+
+  it('finds a rebrand/historical alias not in the OpenFlights data under that name', () => {
+    const results = searchAirlines('Cathay Dragon')
+    expect(results.some((r) => r.icao === 'HDA' && r.iata === 'KA')).toBe(true)
+  })
 })
