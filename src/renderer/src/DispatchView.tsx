@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AirportSearch } from './AirportSearch'
+import { MetarPanel } from './MetarPanel'
 import { formatWeight, mToFt } from './units'
 
 function formatUtc(iso: string): string {
@@ -130,125 +131,145 @@ export function DispatchView(props: {
     }
   }
 
+  const metarAirports = ofp
+    ? { depIcao: ofp.depIcao, arrIcao: ofp.arrIcao, altnIcao: ofp.altnIcao }
+    : { depIcao: depIcao || null, arrIcao: destIcao || null, altnIcao: null }
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-heading text-2xl font-semibold text-foreground">Dispatch</h1>
 
-      <div className="flex flex-wrap gap-4">
-        <Card className="max-w-md flex-1">
-          <CardHeader>
-            <CardTitle>Plan a flight</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Aircraft</Label>
-              <Select
-                value={planAircraftId != null ? String(planAircraftId) : undefined}
-                onValueChange={(v) => handlePlanAircraftChange(Number(v))}
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="flex min-w-72 max-w-md flex-1 flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Plan a flight</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Aircraft</Label>
+                <Select
+                  value={planAircraftId != null ? String(planAircraftId) : undefined}
+                  onValueChange={(v) => handlePlanAircraftChange(Number(v))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="— select —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {aircraft.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {aircraftLabel(a)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Departure</Label>
+                <AirportSearch value={depIcao} onChange={setDepIcao} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Destination</Label>
+                <AirportSearch value={destIcao} onChange={setDestIcao} />
+              </div>
+              <Button
+                type="button"
+                onClick={handleOpenSimBrief}
+                disabled={planAircraftId == null || !depIcao || !destIcao}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="— select —" />
-                </SelectTrigger>
-                <SelectContent>
-                  {aircraft.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {aircraftLabel(a)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Departure</Label>
-              <AirportSearch value={depIcao} onChange={setDepIcao} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Destination</Label>
-              <AirportSearch value={destIcao} onChange={setDestIcao} />
-            </div>
-            <Button
-              type="button"
-              onClick={handleOpenSimBrief}
-              disabled={planAircraftId == null || !depIcao || !destIcao}
-            >
-              Plan on SimBrief…
-            </Button>
-          </CardContent>
-        </Card>
+                Plan on SimBrief…
+              </Button>
+            </CardContent>
+          </Card>
 
-        <Card className="max-w-md flex-1">
-          <CardHeader>
-            <CardTitle>Or import an existing plan</CardTitle>
-            <CardDescription>
-              Pulls your latest OFP from SimBrief — useful if you planned it there directly, or want to
-              re-fetch after adjusting it on SimBrief's site.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button type="button" variant="outline" onClick={handleFetch} disabled={fetching}>
-              {fetching ? 'Fetching…' : 'Fetch latest OFP'}
-            </Button>
-          </CardContent>
-        </Card>
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>Or import an existing plan</CardTitle>
+              <CardDescription>
+                Pulls your latest OFP from SimBrief — useful if you planned it there directly, or want
+                to re-fetch after adjusting it on SimBrief's site.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button type="button" variant="outline" size="sm" onClick={handleFetch} disabled={fetching}>
+                {fetching ? 'Fetching…' : 'Fetch latest OFP'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex min-w-72 flex-1 flex-col gap-4">
+          <MetarPanel depIcao={metarAirports.depIcao} arrIcao={metarAirports.arrIcao} altnIcao={metarAirports.altnIcao} />
+
+          {ofp ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {ofp.flightNumber}: {ofp.depIcao} → {ofp.arrIcao} (altn {ofp.altnIcao})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                  <DetailField
+                    label="Aircraft (OFP)"
+                    value={`${ofp.aircraftIcaoType} ${ofp.aircraftRegistration}`}
+                  />
+                  <DetailField
+                    label="Cruise altitude"
+                    value={`${Math.round(mToFt(ofp.cruiseAltM)).toLocaleString()} ft`}
+                  />
+                  <DetailField
+                    label="Scheduled out / in"
+                    value={`${formatUtc(ofp.schedOutUtc)} / ${formatUtc(ofp.schedInUtc)}`}
+                  />
+                  <DetailField label="Planned fuel" value={formatWeight(ofp.fuelPlannedKg, props.weightUnit)} />
+                  <DetailField
+                    label="Pax / cargo"
+                    value={`${ofp.pax} / ${formatWeight(ofp.cargoKg, props.weightUnit)}`}
+                  />
+                  <DetailField
+                    label="ZFW / TOW / LDW"
+                    value={`${formatWeight(ofp.zfwKg, props.weightUnit)} / ${formatWeight(ofp.towKg, props.weightUnit)} / ${formatWeight(ofp.ldwKg, props.weightUnit)}`}
+                  />
+                </dl>
+                <p className="max-h-16 overflow-auto text-sm text-muted-foreground">{ofp.routeString}</p>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label>Fleet aircraft</Label>
+                  <Select
+                    value={selectedAircraftId != null ? String(selectedAircraftId) : undefined}
+                    onValueChange={(v) => setSelectedAircraftId(Number(v))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="— select —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aircraft.map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)}>
+                          {a.registration} — {a.icaoType}
+                          {a.registration === ofp.aircraftRegistration ? ' (matched)' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {ofp.matchedAircraftId == null && selectedAircraftId == null && (
+                  <p className="text-sm text-muted-foreground">
+                    No fleet aircraft matches tail {ofp.aircraftRegistration || '(none in OFP)'} — pick
+                    one manually.
+                  </p>
+                )}
+
+                <Button type="button" onClick={handleSaveFlight} disabled={saving || selectedAircraftId == null}>
+                  {saving ? 'Starting…' : 'Fly'}
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <p className="text-sm text-muted-foreground">Plan or fetch a flight to see its details here.</p>
+          )}
+        </div>
       </div>
-
-      {ofp && (
-        <Card className="max-w-2xl">
-          <CardHeader>
-            <CardTitle>
-              {ofp.flightNumber}: {ofp.depIcao} → {ofp.arrIcao} (altn {ofp.altnIcao})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-              <DetailField label="Aircraft (OFP)" value={`${ofp.aircraftIcaoType} ${ofp.aircraftRegistration}`} />
-              <DetailField label="Cruise altitude" value={`${Math.round(mToFt(ofp.cruiseAltM)).toLocaleString()} ft`} />
-              <DetailField label="Scheduled out / in" value={`${formatUtc(ofp.schedOutUtc)} / ${formatUtc(ofp.schedInUtc)}`} />
-              <DetailField label="Planned fuel" value={formatWeight(ofp.fuelPlannedKg, props.weightUnit)} />
-              <DetailField
-                label="Pax / cargo"
-                value={`${ofp.pax} / ${formatWeight(ofp.cargoKg, props.weightUnit)}`}
-              />
-              <DetailField
-                label="ZFW / TOW / LDW"
-                value={`${formatWeight(ofp.zfwKg, props.weightUnit)} / ${formatWeight(ofp.towKg, props.weightUnit)} / ${formatWeight(ofp.ldwKg, props.weightUnit)}`}
-              />
-              <DetailField label="Waypoints" value={ofp.waypoints.length} />
-            </dl>
-            <p className="max-h-16 overflow-auto text-sm text-muted-foreground">{ofp.routeString}</p>
-
-            <div className="flex flex-col gap-1.5">
-              <Label>Fleet aircraft</Label>
-              <Select
-                value={selectedAircraftId != null ? String(selectedAircraftId) : undefined}
-                onValueChange={(v) => setSelectedAircraftId(Number(v))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="— select —" />
-                </SelectTrigger>
-                <SelectContent>
-                  {aircraft.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.registration} — {a.icaoType}
-                      {a.registration === ofp.aircraftRegistration ? ' (matched)' : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {ofp.matchedAircraftId == null && selectedAircraftId == null && (
-              <p className="text-sm text-muted-foreground">
-                No fleet aircraft matches tail {ofp.aircraftRegistration || '(none in OFP)'} — pick one
-                manually.
-              </p>
-            )}
-
-            <Button type="button" onClick={handleSaveFlight} disabled={saving || selectedAircraftId == null}>
-              {saving ? 'Starting…' : 'Fly'}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
