@@ -11,8 +11,7 @@ import {
   YAxis
 } from 'recharts'
 import { ArrowLeft } from 'lucide-react'
-import { toast } from 'sonner'
-import type { Aircraft, Flight, LogbookImportSummary, TrackPoint, WeightUnit } from '@shared/ipc'
+import type { Aircraft, Flight, TrackPoint, WeightUnit } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -211,7 +210,6 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
   const [view, setView] = useState<View>({ kind: 'list' })
   const [aircraftFilter, setAircraftFilter] = useState<number | 'all'>('all')
   const [loading, setLoading] = useState(true)
-  const [importing, setImporting] = useState(false)
 
   function reload(): Promise<void> {
     return Promise.all([
@@ -226,32 +224,6 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
   useEffect(() => {
     reload().finally(() => setLoading(false))
   }, [])
-
-  function summarizeImport(summary: LogbookImportSummary): string {
-    const flightsLabel = `${summary.imported} flight${summary.imported === 1 ? '' : 's'}`
-    const aircraftLabel =
-      summary.aircraftCreated > 0 ? ` (added ${summary.aircraftCreated} aircraft to your fleet)` : ''
-    const skippedLabel =
-      summary.skipped.length > 0
-        ? ` Skipped ${summary.skipped.length}: ${summary.skipped.map((s) => `${s.label} (${s.reason})`).join(', ')}`
-        : ''
-    return `Imported ${flightsLabel}${aircraftLabel}.${skippedLabel}`
-  }
-
-  async function handleImport(): Promise<void> {
-    setImporting(true)
-    try {
-      const summary = await window.flightdeck.logbookImportCsv()
-      if (summary) {
-        toast.success(summarizeImport(summary))
-        await reload()
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err))
-    } finally {
-      setImporting(false)
-    }
-  }
 
   function registrationFor(aircraftId: number): string {
     return aircraft.find((a) => a.id === aircraftId)?.registration ?? `#${aircraftId}`
@@ -275,12 +247,7 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="font-heading text-2xl font-semibold text-foreground">Logbook</h1>
-        <Button type="button" variant="outline" size="sm" onClick={handleImport} disabled={importing}>
-          {importing ? 'Importing…' : 'Import CSV'}
-        </Button>
-      </div>
+      <h1 className="font-heading text-2xl font-semibold text-foreground">Logbook</h1>
 
       {loading ? (
         <Table>
@@ -300,7 +267,9 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
           </TableBody>
         </Table>
       ) : flights.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No completed flights yet — track one to see it here.</p>
+        <p className="text-sm text-muted-foreground">
+          No completed flights yet — track one, or import a CSV logbook from Settings → Data.
+        </p>
       ) : (
         <>
           <div className="flex flex-col gap-1.5">

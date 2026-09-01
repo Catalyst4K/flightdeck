@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Aircraft, AircraftImportSummary, FleetStats, NewAircraft } from '@shared/ipc'
+import type { Aircraft, FleetStats, NewAircraft } from '@shared/ipc'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -150,33 +150,6 @@ export function FleetView(): React.JSX.Element {
     }
   }
 
-  function summarizeImport(summary: AircraftImportSummary): string {
-    if (summary.skipped.length === 0) return `Imported ${summary.imported} aircraft.`
-    const skipped = summary.skipped.map((s) => `${s.registration} (${s.reason})`).join(', ')
-    return `Imported ${summary.imported} aircraft. Skipped ${summary.skipped.length}: ${skipped}`
-  }
-
-  async function handleImport(): Promise<void> {
-    try {
-      const summary = await window.flightdeck.aircraftImport()
-      if (summary) {
-        toast.success(summarizeImport(summary))
-        await reload()
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  async function handleExport(): Promise<void> {
-    try {
-      const saved = await window.flightdeck.aircraftExport()
-      if (saved) toast.success('Fleet exported.')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err))
-    }
-  }
-
   if (view.kind === 'new') {
     return (
       <div className="flex flex-col gap-6">
@@ -235,24 +208,16 @@ export function FleetView(): React.JSX.Element {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="font-heading text-2xl font-semibold text-foreground">Fleet</h1>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleImport}>
-            <Upload />
-            Import JSON
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleExport}>
-            <Download />
-            Export JSON
-          </Button>
-          <Button type="button" size="sm" onClick={() => setView({ kind: 'new' })}>
-            <Plus />
-            New aircraft
-          </Button>
-        </div>
+        <Button type="button" size="sm" onClick={() => setView({ kind: 'new' })}>
+          <Plus />
+          New aircraft
+        </Button>
       </div>
 
       {aircraft.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No aircraft yet — add one or import a fleet.</p>
+        <p className="text-sm text-muted-foreground">
+          No aircraft yet — add one, or import a fleet from Settings → Data.
+        </p>
       ) : (
         <Table>
           <TableHeader>
