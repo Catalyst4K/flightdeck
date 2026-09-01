@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { WeightUnit } from '@shared/ipc'
 
 export function SettingsView(props: {
@@ -5,25 +7,30 @@ export function SettingsView(props: {
   onWeightUnitChange: (unit: WeightUnit) => void
 }): React.JSX.Element {
   return (
-    <div>
-      <h1>Settings</h1>
+    <div className="flex flex-col gap-6">
+      <h1 className="font-heading text-2xl font-semibold text-foreground">Settings</h1>
 
-      <section style={{ border: '1px solid #ccc', borderRadius: 4, padding: '1rem', maxWidth: 320 }}>
-        <h2 style={{ marginTop: 0 }}>Units</h2>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span>Weights:</span>
-          {(['kg', 'lb'] as const).map((unit) => (
-            <button
-              key={unit}
-              type="button"
-              onClick={() => props.onWeightUnitChange(unit)}
-              style={{ fontWeight: props.weightUnit === unit ? 'bold' : 'normal' }}
-            >
-              {unit}
-            </button>
-          ))}
-        </div>
-      </section>
+      <Card className="max-w-sm">
+        <CardHeader>
+          <CardTitle>Units</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Weights:</span>
+          <div className="flex gap-1.5">
+            {(['kg', 'lb'] as const).map((unit) => (
+              <Button
+                key={unit}
+                type="button"
+                size="sm"
+                variant={props.weightUnit === unit ? 'default' : 'outline'}
+                onClick={() => props.onWeightUnitChange(unit)}
+              >
+                {unit}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

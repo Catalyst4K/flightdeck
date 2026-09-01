@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AppPage, SimConnectionStatus, SimTelemetry, WeightUnit } from '@shared/ipc'
+import { Toaster } from '@/components/ui/sonner'
 import { DispatchView } from './DispatchView'
 import { FleetView } from './FleetView'
 import { LogbookView } from './LogbookView'
@@ -54,7 +55,7 @@ export default function App(): React.JSX.Element {
   }
 
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem' }}>
+    <main className="p-8">
       <div
         style={{
           display: 'flex',
@@ -91,6 +92,7 @@ export default function App(): React.JSX.Element {
       {page === 'settings' && (
         <SettingsView weightUnit={weightUnit} onWeightUnitChange={handleWeightUnitChange} />
       )}
+      <Toaster />
     </main>
   )
 }
