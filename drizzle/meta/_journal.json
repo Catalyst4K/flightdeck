@@ -8,6 +8,13 @@
       "when": 1788252881252,
       "tag": "0000_natural_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788262800277,
+      "tag": "0001_awesome_gauntlet",
+      "breakpoints": true
     }
   ]
 }
