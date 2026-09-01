@@ -18,6 +18,12 @@ export function mToFt(m: number): number {
   return m / M_PER_FT
 }
 
+const MS_PER_KT = 0.514444
+
+export function msToKt(ms: number): number {
+  return ms / MS_PER_KT
+}
+
 /** Converts a stored kg value to the user's preferred display unit. */
 export function kgToUnit(kg: number, unit: WeightUnit): number {
   return unit === 'kg' ? kg : kgToLb(kg)

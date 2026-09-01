@@ -18,7 +18,7 @@ import {
 } from './db/aircraft-repo'
 import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
-import { createFlight, listFlights } from './db/flight-repo'
+import { createFlight, getFleetStats, listCompletedFlights, listFlights } from './db/flight-repo'
 import { getSimbriefUsername, getWeightUnit, setSimbriefUsername, setWeightUnit } from './db/settings-repo'
 import { listTrackPoints } from './db/track-point-repo'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
@@ -125,6 +125,9 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.trackingStop, () => trackingController.stop())
   ipcMain.handle(IpcChannels.trackingGetActive, () => trackingController.getActive() ?? null)
   ipcMain.handle(IpcChannels.trackPointList, (_event, flightId: number) => listTrackPoints(db, flightId))
+
+  ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))
+  ipcMain.handle(IpcChannels.logbookFleetStats, () => getFleetStats(db))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits

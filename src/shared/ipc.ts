@@ -176,6 +176,16 @@ export interface Flight {
   createdAt: string
 }
 
+/** One row per aircraft with at least one completed flight — see flight-repo.ts. */
+export interface FleetStats {
+  aircraftId: number
+  registration: string
+  totalHours: number
+  totalCycles: number
+  lastArrIcao: string
+  lastFlightInUtc: string | null
+}
+
 export interface NewFlight {
   aircraftId: number
   status?: FlightStatus
@@ -257,7 +267,9 @@ export const IpcChannels = {
   trackingStop: 'tracking:stop',
   trackingGetActive: 'tracking:get-active',
   trackingPoint: 'tracking:point',
-  trackPointList: 'track-point:list'
+  trackPointList: 'track-point:list',
+  logbookListCompletedFlights: 'logbook:list-completed-flights',
+  logbookFleetStats: 'logbook:fleet-stats'
 } as const
 
 export interface FlightdeckApi {
@@ -294,4 +306,6 @@ export interface FlightdeckApi {
   trackingGetActive: () => Promise<ActiveTracking | null>
   trackPointList: (flightId: number) => Promise<TrackPoint[]>
   onTrackingPoint: (listener: (point: TrackPoint) => void) => () => void
+  logbookListCompletedFlights: () => Promise<Flight[]>
+  logbookFleetStats: () => Promise<FleetStats[]>
 }

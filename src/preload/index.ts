@@ -47,7 +47,9 @@ const api: FlightdeckApi = {
     const handler = (_event: Electron.IpcRendererEvent, point: TrackPoint): void => listener(point)
     ipcRenderer.on(IpcChannels.trackingPoint, handler)
     return () => ipcRenderer.removeListener(IpcChannels.trackingPoint, handler)
-  }
+  },
+  logbookListCompletedFlights: () => ipcRenderer.invoke(IpcChannels.logbookListCompletedFlights),
+  logbookFleetStats: () => ipcRenderer.invoke(IpcChannels.logbookFleetStats)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

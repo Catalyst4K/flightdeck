@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm'
-import type { Flight, NewFlight } from '@shared/ipc'
-import { flight } from './schema'
+import type { Flight, FleetStats, NewFlight } from '@shared/ipc'
+import { aircraft, flight } from './schema'
 import type { FlightdeckDb } from './client'
 
 function toFlight(row: typeof flight.$inferSelect): Flight {
@@ -123,4 +123,53 @@ export function completeFlight(db: FlightdeckDb, id: number, fuelInKg: number): 
 export function abandonFlight(db: FlightdeckDb, id: number): Flight | undefined {
   const [row] = db.update(flight).set({ status: 'abandoned' }).where(eq(flight.id, id)).returning().all()
   return row ? toFlight(row) : undefined
+}
+
+export function listCompletedFlights(db: FlightdeckDb): Flight[] {
+  return db
+    .select()
+    .from(flight)
+    .where(eq(flight.status, 'completed'))
+    .orderBy(desc(flight.actualInUtc))
+    .all()
+    .map(toFlight)
+}
+
+/**
+ * One row per aircraft with a completed flight, derived live from `flight` rather than
+ * `Aircraft.totalHours`/`totalCycles` — nothing currently writes to those columns, so
+ * they can't be trusted as a running total. Aircraft with no completed flights are
+ * omitted rather than shown with zeroes.
+ */
+export function getFleetStats(db: FlightdeckDb): FleetStats[] {
+  const completed = listCompletedFlights(db) // newest first
+  const aircraftById = new Map(
+    db
+      .select()
+      .from(aircraft)
+      .all()
+      .map((row) => [row.id, row.registration])
+  )
+
+  const byAircraft = new Map<number, FleetStats>()
+  for (const f of completed) {
+    const registration = aircraftById.get(f.aircraftId)
+    if (!registration) continue // orphaned flight row, e.g. its aircraft was deleted
+
+    const existing = byAircraft.get(f.aircraftId)
+    if (existing) {
+      existing.totalHours += (f.blockMinutes ?? 0) / 60
+      existing.totalCycles += 1
+    } else {
+      byAircraft.set(f.aircraftId, {
+        aircraftId: f.aircraftId,
+        registration,
+        totalHours: (f.blockMinutes ?? 0) / 60,
+        totalCycles: 1,
+        lastArrIcao: f.arrIcao,
+        lastFlightInUtc: f.actualInUtc
+      })
+    }
+  }
+  return [...byAircraft.values()].sort((a, b) => a.registration.localeCompare(b.registration))
 }
