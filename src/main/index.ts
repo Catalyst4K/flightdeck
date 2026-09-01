@@ -1,9 +1,11 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { IpcChannels, type NewAircraft } from '@shared/ipc'
+import { IpcChannels, type AircraftUpdate } from '@shared/ipc'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
-import { createAircraft, listAircraft } from './db/aircraft-repo'
+import { createAircraft, deleteAircraft, listAircraft, updateAircraft } from './db/aircraft-repo'
+import { parseAircraftInput } from './db/aircraft-validation'
+import { exportAircraft, importAircraft } from './db/aircraft-import-export'
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -32,12 +34,31 @@ app.whenReady().then(() => {
   migrateDb(dbPath)
   const { db } = createDb(dbPath)
 
-  ipcMain.handle(IpcChannels.aircraftList, () => listAircraft(db))
-  ipcMain.handle(IpcChannels.aircraftCreate, (_event, input: NewAircraft) =>
-    createAircraft(db, input)
-  )
-
   const window = createWindow()
+
+  ipcMain.handle(IpcChannels.aircraftList, () => listAircraft(db))
+
+  ipcMain.handle(IpcChannels.aircraftCreate, (_event, input: unknown) => {
+    const result = parseAircraftInput(input)
+    if ('error' in result) throw new Error(result.error)
+    return createAircraft(db, result.data)
+  })
+
+  ipcMain.handle(IpcChannels.aircraftUpdate, (_event, input: AircraftUpdate) => {
+    const { id, ...rest } = input
+    const result = parseAircraftInput(rest)
+    if ('error' in result) throw new Error(result.error)
+    const updated = updateAircraft(db, { id, ...result.data })
+    if (!updated) throw new Error(`Aircraft ${id} not found`)
+    return updated
+  })
+
+  ipcMain.handle(IpcChannels.aircraftDelete, (_event, id: number) => {
+    deleteAircraft(db, id)
+  })
+
+  ipcMain.handle(IpcChannels.aircraftImport, () => importAircraft(db, window))
+  ipcMain.handle(IpcChannels.aircraftExport, () => exportAircraft(db, window))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits
