@@ -11,6 +11,7 @@ function toExportRecord(a: Aircraft): NewAircraft {
     registration: a.registration,
     icaoType: a.icaoType,
     operator: a.operator,
+    operatorIata: a.operatorIata,
     simbriefAirframeId: a.simbriefAirframeId,
     currentIcao: a.currentIcao
   }

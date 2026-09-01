@@ -259,3 +259,31 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
            accent #0ea5e9  accent-2 #3b82f6
            success #10b981  danger #ef4444
     ```
+- 2026-09-01: Fleet's "Airline" field is now searchable by name/ICAO (the same
+  Combobox pattern as airport/aircraft-type search), and shows a small logo next to the
+  airline name in Fleet's list and detail views. Two sourcing decisions, made explicitly
+  rather than picked silently given the project's existing trademark/licensing care
+  (SimToolkitPro wording, flightsim.to naming, the LGPL audit):
+  - **Airline name/ICAO/IATA data**: vendored from the OpenFlights airline database
+    (`resources/airlines.csv`, trimmed from 6,162 to 5,886 rows — see
+    resources/airlines.LICENSE.txt for the exact trim). Licensed **ODbL 1.0**, not
+    public domain like the OurAirports/ICAO-8643 vendored files — this requires
+    attribution (satisfied by the LICENSE.txt file plus this entry) and that any
+    redistributed derivative of the *database* stay under a free/open license; it does
+    **not** put the app's own MIT-licensed code under ODbL. Not filtered by the
+    upstream "active" flag, which is known to be stale.
+  - **Airline logos**: fetched live by IATA code from `images.kiwi.com/airlines/`, a
+    free, keyless image CDN — Kiwi.com's own site uses this same endpoint, and it needs
+    no signup/API key (checked several alternatives — AirHex, logostream — all gate
+    even their free tiers behind an API key). Same category of decision as the
+    OpenFreeMap tile source: a live third-party dependency, not vendored, so the app
+    still shows no logo gracefully (about 4,600 of the 5,886 vendored airlines have no
+    IATA code at all, and not every IATA code the service does cover has a logo) rather
+    than failing. Trademark rationale mirrors that of every other flight-tracking hobby
+    tool doing the same thing: a small logo shown purely for identification next to an
+    airline name the user themselves typed in, not used to imply endorsement or
+    affiliation. Requires a `img-src` CSP addition (see src/renderer/index.html).
+  - Schema change: `aircraft.operator_iata` (nullable text) added via migration
+    `0005_melted_katie_power.sql` — set only when the airline is picked from the search
+    dropdown (a free-typed or registration-lookup-filled operator has no code, so no
+    logo shows for it).

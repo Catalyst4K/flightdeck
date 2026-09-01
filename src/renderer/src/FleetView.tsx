@@ -23,7 +23,33 @@ function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : '—'
 }
 
-function DetailField(props: { label: string; value: string | number }): React.JSX.Element {
+// Free, keyless logo-by-IATA-code image service (docs/decisions.md, 2026-09-01 airline-
+// search entry) — the same service Kiwi.com's own site uses. Not every IATA code has a
+// logo there, so a failed load just hides the image rather than showing a broken icon.
+function AirlineLogo(props: { iata: string | null }): React.JSX.Element | null {
+  if (!props.iata) return null
+  return (
+    <img
+      src={`https://images.kiwi.com/airlines/32/${props.iata}.png`}
+      alt=""
+      className="size-4 rounded-sm"
+      onError={(e) => {
+        e.currentTarget.style.display = 'none'
+      }}
+    />
+  )
+}
+
+function AirlineLabel(props: { operator: string | null; operatorIata: string | null }): React.JSX.Element {
+  return (
+    <span className="flex items-center gap-1.5">
+      <AirlineLogo iata={props.operatorIata} />
+      {props.operator ?? '—'}
+    </span>
+  )
+}
+
+function DetailField(props: { label: string; value: React.ReactNode }): React.JSX.Element {
   return (
     <>
       <dt className="text-muted-foreground">{props.label}</dt>
@@ -56,7 +82,7 @@ function AircraftDetail(props: {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-            <DetailField label="Airline" value={a.operator ?? '—'} />
+            <DetailField label="Airline" value={<AirlineLabel operator={a.operator} operatorIata={a.operatorIata} />} />
             <DetailField label="SimBrief profile" value={a.simbriefAirframeId ?? '—'} />
             <DetailField label="Current airport" value={a.currentIcao ?? s?.lastArrIcao ?? '—'} />
             <DetailField label="Total hours" value={s ? s.totalHours.toFixed(1) : '0.0'} />
@@ -249,7 +275,9 @@ export function FleetView(): React.JSX.Element {
                 >
                   <TableCell className="font-medium">{a.registration}</TableCell>
                   <TableCell>{a.icaoType}</TableCell>
-                  <TableCell>{a.operator ?? '—'}</TableCell>
+                  <TableCell>
+                    <AirlineLabel operator={a.operator} operatorIata={a.operatorIata} />
+                  </TableCell>
                   <TableCell>{s ? s.totalHours.toFixed(1) : '0.0'}</TableCell>
                   <TableCell>{s?.totalCycles ?? 0}</TableCell>
                 </TableRow>
