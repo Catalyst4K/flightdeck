@@ -27,6 +27,10 @@ export function TrackView(props: {
   previewOfpJson?: string | null
   /** Live sim telemetry, shown as a small overlay on the map. */
   telemetry?: SimTelemetry | null
+  /** Called after a flight (active or planned) is cancelled here, so Dispatch's
+   *  persisted OFP reference — which otherwise survives independently of this — can be
+   *  cleared too rather than going on claiming to reference an abandoned flight. */
+  onFlightCancelled?: () => void
 }): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [flights, setFlights] = useState<Flight[]>([])
@@ -83,6 +87,7 @@ export function TrackView(props: {
         await window.flightdeck.trackingStop()
         setActive(null)
         await reload()
+        props.onFlightCancelled?.()
       } else if (action.kind === 'finish') {
         await window.flightdeck.trackingFinish()
         setActive(null)
@@ -90,6 +95,7 @@ export function TrackView(props: {
       } else {
         await window.flightdeck.flightCancel(action.id)
         await reload()
+        props.onFlightCancelled?.()
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -174,11 +180,7 @@ export function TrackView(props: {
           </CardContent>
         </Card>
       ) : plannedFlights.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {props.previewOfpJson
-            ? 'Previewing the OFP fetched in Dispatch — save it as a planned flight to start tracking.'
-            : 'No planned flights to track — dispatch one first.'}
-        </p>
+        <p className="text-sm text-muted-foreground">No planned flights to track — dispatch one first.</p>
       ) : (
         <div className="flex flex-col gap-2">
           {plannedFlights.map((f) => {
