@@ -10,6 +10,7 @@ import {
 } from '@shared/ipc'
 import { fetchAircraftByRegistration } from './aircraft-lookup/adsbdb-client'
 import { searchAircraftTypes } from './aircraft-lookup/icao-types'
+import { searchAirlines } from './airlines/airline-search'
 import { searchAirports } from './airports/airport-search'
 import { buildAppMenu } from './menu'
 import { createDb } from './db/client'
@@ -171,6 +172,7 @@ app.whenReady().then(() => {
   )
   ipcMain.handle(IpcChannels.aircraftTypeSearch, (_event, query: string) => searchAircraftTypes(query))
   ipcMain.handle(IpcChannels.airportSearch, (_event, query: string) => searchAirports(query))
+  ipcMain.handle(IpcChannels.airlineSearch, (_event, query: string) => searchAirlines(query))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits

@@ -9,6 +9,7 @@ function toAircraft(row: typeof aircraft.$inferSelect): Aircraft {
     registration: row.registration,
     icaoType: row.icaoType,
     operator: row.operator,
+    operatorIata: row.operatorIata,
     simbriefAirframeId: row.simbriefAirframeId,
     currentIcao: row.currentIcao,
     createdAt: row.createdAt

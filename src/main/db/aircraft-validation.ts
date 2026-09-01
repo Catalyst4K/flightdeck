@@ -1,7 +1,7 @@
 import type { NewAircraft } from '@shared/ipc'
 
 const REQUIRED_STRING_FIELDS = ['registration', 'icaoType'] as const
-const OPTIONAL_STRING_FIELDS = ['operator', 'simbriefAirframeId', 'currentIcao'] as const
+const OPTIONAL_STRING_FIELDS = ['operator', 'operatorIata', 'simbriefAirframeId', 'currentIcao'] as const
 
 export type AircraftInputResult = { data: NewAircraft } | { error: string }
 
