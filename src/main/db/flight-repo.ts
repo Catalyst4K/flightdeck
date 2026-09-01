@@ -1,4 +1,4 @@
-import { desc } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import type { Flight, NewFlight } from '@shared/ipc'
 import { flight } from './schema'
 import type { FlightdeckDb } from './client'
@@ -38,13 +38,89 @@ function toFlight(row: typeof flight.$inferSelect): Flight {
   }
 }
 
+function minutesBetween(startIso: string | null, endIso: string | null): number | null {
+  if (!startIso || !endIso) return null
+  return (new Date(endIso).getTime() - new Date(startIso).getTime()) / 60_000
+}
+
 export function listFlights(db: FlightdeckDb): Flight[] {
   // Order by id, not created_at: current_timestamp has 1-second resolution and two
   // flights created in the same second would otherwise tie with no defined order.
   return db.select().from(flight).orderBy(desc(flight.id)).all().map(toFlight)
 }
 
+export function getFlight(db: FlightdeckDb, id: number): Flight | undefined {
+  const row = db.select().from(flight).where(eq(flight.id, id)).get()
+  return row ? toFlight(row) : undefined
+}
+
 export function createFlight(db: FlightdeckDb, input: NewFlight): Flight {
   const [row] = db.insert(flight).values(input).returning().all()
   return toFlight(row)
+}
+
+/** Block-out: the flight goes 'active' and tracking begins. */
+export function startFlight(
+  db: FlightdeckDb,
+  id: number,
+  fuelOutKg: number,
+  simVersion?: string
+): Flight | undefined {
+  const [row] = db
+    .update(flight)
+    .set({ status: 'active', actualOutUtc: new Date().toISOString(), fuelOutKg, simVersion })
+    .where(eq(flight.id, id))
+    .returning()
+    .all()
+  return row ? toFlight(row) : undefined
+}
+
+/** Liftoff — the takeoff → climb transition. */
+export function recordOff(db: FlightdeckDb, id: number): Flight | undefined {
+  const [row] = db
+    .update(flight)
+    .set({ actualOffUtc: new Date().toISOString() })
+    .where(eq(flight.id, id))
+    .returning()
+    .all()
+  return row ? toFlight(row) : undefined
+}
+
+/** Touchdown — the descent → landing transition. */
+export function recordOn(db: FlightdeckDb, id: number): Flight | undefined {
+  const [row] = db
+    .update(flight)
+    .set({ actualOnUtc: new Date().toISOString() })
+    .where(eq(flight.id, id))
+    .returning()
+    .all()
+  return row ? toFlight(row) : undefined
+}
+
+/** Block-in: shutdown reached. Derives block/air time and fuel burn from the timestamps already recorded. */
+export function completeFlight(db: FlightdeckDb, id: number, fuelInKg: number): Flight | undefined {
+  const existing = getFlight(db, id)
+  if (!existing) return undefined
+
+  const actualInUtc = new Date().toISOString()
+  const [row] = db
+    .update(flight)
+    .set({
+      status: 'completed',
+      actualInUtc,
+      fuelInKg,
+      blockMinutes: minutesBetween(existing.actualOutUtc, actualInUtc),
+      airMinutes: minutesBetween(existing.actualOffUtc, existing.actualOnUtc),
+      fuelBurnKg: existing.fuelOutKg != null ? existing.fuelOutKg - fuelInKg : null
+    })
+    .where(eq(flight.id, id))
+    .returning()
+    .all()
+  return row ? toFlight(row) : undefined
+}
+
+/** User cancelled tracking mid-flight — stop recording without pretending it completed normally. */
+export function abandonFlight(db: FlightdeckDb, id: number): Flight | undefined {
+  const [row] = db.update(flight).set({ status: 'abandoned' }).where(eq(flight.id, id)).returning().all()
+  return row ? toFlight(row) : undefined
 }

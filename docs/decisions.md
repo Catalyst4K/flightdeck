@@ -5,28 +5,34 @@ Code session, before scaffolding M0. Add new decisions below as they come up —
 let them live only in chat history.
 
 ## 1. Name
+
 - **Status:** Decided — **Flightdeck**
 - Matches the existing repo name. package.json, DB filename (`flightdeck.db`), and
   window title all use it.
 
 ## 2. Stack: Electron/TypeScript or .NET/C#?
+
 - **Status:** Decided — **Electron + React + TypeScript**, per PLAN.md's recommendation.
   `node-simconnect` for the sim link (pure TS, no native compile step).
 
 ## 3. MSFS 2024 only, or 2020 too?
+
 - **Status:** Decided — **2024 only** for v1. Sim connector stays behind an interface
   so 2020 support can be added later without a rewrite.
 
 ## 4. Fleet ↔ SimBrief airframes: saved airframe IDs, or push `acdata` per request?
+
 - **Status:** Decided — **saved airframe ID**. Each fleet aircraft stores its SimBrief
   saved-airframe ID (`simbrief_airframe_id`); dispatch requests reference it in place of
   a type code rather than pushing full `acdata` JSON per request.
 
 ## 5. Units: store SI internally and convert at the edges, or store as the sim reports?
+
 - **Status:** Decided — **SI internally** (kg, m, m/s). Convert to aviation units
   (ft, kt, fpm) only at the IPC boundary / UI layer, per CLAUDE.md.
 
 ## 6. Licence and repo visibility
+
 - **Status:** Decided — **public repo, MIT licence**. OurAirports data (public domain)
   is fine to vendor; don't copy GPL reference code (e.g. Little Navmap) beyond ideas.
 
@@ -93,7 +99,7 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     trusting this note.
   - Naming: flightsim.to already runs a first-party product called "FlightDeck —
     Creators Analytics" (creators.flightsim.to). Same name, same platform — consider a
-    more specific title for the flightsim.to *listing* itself (e.g. "Flightdeck — Fleet
+    more specific title for the flightsim.to _listing_ itself (e.g. "Flightdeck — Fleet
     & Logbook Companion") to avoid confusion; doesn't require renaming the repo/package.
   - General MSFS-addon norm, not verified against flightsim.to's specific wording: don't
     use Microsoft/Asobo logos or MSFS box art as the app icon, and carry a brief "not
@@ -114,9 +120,37 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   verified it against one real fetch (`xml.fetcher.php?username=...&json=1`) before
   writing `src/main/simbrief/simbrief-client.ts`, same rigor as M1's SimConnect spike.
   Two things worth knowing for later milestones that touch OFP data: every numeric field
-  in the response is a JSON *string*, and `params.units` (`'kgs'` or `'lbs'`) depends on
+  in the response is a JSON _string_, and `params.units` (`'kgs'` or `'lbs'`) depends on
   the SimBrief user's own profile setting — weight/fuel figures are in whichever one
   that is, not a fixed unit. Also confirmed decision #4's assumption: a saved airframe's
   Internal ID (`simbrief_airframe_id`, format `123456_1582090020`) is used via SimBrief's
   own `airframe=` URL parameter, both for future direct-generation API calls and for
   pre-filling the `dispatch.simbrief.com` web form.
+- 2026-09-01: M4 map tile source (PLAN.md §4, deferred to M4) — **OpenFreeMap**, style
+  `https://tiles.openfreemap.org/styles/liberty`. No API key, no published quota, and no
+  self-hosting infrastructure to run — the only one of the three options (OpenFreeMap /
+  self-hosted PMTiles / a shared MapTiler-Stadia key) that adds zero backend surface,
+  matching this app's "no accounts, no backend" rule. MapLibre's default
+  `AttributionControl` must stay enabled (don't pass `attributionControl: false`) — that's
+  what satisfies OpenFreeMap's required attribution, not something to add manually.
+- 2026-09-01: Switched the M4 style from `liberty` to `positron` (same OpenFreeMap host,
+  no other setup change) after live-testing the map against a real flight — `liberty`'s
+  full-colour OSM styling competed visually with the flight track/marker. `positron` is a
+  low-contrast, mostly-grayscale basemap designed for exactly this kind of data overlay.
+  An airport-diagram overlay at high zoom (raised in the same conversation, comparing to
+  SimToolkitPro) is a separate, much bigger feature — needs its own chart/diagram data
+  source — and is deliberately out of scope for M4.
+- 2026-09-01: Retuned `FlightRecorder`'s track-point downsampling after live-testing
+  against a real flight: cruise goes from PLAN.md §5's "every 15s" to every 5s, and climb
+  gets its own 2s interval (was the 1s default shared with the ground phases). The
+  marker/camera interpolation added earlier the same session (to hide the jump between
+  sparse cruise points) was briefly removed on the assumption tighter intervals would make
+  a plain snap-to read smoothly on its own — live-tested and still visibly jumpy even at
+  5s, so it went back in. `TrackView.tsx` keeps the interpolation regardless of how tight
+  the recording interval ends up being.
+  Also: `descent` can now transition back to `cruise` on a sustained level-off (mirroring
+  the existing `climb` → `cruise` check), not just forward to `landing` on touchdown. A
+  routine flight-level change sustains a descent rate for well over
+  `DESCENT_SUSTAIN_SAMPLES` too, so without this the recorder would commit a flight to
+  "descent" — and its 1s-interval, high-precision recording — for the rest of the flight
+  after the first step-down, long before any real approach.
