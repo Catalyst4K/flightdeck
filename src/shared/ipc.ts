@@ -51,6 +51,11 @@ export interface AircraftImportSummary {
 export interface AircraftLookupResult {
   icaoType: string
   operator: string | null
+  /** The operator's ICAO code (adsbdb's "operator flag code") — used to resolve the
+   *  exact vendored airline entry (and its IATA code, for a logo) rather than fuzzy-
+   *  matching adsbdb's free-text operator name against it. Null if adsbdb didn't have
+   *  one for this aircraft. */
+  operatorIcao: string | null
 }
 
 /** One match from the vendored OurAirports name/ICAO search — see resources/airports.csv. */

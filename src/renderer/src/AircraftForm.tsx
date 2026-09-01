@@ -91,13 +91,15 @@ export function AircraftForm(props: {
         setLookupStatus(`No match for "${registration}" — search for the type below.`)
         return
       }
-      // adsbdb only returns a plain operator name, no code — match it against our own
-      // vendored airline list so a registration lookup fills in the same ICAO/IATA-backed
-      // selection a manual pick from the Airline combobox would, logo included.
+      // adsbdb also returns the operator's actual ICAO code — resolve the exact vendored
+      // airline entry from that (canonical name + IATA, for a logo) rather than fuzzy-
+      // matching adsbdb's free-text operator name against it, which breaks on real
+      // mismatches (adsbdb's "Cathay Pacific Airways" vs. the vendored "Cathay Pacific" —
+      // a shorter name can never substring-match a longer query).
       let matchedAirline: AirlineOption | undefined
-      if (result.operator) {
-        const matches = await window.flightdeck.airlineSearch(result.operator)
-        matchedAirline = matches.find((m) => m.name.toLowerCase() === result.operator!.toLowerCase()) ?? matches[0]
+      if (result.operatorIcao) {
+        const matches = await window.flightdeck.airlineSearch(result.operatorIcao)
+        matchedAirline = matches.find((m) => m.icao.toLowerCase() === result.operatorIcao!.toLowerCase())
       }
       // Fills blanks only — never overwrites something already typed/edited.
       setForm((current) => {
