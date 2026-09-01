@@ -91,12 +91,24 @@ export function AircraftForm(props: {
         setLookupStatus(`No match for "${registration}" — search for the type below.`)
         return
       }
+      // adsbdb only returns a plain operator name, no code — match it against our own
+      // vendored airline list so a registration lookup fills in the same ICAO/IATA-backed
+      // selection a manual pick from the Airline combobox would, logo included.
+      let matchedAirline: AirlineOption | undefined
+      if (result.operator) {
+        const matches = await window.flightdeck.airlineSearch(result.operator)
+        matchedAirline = matches.find((m) => m.name.toLowerCase() === result.operator!.toLowerCase()) ?? matches[0]
+      }
       // Fills blanks only — never overwrites something already typed/edited.
-      setForm((current) => ({
-        ...current,
-        icaoType: current.icaoType || result.icaoType,
-        operator: current.operator || result.operator || current.operator
-      }))
+      setForm((current) => {
+        const fillOperator = !current.operator
+        return {
+          ...current,
+          icaoType: current.icaoType || result.icaoType,
+          operator: fillOperator ? (matchedAirline?.name ?? result.operator ?? current.operator) : current.operator,
+          operatorIata: fillOperator ? (matchedAirline?.iata ?? '') : current.operatorIata
+        }
+      })
       setLookupStatus(`Found: ${result.operator ?? 'unknown operator'}, ${result.icaoType}`)
     } catch (err) {
       setLookupStatus(err instanceof Error ? err.message : String(err))
