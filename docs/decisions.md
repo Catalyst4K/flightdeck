@@ -319,3 +319,21 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   resolves the exact vendored airline entry by that code instead of fuzzy-matching a
   name. No more substring-matching footgun; falls back to the raw adsbdb name with no
   logo only if adsbdb has no operator code for that aircraft at all.
+- 2026-09-02: Moved Fleet's JSON import/export and Logbook's CSV import into a new
+  "Data" card in Settings, and Dispatch's SimBrief username into a new "Credentials"
+  card there — these are config/housekeeping actions, not something that belonged
+  scattered across the working views that consume their results. No IPC/behavior
+  changes, purely relocated.
+- 2026-09-02: Added a METAR panel to Track — a small widget next to the page title
+  (not a full section) with Dep/Dest/Altn/Custom tabs, the first three sourced from
+  whatever flight or Dispatch preview Track is already showing (see
+  `parseAirportsFromOfpJson` in route.ts, mirroring the existing route/waypoints
+  fallback), the last a free airport search. Data source: **aviationweather.gov**'s
+  public Data API (NOAA/NWS Aviation Weather Center) — free, keyless, no rate limit
+  documented, and genuinely public-domain US government data, unlike the other two
+  external data sources added this week (OpenFlights is ODbL/attribution-required,
+  images.kiwi.com is an undocumented internal endpoint with no durability guarantee at
+  all). Verified live: `GET .../api/data/metar?ids=EGLL,KJFK&format=json` returns raw
+  METAR text plus a decoded flight category (VFR/MVFR/IFR/LIFR); an all-unknown-code
+  request returns HTTP 204, not an error. All four slots are fetched in one batched
+  request rather than one per tab.

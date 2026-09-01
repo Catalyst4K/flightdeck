@@ -58,7 +58,8 @@ const api: FlightdeckApi = {
     ipcRenderer.invoke(IpcChannels.aircraftLookupByRegistration, registration),
   aircraftTypeSearch: (query: string) => ipcRenderer.invoke(IpcChannels.aircraftTypeSearch, query),
   airportSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airportSearch, query),
-  airlineSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airlineSearch, query)
+  airlineSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airlineSearch, query),
+  weatherGetMetars: (icaoCodes: string[]) => ipcRenderer.invoke(IpcChannels.weatherGetMetars, icaoCodes)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

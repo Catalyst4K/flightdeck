@@ -1,0 +1,56 @@
+/**
+ * METAR lookup via aviationweather.gov's public Data API (NOAA/NWS Aviation Weather
+ * Center) — free, keyless, no documented rate limit, and a genuine public-domain US
+ * government data source (docs/decisions.md, 2026-09-02 Track METAR entry). Verified
+ * against real live responses, not just its docs:
+ *
+ *   GET https://aviationweather.gov/api/data/metar?ids=EGLL,KJFK&format=json
+ *   [{ "icaoId": "EGLL", "rawOb": "METAR EGLL 012320Z AUTO 25008KT 9999 NCD 18/12 Q1020",
+ *      "reportTime": "2026-09-01T23:20:00.000Z", "fltCat": "VFR", ... }, ...]
+ *
+ * A request where every code is unknown/non-reporting returns HTTP 204 with an empty
+ * body (verified against a made-up code); a request mixing known and unknown codes just
+ * omits the unknown ones from the response array. Both are the normal "nothing to
+ * report for this code" outcome here, not an error.
+ */
+import type { MetarReport } from '@shared/ipc'
+
+class MetarError extends Error {}
+
+interface AviationWeatherMetar {
+  icaoId?: unknown
+  rawOb?: unknown
+  reportTime?: unknown
+  fltCat?: unknown
+}
+
+function isFlightCategory(value: unknown): value is MetarReport['flightCategory'] {
+  return value === 'VFR' || value === 'MVFR' || value === 'IFR' || value === 'LIFR'
+}
+
+export async function fetchMetars(icaoCodes: string[]): Promise<MetarReport[]> {
+  const codes = [...new Set(icaoCodes.map((c) => c.trim().toUpperCase()).filter(Boolean))]
+  if (codes.length === 0) return []
+
+  const url = `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(codes.join(','))}&format=json`
+  const response = await fetch(url)
+  if (response.status === 204) return []
+  if (!response.ok) {
+    throw new MetarError(`METAR lookup failed (HTTP ${response.status}) for ${codes.join(', ')}`)
+  }
+
+  const raw: unknown = await response.json().catch(() => undefined)
+  if (!Array.isArray(raw)) return []
+
+  return (raw as AviationWeatherMetar[])
+    .filter(
+      (m): m is AviationWeatherMetar & { icaoId: string; rawOb: string } =>
+        typeof m.icaoId === 'string' && typeof m.rawOb === 'string'
+    )
+    .map((m) => ({
+      icao: m.icaoId,
+      rawText: m.rawOb,
+      observedUtc: typeof m.reportTime === 'string' ? m.reportTime : '',
+      flightCategory: isFlightCategory(m.fltCat) ? m.fltCat : null
+    }))
+}
