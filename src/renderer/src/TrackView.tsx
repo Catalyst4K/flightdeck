@@ -1,7 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import type { ActiveTracking, Aircraft, Flight, SimTelemetry, TrackPoint } from '@shared/ipc'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { FlightMap } from './FlightMap'
 import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
+
+type ConfirmAction =
+  | { kind: 'cancel-active'; title: string; description: string }
+  | { kind: 'finish'; title: string; description: string }
+  | { kind: 'cancel-planned'; id: number; title: string; description: string }
 
 export function TrackView(props: {
   /** The OFP most recently fetched in Dispatch, not yet saved as a flight — last-resort
@@ -14,8 +32,8 @@ export function TrackView(props: {
   const [flights, setFlights] = useState<Flight[]>([])
   const [active, setActive] = useState<ActiveTracking | null>(null)
   const [trackPoints, setTrackPoints] = useState<TrackPoint[]>([])
-  const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
 
   function reload(): Promise<void> {
     return Promise.all([window.flightdeck.aircraftList(), window.flightdeck.flightList()]).then(
@@ -44,42 +62,43 @@ export function TrackView(props: {
 
   async function handleStart(flightId: number): Promise<void> {
     setStarting(true)
-    setError(null)
     try {
       await window.flightdeck.trackingStart(flightId)
       setActive(await window.flightdeck.trackingGetActive())
       setTrackPoints([])
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setStarting(false)
     }
   }
 
-  /** Cancels the actively tracked flight — abandoned rather than completed. */
-  async function handleCancelActive(): Promise<void> {
-    await window.flightdeck.trackingStop()
-    setActive(null)
-    await reload()
-  }
-
-  /** Manually ends and saves the actively tracked flight now, rather than waiting for
-   *  automatic shutdown detection. */
-  async function handleFinish(): Promise<void> {
-    await window.flightdeck.trackingFinish()
-    setActive(null)
-    await reload()
-  }
-
-  /** Cancels a flight that's been planned but never started tracking. */
-  async function handleCancelPlanned(id: number): Promise<void> {
-    await window.flightdeck.flightCancel(id)
-    await reload()
+  async function handleConfirm(): Promise<void> {
+    if (!confirmAction) return
+    const action = confirmAction
+    setConfirmAction(null)
+    try {
+      if (action.kind === 'cancel-active') {
+        await window.flightdeck.trackingStop()
+        setActive(null)
+        await reload()
+      } else if (action.kind === 'finish') {
+        await window.flightdeck.trackingFinish()
+        setActive(null)
+        await reload()
+      } else {
+        await window.flightdeck.flightCancel(action.id)
+        await reload()
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const plannedFlights = flights.filter((f) => f.status === 'planned')
   const activeFlight = active ? flights.find((f) => f.id === active.flightId) : undefined
+  const activeLabel = activeFlight?.flightNumber ?? `flight #${active?.flightId}`
   // Before tracking starts, preview the most recently planned flight (flightList already
   // orders newest-first) so a freshly-dispatched plan shows up on the map immediately
   // rather than only after "Start tracking" is clicked. If nothing's been saved yet,
@@ -113,54 +132,110 @@ export function TrackView(props: {
   const waypoints = previewFlight ? flightWaypoints : dispatchPreviewWaypoints
 
   return (
-    <div>
-      <h1>Track</h1>
-
-      {error && <p style={{ color: '#b00020' }}>{error}</p>}
+    <div className="flex flex-col gap-6">
+      <h1 className="font-heading text-2xl font-semibold text-foreground">Track</h1>
 
       {active ? (
-        <p>
-          Tracking {activeFlight?.flightNumber ?? `flight #${active.flightId}`} — phase:{' '}
-          <strong>{active.phase}</strong>{' '}
-          <button type="button" onClick={handleCancelActive}>
-            Cancel flight
-          </button>{' '}
-          <button type="button" onClick={handleFinish}>
-            Finish & save
-          </button>
-        </p>
+        <Card>
+          <CardContent className="flex items-center justify-between gap-4">
+            <p className="text-sm text-foreground">
+              Tracking <span className="font-medium">{activeLabel}</span> — phase:{' '}
+              <span className="font-mono">{active.phase}</span>
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() =>
+                  setConfirmAction({
+                    kind: 'cancel-active',
+                    title: `Cancel ${activeLabel}?`,
+                    description: 'The flight will be marked abandoned rather than completed.'
+                  })
+                }
+              >
+                Cancel flight
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  setConfirmAction({
+                    kind: 'finish',
+                    title: `Finish ${activeLabel} now?`,
+                    description: 'Ends tracking immediately and saves the flight as completed.'
+                  })
+                }
+              >
+                Finish & save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       ) : plannedFlights.length === 0 ? (
-        <p>
+        <p className="text-sm text-muted-foreground">
           {props.previewOfpJson
             ? 'Previewing the OFP fetched in Dispatch — save it as a planned flight to start tracking.'
             : 'No planned flights to track — dispatch one first.'}
         </p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-          {plannedFlights.map((f) => (
-            <div key={f.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <span>
-                {f.flightNumber ?? `${f.depIcao} → ${f.arrIcao}`} (
-                {aircraft.find((a) => a.id === f.aircraftId)?.registration ?? f.aircraftId})
-              </span>
-              <button type="button" disabled={starting} onClick={() => handleStart(f.id)}>
-                Start tracking
-              </button>
-              <button type="button" onClick={() => handleCancelPlanned(f.id)}>
-                Cancel flight
-              </button>
-            </div>
-          ))}
+        <div className="flex flex-col gap-2">
+          {plannedFlights.map((f) => {
+            const label = f.flightNumber ?? `${f.depIcao} → ${f.arrIcao}`
+            const registration = aircraft.find((a) => a.id === f.aircraftId)?.registration ?? f.aircraftId
+            return (
+              <Card key={f.id}>
+                <CardContent className="flex items-center justify-between gap-4">
+                  <span className="text-sm text-foreground">
+                    {label} ({registration})
+                  </span>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" disabled={starting} onClick={() => handleStart(f.id)}>
+                      Start tracking
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() =>
+                        setConfirmAction({
+                          kind: 'cancel-planned',
+                          id: f.id,
+                          title: `Cancel ${label}?`,
+                          description: 'This planned flight will be abandoned.'
+                        })
+                      }
+                    >
+                      Cancel flight
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
 
-      <FlightMap
-        live
-        route={route}
-        waypoints={waypoints}
-        trackPoints={trackPoints}
-        telemetry={props.telemetry}
-      />
+      <FlightMap live route={route} waypoints={waypoints} trackPoints={trackPoints} telemetry={props.telemetry} />
+
+      <AlertDialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmAction?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmAction?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Back</AlertDialogCancel>
+            <AlertDialogAction
+              variant={confirmAction?.kind === 'finish' ? 'default' : 'destructive'}
+              onClick={handleConfirm}
+            >
+              {confirmAction?.kind === 'finish' ? 'Finish & save' : 'Cancel flight'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
