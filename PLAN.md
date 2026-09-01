@@ -44,13 +44,22 @@ Anything on this list that you still want later becomes a v2 issue, not a v1 dis
 
 ## 2. Reference points
 
-- **SimToolkitPro** (simtoolkitpro.co.uk) — the app you're modelling. Free, Electron-based,
-  cross-platform. Study its UX, don't copy its assets or branding.
+These are points of inspiration and comparison, not sources of code. Flightdeck is
+written independently from scratch — no code, assets, icons, copy, or branding are
+taken from any of them. "Reference" below means: install it, see how it handles a
+problem, form your own opinion, implement your own solution.
+
+- **SimToolkitPro** (simtoolkitpro.co.uk) — free, Electron-based, cross-platform, closest
+  thing to prior art for this app's scope. Useful for UX and feature-scope comparison
+  only (what a screen shows, what a workflow feels like) — closed source, so there's
+  nothing to borrow from it beyond that observation. Don't reuse its name, icons, colour
+  scheme, or copy.
 - **Volanta** — the main competitor; better reliability reputation. Good for comparing how
-  flight phase detection and logbook presentation are handled.
+  flight phase detection and logbook presentation are handled. Also closed source.
 - **Little Navmap** — open source (GPL), C++/Qt. Excellent reference for airport/navdata
-  handling and map rendering, and it's readable source. Note the licence before borrowing
-  anything more than ideas.
+  handling and map rendering, and it's readable source. GPL is viral — do not copy or
+  adapt its code into this MIT-licensed project. Ideas and algorithms observed by reading
+  it are fine; lifted code is not.
 
 ---
 

@@ -51,3 +51,8 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   this repo lives in a OneDrive-synced folder, and OneDrive injects Finder
   metadata/extended attributes that fail `codesign --verify --strict` — cost real time
   to debug, worth remembering if it resurfaces.
+- 2026-09-01: Reworded PLAN.md §2 and README.md's SimToolkitPro mentions — now public
+  repo (see above), so "modelled on"/"the app you're modelling" reads as more derivative
+  than intended. Flightdeck is written independently from scratch; STKP, Volanta and
+  Little Navmap are UX/feature comparison points only, not code sources. Little Navmap
+  is GPL — ideas from reading it are fine, its code is not (this project is MIT).
