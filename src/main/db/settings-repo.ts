@@ -36,7 +36,7 @@ export function setWeightUnit(db: FlightdeckDb, unit: WeightUnit): void {
 
 export function getAltitudeUnit(db: FlightdeckDb): AltitudeUnit {
   const value = getSetting(db, ALTITUDE_UNIT_KEY)
-  return value === 'm' || value === 'raw' ? value : 'ft'
+  return value === 'm' || value === 'hybrid' ? value : 'ft'
 }
 
 export function setAltitudeUnit(db: FlightdeckDb, unit: AltitudeUnit): void {

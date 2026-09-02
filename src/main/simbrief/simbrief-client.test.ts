@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeStepClimbs, fetchLatestOfp } from './simbrief-client'
+import { fetchLatestOfp, parseStepClimbs } from './simbrief-client'
 
 // Minimal fixture using the real field names/shape verified against a live SimBrief OFP
 // response (see docs note in simbrief-client.ts) — not real personal flight data.
@@ -59,22 +59,37 @@ describe('fetchLatestOfp', () => {
     expect(ofp.stepClimbs).toEqual([])
   })
 
-  it('surfaces a step climb from real-shaped navlog fixes with a stage field', async () => {
-    const withStage = fixture('kgs') as { navlog: { fix: Record<string, unknown>[] } }
-    withStage.navlog.fix = [
-      { ident: 'BPK', altitude_feet: '4000', distance: '5', stage: 'CLB' },
-      { ident: 'MID1', altitude_feet: '35000', distance: '400', stage: 'CRZ' },
-      { ident: 'MID2', altitude_feet: '37000', distance: '900', stage: 'CRZ' },
-      { ident: 'VHHH', altitude_feet: '0', distance: '20', stage: 'DSC' }
-    ]
+  it('surfaces step climbs from a real stepclimb_string, converting a metric level to feet', async () => {
+    const withStepClimbs = fixture('kgs') as { general: Record<string, unknown> }
+    withStepClimbs.general.stepclimb_string = 'EGLL/0330/DENAK/0350/SUDAR/0370/KAMUD/1130/OMBON/1190'
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => withStage }))
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => withStepClimbs }))
     )
 
     const ofp = await fetchLatestOfp('LandingHangar711')
 
-    expect(ofp.stepClimbs).toEqual([{ atIdent: 'MID2', fromAltitudeFt: 35000, toAltitudeFt: 37000 }])
+    expect(ofp.stepClimbs).toHaveLength(5)
+    expect(ofp.stepClimbs[0]).toEqual({ atIdent: 'EGLL', toAltitudeFt: 33000, native: { unit: 'ft', value: 33000 } })
+    expect(ofp.stepClimbs[2]).toEqual({ atIdent: 'SUDAR', toAltitudeFt: 37000, native: { unit: 'ft', value: 37000 } })
+    expect(ofp.stepClimbs[3].atIdent).toBe('KAMUD')
+    expect(ofp.stepClimbs[3].native).toEqual({ unit: 'm', value: 11300 })
+    expect(ofp.stepClimbs[3].toAltitudeFt).toBeCloseTo(11300 / 0.3048, 1)
+  })
+
+  it('finds stepclimb_string wherever it is nested in the response', async () => {
+    const nested = fixture('kgs') as Record<string, unknown>
+    nested.atc = { subsection: { stepclimb_string: 'DENAK/0350' } }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => nested }))
+    )
+
+    const ofp = await fetchLatestOfp('LandingHangar711')
+
+    expect(ofp.stepClimbs).toEqual([
+      { atIdent: 'DENAK', toAltitudeFt: 35000, native: { unit: 'ft', value: 35000 } }
+    ])
   })
 
   it('converts weights when the SimBrief profile uses lbs', async () => {
@@ -107,59 +122,45 @@ describe('fetchLatestOfp', () => {
   })
 })
 
-// NOT YET VERIFIED against a real SimBrief response — see the caveat comment on
-// computeStepClimbs in simbrief-client.ts. These lock in the *intended* behavior
-// (CRZ-to-CRZ altitude increases only) so a future correction has a clear spec to
-// change deliberately, not silently.
-describe('computeStepClimbs', () => {
-  it('finds no step climbs for a single cruise altitude', () => {
-    const fixes = [
-      { ident: 'A', altitudeFt: 10000, stage: 'CLB' },
-      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' },
-      { ident: 'C', altitudeFt: 35000, stage: 'CRZ' },
-      { ident: 'D', altitudeFt: 10000, stage: 'DSC' }
-    ]
-    expect(computeStepClimbs(fixes)).toEqual([])
+// Confirmed against a real China-crossing OFP (2026-09-02, see docs/decisions.md) — the
+// exact stepclimb_string a user shared from an exported OFP JSON.
+describe('parseStepClimbs', () => {
+  it('returns no step climbs for an empty or missing string', () => {
+    expect(parseStepClimbs(undefined)).toEqual([])
+    expect(parseStepClimbs('')).toEqual([])
   })
 
-  it('finds a single step climb between two CRZ fixes', () => {
-    const fixes = [
-      { ident: 'A', altitudeFt: 10000, stage: 'CLB' },
-      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' },
-      { ident: 'C', altitudeFt: 37000, stage: 'CRZ' },
-      { ident: 'D', altitudeFt: 10000, stage: 'DSC' }
-    ]
-    expect(computeStepClimbs(fixes)).toEqual([{ atIdent: 'C', fromAltitudeFt: 35000, toAltitudeFt: 37000 }])
-  })
-
-  it('finds multiple step climbs in sequence', () => {
-    const fixes = [
-      { ident: 'A', altitudeFt: 33000, stage: 'CRZ' },
-      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' },
-      { ident: 'C', altitudeFt: 39000, stage: 'CRZ' }
-    ]
-    expect(computeStepClimbs(fixes)).toEqual([
-      { atIdent: 'B', fromAltitudeFt: 33000, toAltitudeFt: 35000 },
-      { atIdent: 'C', fromAltitudeFt: 35000, toAltitudeFt: 39000 }
+  it('parses a standard flight level (code < 1000) as hundreds of feet', () => {
+    expect(parseStepClimbs('DENAK/0350')).toEqual([
+      { atIdent: 'DENAK', toAltitudeFt: 35000, native: { unit: 'ft', value: 35000 } }
     ])
   })
 
-  it('ignores the initial climb-out and the descent, even though both change altitude monotonically', () => {
-    const fixes = [
-      { ident: 'A', altitudeFt: 0, stage: 'CLB' },
-      { ident: 'B', altitudeFt: 20000, stage: 'CLB' },
-      { ident: 'C', altitudeFt: 35000, stage: 'CRZ' },
-      { ident: 'D', altitudeFt: 15000, stage: 'DSC' },
-      { ident: 'E', altitudeFt: 0, stage: 'DSC' }
-    ]
-    expect(computeStepClimbs(fixes)).toEqual([])
+  it('parses a metric flight level (code >= 1000) as tens of metres, converted to feet', () => {
+    const [climb] = parseStepClimbs('KAMUD/1130')
+    expect(climb.atIdent).toBe('KAMUD')
+    expect(climb.native).toEqual({ unit: 'm', value: 11300 })
+    expect(climb.toAltitudeFt).toBeCloseTo(11300 / 0.3048, 1)
   })
 
-  it('does not report a step climb for a descent step between two CRZ-labeled fixes', () => {
-    const fixes = [
-      { ident: 'A', altitudeFt: 37000, stage: 'CRZ' },
-      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' }
-    ]
-    expect(computeStepClimbs(fixes)).toEqual([])
+  it('parses a real China-crossing stepclimb_string end to end', () => {
+    const climbs = parseStepClimbs('EGLL/0330/DENAK/0350/SUDAR/0370/KAMUD/1130/OMBON/1190')
+    expect(climbs.map((c) => c.atIdent)).toEqual(['EGLL', 'DENAK', 'SUDAR', 'KAMUD', 'OMBON'])
+    expect(climbs.map((c) => c.native)).toEqual([
+      { unit: 'ft', value: 33000 },
+      { unit: 'ft', value: 35000 },
+      { unit: 'ft', value: 37000 },
+      { unit: 'm', value: 11300 },
+      { unit: 'm', value: 11900 }
+    ])
+    expect(climbs[2].toAltitudeFt).toBe(37000)
+    expect(climbs[3].toAltitudeFt).toBeCloseTo(11300 / 0.3048, 1)
+    expect(climbs[4].toAltitudeFt).toBeCloseTo(11900 / 0.3048, 1)
+  })
+
+  it('ignores a trailing unpaired identifier', () => {
+    expect(parseStepClimbs('DENAK/0350/TRAIL')).toEqual([
+      { atIdent: 'DENAK', toAltitudeFt: 35000, native: { unit: 'ft', value: 35000 } }
+    ])
   })
 })

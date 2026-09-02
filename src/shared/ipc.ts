@@ -249,11 +249,14 @@ export interface DispatchWaypoint {
   distanceNm: number
 }
 
-/** A planned mid-cruise altitude increase — see computeStepClimbs in simbrief-client.ts. */
+/** A planned mid-cruise altitude increase — see parseStepClimbs in simbrief-client.ts. */
 export interface DispatchStepClimb {
   atIdent: string
-  fromAltitudeFt: number
   toAltitudeFt: number
+  /** Unit and value this point was actually coded in on the OFP, e.g. {unit: 'ft',
+   *  value: 33000} for FL330, or {unit: 'm', value: 11300} for a Chinese-airspace
+   *  metric level like FL1130 — see parseStepClimbs. */
+  native: { unit: 'ft' | 'm'; value: number }
 }
 
 /** A freshly-fetched OFP, not yet saved as a Flight — the renderer confirms/picks the aircraft first. */
@@ -291,16 +294,15 @@ export type WeightUnit = 'kg' | 'lb'
 
 /**
  * Display unit for OFP-derived altitudes (Dispatch's cruise altitude and step climbs).
- * Storage stays whatever SimBrief itself provided — see the caveat on
- * computeStepClimbs in simbrief-client.ts: a SimBrief-computed level is sometimes
- * already a metric flight level (e.g. crossing Chinese airspace), not literal feet, with
- * no field distinguishing which. 'ft'/'m' both assume it's real feet and convert (right
- * most of the time, wrong for a metric segment); 'raw' sidesteps the question entirely
- * by showing the untouched number in FL notation (e.g. "FL1130"), exactly as SimBrief's
- * own OFP text would for that point, whichever unit it actually represents. Defaults to
- * 'ft' if never set.
+ * A step climb point is sometimes a metric flight level rather than a standard one (e.g.
+ * crossing Chinese airspace) — see parseStepClimbs in simbrief-client.ts for how that's
+ * detected and converted to a real feet value. 'ft'/'m' both show every point converted
+ * to that one unit; 'hybrid' shows each point in whichever unit it was actually coded
+ * in (its `native` field) — feet for a standard level, metres for a metric one — which
+ * is how a route crossing into e.g. Chinese airspace actually reads on the OFP itself.
+ * Defaults to 'ft' if never set.
  */
-export type AltitudeUnit = 'ft' | 'm' | 'raw'
+export type AltitudeUnit = 'ft' | 'm' | 'hybrid'
 
 /** The app's tabs — also the native menu bar's top-level items, see main/menu.ts. */
 export type AppPage = 'fleet' | 'dispatch' | 'track' | 'logbook' | 'settings'
@@ -332,7 +334,6 @@ export const IpcChannels = {
   flightCreate: 'flight:create',
   dispatchFetchOfp: 'dispatch:fetch-ofp',
   dispatchOpenSimBrief: 'dispatch:open-simbrief',
-  dispatchExportOfpJson: 'dispatch:export-ofp-json',
   settingsGetSimbriefUsername: 'settings:get-simbrief-username',
   settingsSetSimbriefUsername: 'settings:set-simbrief-username',
   settingsGetWeightUnit: 'settings:get-weight-unit',
@@ -386,10 +387,6 @@ export interface FlightdeckApi {
   dispatchFetchOfp: () => Promise<DispatchOfp>
   /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) => Promise<void>
-  /** Saves a raw OFP JSON blob to a file the user picks — a diagnostic escape hatch for
-   *  checking SimBrief's actual field names/shapes against a real response (docs/
-   *  decisions.md), not a feature end users need day to day. False if cancelled. */
-  dispatchExportOfpJson: (ofpJson: string) => Promise<boolean>
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>
