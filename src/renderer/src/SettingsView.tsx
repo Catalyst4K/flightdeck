@@ -108,7 +108,7 @@ export function SettingsView(props: {
                 [
                   { unit: 'ft', label: 'Feet' },
                   { unit: 'm', label: 'Meters' },
-                  { unit: 'raw', label: 'Raw' }
+                  { unit: 'hybrid', label: 'Hybrid' }
                 ] as const
               ).map(({ unit, label }) => (
                 <Button
@@ -124,10 +124,10 @@ export function SettingsView(props: {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            "Raw" shows the level exactly as SimBrief reported it (e.g. "FL1130") without
-            assuming it's really feet — useful for a route crossing into airspace that
-            uses metric flight levels, where SimBrief may already report the level in
-            meters under the same field.
+            "Hybrid" shows each step climb in whichever unit it was actually planned in —
+            feet for a standard level, meters for a route crossing into airspace (e.g.
+            China) that assigns levels in meters — rather than converting everything to
+            one unit.
           </p>
         </CardContent>
       </Card>

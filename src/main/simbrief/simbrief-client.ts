@@ -13,12 +13,19 @@
  */
 
 const LB_PER_KG = 2.2046226218
+const FT_PER_M = 1 / 0.3048
 
 export interface SimBriefStepClimb {
-  /** Waypoint where the new, higher cruise altitude begins. */
+  /** Waypoint where the new cruise altitude begins. */
   atIdent: string
-  fromAltitudeFt: number
+  /** Real feet-equivalent altitude, regardless of which notation the point was coded
+   *  in — used for the 'ft' and 'm' AltitudeUnit settings. */
   toAltitudeFt: number
+  /** The unit and value this point was actually coded in on the OFP: a standard flight
+   *  level is 'ft' (e.g. FL330 -> {unit: 'ft', value: 33000}); a Chinese-airspace metric
+   *  level is 'm' (e.g. FL1130 -> {unit: 'm', value: 11300}) — see parseStepClimbs. Used
+   *  for the 'hybrid' AltitudeUnit setting. */
+  native: { unit: 'ft' | 'm'; value: number }
 }
 
 export interface SimBriefOfp {
@@ -41,9 +48,7 @@ export interface SimBriefOfp {
   towKg: number
   ldwKg: number
   waypoints: { ident: string; altitudeFt: number; distanceNm: number }[]
-  /** Planned mid-cruise altitude increases (see computeStepClimbs) — NOT yet verified
-   *  against a real SimBrief response (see the comment on computeStepClimbs below);
-   *  flag it if this comes out empty/wrong against a real fetched OFP. */
+  /** Planned mid-cruise altitude increases — see parseStepClimbs. */
   stepClimbs: SimBriefStepClimb[]
   /** The full response, stored verbatim per PLAN.md §5 ("Store the raw JSON"). */
   rawJson: string
@@ -66,27 +71,60 @@ function epochSecondsToIso(value: unknown): string {
 }
 
 /**
- * NOT YET VERIFIED against a real SimBrief response — SimBrief's JSON schema isn't
- * documented anywhere (see the file header), and unlike every other field in this file
- * this one hasn't been checked against a live fetch. Best-effort based on how SimBrief's
- * own OFP text output derives its "PLANNED STEP CLIMBS" section: each navlog fix during
- * the cruise phase carries a `stage` field ('CLB'/'CRZ'/'DSC' per public discussion of
- * the schema), and a step climb is wherever cruise altitude increases between two CRZ
- * fixes — deliberately restricted to CRZ-to-CRZ so the initial climb-out and the descent
- * (both naturally monotonic altitude changes too) never get misread as step climbs. If
- * this comes out empty or wrong against a real OFP, `stage` is the thing to re-check.
+ * Recursively searches a parsed JSON value for the first string-valued property named
+ * `key`, at any depth. Used instead of a fixed path (e.g. `general.stepclimb_string`)
+ * because only the field's name and value have been confirmed against a real SimBrief
+ * response — not which section it lives under — see the docs/decisions.md entry for
+ * 2026-09-02 on why a third guess at the JSON path was avoided.
  */
-export function computeStepClimbs(
-  fixes: { ident: string; altitudeFt: number; stage: string }[]
-): SimBriefStepClimb[] {
-  const climbs: SimBriefStepClimb[] = []
-  let cruiseAltitudeFt: number | null = null
-  for (const fix of fixes) {
-    if (fix.stage !== 'CRZ') continue
-    if (cruiseAltitudeFt !== null && fix.altitudeFt > cruiseAltitudeFt) {
-      climbs.push({ atIdent: fix.ident, fromAltitudeFt: cruiseAltitudeFt, toAltitudeFt: fix.altitudeFt })
+function findStringField(value: unknown, key: string): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findStringField(item, key)
+      if (found !== undefined) return found
     }
-    cruiseAltitudeFt = fix.altitudeFt
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  if (typeof record[key] === 'string') return record[key] as string
+  for (const nested of Object.values(record)) {
+    const found = findStringField(nested, key)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
+/**
+ * Parses SimBrief's `stepclimb_string` field — a flat "IDENT/CODE/IDENT/CODE/..." string
+ * that mirrors the "FL STEPS" line on the OFP text itself. Confirmed against a real
+ * China-crossing OFP (2026-09-02, see docs/decisions.md):
+ * `"EGLL/0330/DENAK/0350/SUDAR/0370/KAMUD/1130/OMBON/1190"`.
+ *
+ * Each 4-digit code is one of two notations, with nothing in the string marking which:
+ * - A standard flight level, in hundreds of feet (e.g. "0330" = FL330 = 33,000 ft).
+ * - A metric flight level, used once a flight crosses into airspace (e.g. China) that
+ *   assigns levels in metres — in tens of metres (e.g. "1130" = 11,300 m ≈ 37,073 ft).
+ *
+ * The two ranges don't overlap in practice: no aircraft files a standard flight level at
+ * or above FL1000, and no metric level is coded below 1000. A code >= 1000 is therefore
+ * treated as metric.
+ */
+export function parseStepClimbs(stepclimbString: string | undefined): SimBriefStepClimb[] {
+  if (!stepclimbString) return []
+  const parts = stepclimbString.split('/')
+  const climbs: SimBriefStepClimb[] = []
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const atIdent = parts[i]
+    const code = Number(parts[i + 1])
+    if (!Number.isFinite(code)) continue
+    if (code >= 1000) {
+      const meters = code * 10
+      climbs.push({ atIdent, toAltitudeFt: meters * FT_PER_M, native: { unit: 'm', value: meters } })
+    } else {
+      const feet = code * 100
+      climbs.push({ atIdent, toAltitudeFt: feet, native: { unit: 'ft', value: feet } })
+    }
   }
   return climbs
 }
@@ -142,13 +180,7 @@ export async function fetchLatestOfp(username: string): Promise<SimBriefOfp> {
       altitudeFt: num(fix.altitude_feet ?? 0),
       distanceNm: num(fix.distance ?? 0)
     })),
-    stepClimbs: computeStepClimbs(
-      fixes.map((fix) => ({
-        ident: str(fix.ident),
-        altitudeFt: num(fix.altitude_feet ?? 0),
-        stage: str(fix.stage)
-      }))
-    ),
+    stepClimbs: parseStepClimbs(findStringField(ofp, 'stepclimb_string')),
     rawJson: JSON.stringify(raw)
   }
 }

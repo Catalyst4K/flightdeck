@@ -97,19 +97,6 @@ export function DispatchView(props: {
     }
   }
 
-  /** Diagnostic escape hatch, not a day-to-day feature — SimBrief's JSON schema isn't
-   *  documented anywhere (see simbrief-client.ts), so when a computed field like step
-   *  climbs comes out wrong the real fix is to look at what SimBrief actually sent. */
-  async function handleExportOfp(): Promise<void> {
-    if (!ofp) return
-    try {
-      const saved = await window.flightdeck.dispatchExportOfpJson(ofp.ofpJson)
-      if (saved) toast.success('OFP JSON exported.')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err))
-    }
-  }
-
   async function handleSaveFlight(): Promise<void> {
     if (!ofp || selectedAircraftId == null) return
     setSaving(true)
@@ -226,12 +213,11 @@ export function DispatchView(props: {
                 <CardTitle>
                   {ofp.flightNumber}: {ofp.depIcao} → {ofp.arrIcao} (altn {ofp.altnIcao})
                 </CardTitle>
-                <CardAction className="flex items-center gap-2">
-                  {alreadyFlown && <Badge variant="secondary">Flying</Badge>}
-                  <Button type="button" variant="ghost" size="sm" onClick={handleExportOfp}>
-                    Export raw OFP
-                  </Button>
-                </CardAction>
+                {alreadyFlown && (
+                  <CardAction>
+                    <Badge variant="secondary">Flying</Badge>
+                  </CardAction>
+                )}
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
@@ -256,21 +242,28 @@ export function DispatchView(props: {
                     label="ZFW / TOW / LDW"
                     value={`${formatWeight(ofp.zfwKg, props.weightUnit)} / ${formatWeight(ofp.towKg, props.weightUnit)} / ${formatWeight(ofp.ldwKg, props.weightUnit)}`}
                   />
-                  <DetailField
-                    label="Steps"
-                    value={
-                      ofp.stepClimbs.length === 0
-                        ? 'None'
-                        : ofp.stepClimbs
-                            .map(
-                              (climb) =>
-                                `${formatAltitude(climb.toAltitudeFt, props.altitudeUnit)} at ${climb.atIdent}`
-                            )
-                            .join(', ')
-                    }
-                  />
                 </dl>
-                <p className="max-h-16 overflow-auto text-sm text-muted-foreground">{ofp.routeString}</p>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <span className="text-muted-foreground">Steps</span>
+                  {ofp.stepClimbs.length === 0 ? (
+                    <span className="text-foreground">None</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {ofp.stepClimbs.map((climb) => (
+                        <Badge key={climb.atIdent} variant="outline" className="gap-1.5 font-normal">
+                          <span className="text-muted-foreground">{climb.atIdent}</span>
+                          <span className="font-mono tabular-nums text-foreground">
+                            {formatAltitude(climb.toAltitudeFt, props.altitudeUnit, climb.native)}
+                          </span>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <span className="text-muted-foreground">Route</span>
+                  <p className="max-h-16 overflow-auto text-foreground">{ofp.routeString}</p>
+                </div>
 
                 {!alreadyFlown && (
                   <>

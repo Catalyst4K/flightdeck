@@ -411,3 +411,36 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     that real data comes back — the two feet/meters-assuming modes, and the underlying
     step-climb *detection* itself (finding the right waypoint), are unaffected and
     correct for a non-metric route.
+- 2026-09-02: Resolved, using the raw OFP export from the previous entry. Callum found
+  the real field: `stepclimb_string`, a flat string mirroring the OFP's "FL STEPS"
+  line verbatim — `"EGLL/0330/DENAK/0350/SUDAR/0370/KAMUD/1130/OMBON/1190"`. Replaced
+  `computeStepClimbs` (the `stage`/navlog-fix-based guess, wrong on both attempts)
+  entirely with `parseStepClimbs`, which parses this string directly: `waypoint/code`
+  pairs, where a code < 1000 is a standard flight level in hundreds of feet (`"0330"` =
+  FL330 = 33,000 ft) and a code >= 1000 is a metric flight level in tens of metres
+  (`"1130"` = 11,300 m ≈ 37,073 ft — matches the "FL371" wrongly derived before). The
+  two ranges don't overlap in real-world use (no standard FL reaches 1000, no metric
+  level is coded below it), so the threshold is safe. Each `SimBriefStepClimb` now
+  carries a `raw` field (e.g. `"FL1130"`) — SimBrief's own literal label for that
+  point — so the `raw` AltitudeUnit setting shows it verbatim instead of re-deriving a
+  (previously wrong) FL number from a feet value; `formatAltitude` takes an optional
+  `rawLabel` for this. `stepclimb_string`'s exact parent key in the OFP JSON wasn't
+  confirmed (only its name/value, from a grep) — rather than guess a third path,
+  `findStringField` recursively searches the parsed response for it, wherever it lives.
+  Dropped `fromAltitudeFt` from `SimBriefStepClimb`/`DispatchStepClimb` — never used by
+  the compact "Steps" display, and `stepclimb_string` doesn't naturally pair each point
+  with a "from" anyway.
+- 2026-09-02: Renamed the `raw` AltitudeUnit setting to `hybrid` and changed what it
+  shows — Callum asked for "a nicer looking feet and meters layout between the two"
+  instead of a bare FL-code string. `SimBriefStepClimb`/`DispatchStepClimb`'s `raw:
+  string` field became `native: { unit: 'ft' | 'm'; value: number }` — the unit/value the
+  point was actually coded in (e.g. `{unit: 'ft', value: 33000}` for FL330, `{unit: 'm',
+  value: 11300}` for FL1130) — so `hybrid` now shows "33,000 ft" / "11,300 m" per point
+  rather than "FL330" / "FL1130". `formatAltitude` takes this as its third argument
+  instead of a raw label string. Dispatch's Steps field is now a row of small outline
+  badges (waypoint ident + mono altitude) instead of a single comma-joined string,
+  matching the Glass Cockpit numeric-readout convention (IBM Plex Mono) rather than
+  plain body text.
+- 2026-09-02: Removed the "Export raw OFP" button and `dispatchExportOfpJson` IPC
+  channel — it did its job (surfaced the real `stepclimb_string` field above) and isn't
+  a feature end users need day to day, per its own doc comment when it was added.

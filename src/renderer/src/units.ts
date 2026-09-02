@@ -39,20 +39,33 @@ export function formatWeight(kg: number | null, unit: WeightUnit): string {
 }
 
 /**
- * Formats an altitude that came from a SimBrief OFP — `altitudeFt` should be the raw
- * number SimBrief reported (or its exact inverse-converted equivalent, e.g.
- * `mToFt(cruiseAltM)`), NOT a value already known to be real feet. 'ft'/'m' both
- * assume it is real feet; 'raw' doesn't interpret it at all, just formats it the way an
- * OFP would (see the AltitudeUnit doc comment in shared/ipc.ts for why that distinction
- * matters for a flight crossing into e.g. Chinese metric-level airspace).
+ * Formats an altitude that came from a SimBrief OFP. `altitudeFt` should always be a
+ * real feet value (see the AltitudeUnit doc comment in shared/ipc.ts) — 'ft'/'m' convert
+ * it directly. `native`, when given (a step climb's `native` field), is shown for
+ * 'hybrid' instead — the unit and value the point was actually coded in on the OFP (feet
+ * for a standard level, metres for a Chinese-airspace metric one) — pass it whenever the
+ * caller has that available. Without it, 'hybrid' falls back to plain feet, for values
+ * with no native-unit distinction, e.g. cruise altitude.
+ *
+ * 'ft' rounds to the nearest 100 ft (a real flight level), not the nearest foot — a
+ * point whose native level is metric converts to an odd feet value (e.g. 11,300 m ≈
+ * 37,073 ft), and no ATC/FMS ever assigns a level that isn't a round hundred of feet.
+ * Rounding a value that's already a round hundred (every standard-level point) is a
+ * no-op.
  */
-export function formatAltitude(altitudeFt: number, unit: AltitudeUnit): string {
+export function formatAltitude(
+  altitudeFt: number,
+  unit: AltitudeUnit,
+  native?: { unit: 'ft' | 'm'; value: number }
+): string {
   switch (unit) {
     case 'ft':
-      return `${Math.round(altitudeFt).toLocaleString()} ft`
+      return `${(Math.round(altitudeFt / 100) * 100).toLocaleString()} ft`
     case 'm':
       return `${Math.round(altitudeFt * M_PER_FT).toLocaleString()} m`
-    case 'raw':
-      return `FL${Math.round(altitudeFt / 100)}`
+    case 'hybrid':
+      return native
+        ? `${Math.round(native.value).toLocaleString()} ${native.unit}`
+        : `${Math.round(altitudeFt).toLocaleString()} ft`
   }
 }

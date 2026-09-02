@@ -47,7 +47,7 @@ describe('settings repo', () => {
   it('round-trips the altitude unit', () => {
     setAltitudeUnit(db, 'm')
     expect(getAltitudeUnit(db)).toBe('m')
-    setAltitudeUnit(db, 'raw')
-    expect(getAltitudeUnit(db)).toBe('raw')
+    setAltitudeUnit(db, 'hybrid')
+    expect(getAltitudeUnit(db)).toBe('hybrid')
   })
 })
