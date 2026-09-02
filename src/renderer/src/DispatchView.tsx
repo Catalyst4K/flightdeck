@@ -244,6 +244,22 @@ export function DispatchView(props: {
                 </dl>
                 <p className="max-h-16 overflow-auto text-sm text-muted-foreground">{ofp.routeString}</p>
 
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">Step climbs</span>
+                  {ofp.stepClimbs.length === 0 ? (
+                    <p className="text-sm text-foreground">None planned</p>
+                  ) : (
+                    <ul className="flex flex-col gap-0.5">
+                      {ofp.stepClimbs.map((climb) => (
+                        <li key={climb.atIdent} className="font-mono text-sm text-foreground">
+                          {climb.fromAltitudeFt.toLocaleString()} ft → {climb.toAltitudeFt.toLocaleString()} ft at{' '}
+                          {climb.atIdent}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
                 {!alreadyFlown && (
                   <>
                     <div className="flex flex-col gap-1.5">
