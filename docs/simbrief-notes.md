@@ -270,10 +270,57 @@ What works today with no key at all is the URL prefill the app already uses:
 `https://dispatch.simbrief.com/options/custom?orig=&dest=&airframe=`-or-`type=`,
 verified live in M3 and again on 2026-09-01.
 
-**Unverified, and worth five minutes before building anything on it:** whether that same
-prefill URL accepts the rest of the documented input parameters (`airline`, `fltnum`,
-`date`, `deph`, `depm`, `pax`, `cargo`, `civalue`, `static_id`, …). The parameter names
-are documented for the *API form*, and the prefill URL is known to accept at least
-`orig`/`dest`/`type`/`airframe` from that same set — but "some of the set works" is not
-"all of the set works". Test by opening a URL with the extra parameters and checking
-whether SimBrief's dispatch form comes up populated.
+### The prefill URL honours the API's parameters — verified 2026-09-02
+
+Tested live, logged in, with:
+
+```
+https://dispatch.simbrief.com/options/custom
+  ?orig=EGLL&dest=WSSS&type=A388&airline=BAW&fltnum=002&date=020926&deph=18&depm=25
+```
+
+The dispatch form came up with Airline `BAW`, Flight Number `002`, Depart `EGLL`, Arrive
+`WSSS`, Aircraft Type `A388 - A380-800`, Variant/Airframe `Default`. So the documented API
+input names work on the keyless prefill URL, not just in the API form — no API key needed
+for any of it.
+
+Two things filled themselves in that weren't passed: Alternate (`WIBB`) and the ATC
+callsign placeholder (`BAW2`, derived from airline + flight number). SimBrief picks those
+itself, so there's no need to compute them.
+
+### `date` is a unix epoch, not a date string
+
+The one parameter that did **not** work as guessed. `date=020926` produced a Departure Time
+of `02 Jan 1970 - 00:13`, which decodes exactly:
+
+```
+20926          date=020926 parsed as the integer 20926, i.e. epoch seconds
++ 64800        deph=18  → 18 × 3600
++  1500        depm=25  → 25 × 60
+= 87226 s   →  1970-01-02T00:13:46Z
+```
+
+So:
+
+- **`date` takes unix epoch seconds**, and `ddmmyy` is silently misread as a tiny epoch
+  rather than rejected — a wrong-format date produces a 1970 departure, not an error.
+- **`deph` and `depm` are plain hour and minute integers**, as documented, and both were
+  applied correctly (they're what contributed the 64800 and 1500 above).
+- SimBrief computes departure time as `date + deph×3600 + depm×60`, so **`date` should be
+  midnight UTC of the departure day.**
+
+That matches the `api_params` echo exactly: the reference OFP has `date: "1788307200"` =
+2026-09-02T00:00:00Z, `dephour: "64800"`, `depmin: "1500"`, and `times.sched_out`
+1788373500 = 2026-09-02T18:25:00Z — precisely 66,300 s later. So the echo's odd
+seconds-based `dephour`/`depmin` are just SimBrief's internal form of the `deph`/`depm`
+inputs, and `date` is the same unit in and out.
+
+Everything is UTC.
+
+### Other observations from that page
+
+- **Cost Index** shows a greyed `AUTO` placeholder, so an omitted/empty `civalue` means
+  auto — consistent with `"auto"` being a real value elsewhere in `api_params`.
+- **Saved airframes and default variants share one "Variant or Airframe" dropdown**
+  (sortable by registration), with an **"Open Airframe Editor"** button on the same page.
+  Passing `type=` alone selects `Default` in that dropdown.
