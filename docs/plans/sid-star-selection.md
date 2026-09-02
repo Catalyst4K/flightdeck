@@ -83,13 +83,48 @@ it that the segmentation function must handle, both detailed in `docs/simbrief-n
 - **The destination airport is itself a fix inside the STAR segment** (`VHHH`,
   `is_sid_star: "1"`). Don't assume every procedure fix is an enroute-style waypoint.
 
-Still unverified: **a procedure with a transition.** `sid_trans`/`star_trans` are empty on
-all nine stored OFPs, so nothing confirms how a runway or enroute transition appears in
-either `general` or the navlog. It matters because Navigraph's `tbl_sids`/`tbl_stars` are
-keyed by `transition_identifier` as well as `procedure_identifier` — so matching a
-SimBrief-chosen procedure to a navdata row needs the transition, and overriding one needs
-to write it back. Worth capturing one OFP with a transition before building the matching
-logic; a US arrival is the easiest way to get one.
+**Transitions are now verified too**, via an OFP generated specifically to produce them
+(KLAX→KJFK: `sid_ident` `DOTSS2` / `sid_trans` `CLEEE`, `star_ident` `PUCKY1` /
+`star_trans` `WLKES`). They matter because Navigraph's `tbl_sids`/`tbl_stars` are keyed by
+`transition_identifier` as well as `procedure_identifier`, so matching a SimBrief-chosen
+procedure to a navdata row needs the transition, and overriding one needs to write it back.
+
+They do not appear in the navlog the way this plan originally assumed. Full detail in
+`docs/simbrief-notes.md`; the two facts that determine the segmentation function:
+
+- **A transition never gets its own `via_airway`.** The name exists only in
+  `general.sid_trans`/`star_trans`.
+- **The two ends are not symmetric.** The SID's handoff fix (`CLEEE`) carries
+  `via_airway` = the SID, so `via_airway` finds the SID's full extent. The STAR's handoff
+  fix (`WLKES`) carries `via_airway` = the **inbound enroute airway** (`Q476`), not the
+  STAR — so `via_airway` alone does *not* find where the STAR begins.
+
+Both handoff fixes are `is_sid_star: "0"`, which generalises the earlier `BPK` observation:
+the fix a procedure hands off at is always flagged `"0"`, transition or not.
+
+### The segmentation rule to implement
+
+Verified against all three shapes now on hand — with transitions, with procedures but no
+transitions, and with a SID but no STAR:
+
+- **SID** = fixes from the start while `via_airway === general.sid_ident`. Correctly
+  includes the handoff fix in both the transition case (`CLEEE`) and the no-transition
+  case (`BPK`).
+- **STAR** = from the fix whose `ident === general.star_trans` when non-empty, else from
+  the first fix with `via_airway === general.star_ident`; runs to the last fix (which is
+  the destination airport itself, `type: "apt"`). Starting at `star_trans` is what keeps
+  the segments contiguous instead of leaving the entry fix stranded in the enroute segment.
+- **Enroute** = everything between.
+- All four `general` fields are `{}` when absent, not `""` — guard accordingly.
+
+Unit-test it against all three: a full SID+transition/STAR+transition route, a
+SID/STAR-without-transitions route, and a SID-only route with no STAR.
+
+One more thing the fixtures surfaced: **`TOC` and `TOD` are navlog entries**, with
+`type: "ltlg"` and `via_airway: "DCT"`. They fall in the enroute segment and are computed
+points rather than fixes, so the segmentation function should leave them alone — but
+anything labelling waypoints off this array renders them, which `route.ts` already does
+today.
 
 Note the `{}` trap when reading `sid_ident`/`star_ident` — an absent procedure comes back
 as an empty object, not an empty string, and the existing `str()` helper would turn that
