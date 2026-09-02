@@ -332,6 +332,7 @@ export const IpcChannels = {
   flightCreate: 'flight:create',
   dispatchFetchOfp: 'dispatch:fetch-ofp',
   dispatchOpenSimBrief: 'dispatch:open-simbrief',
+  dispatchExportOfpJson: 'dispatch:export-ofp-json',
   settingsGetSimbriefUsername: 'settings:get-simbrief-username',
   settingsSetSimbriefUsername: 'settings:set-simbrief-username',
   settingsGetWeightUnit: 'settings:get-weight-unit',
@@ -385,6 +386,10 @@ export interface FlightdeckApi {
   dispatchFetchOfp: () => Promise<DispatchOfp>
   /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) => Promise<void>
+  /** Saves a raw OFP JSON blob to a file the user picks — a diagnostic escape hatch for
+   *  checking SimBrief's actual field names/shapes against a real response (docs/
+   *  decisions.md), not a feature end users need day to day. False if cancelled. */
+  dispatchExportOfpJson: (ofpJson: string) => Promise<boolean>
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>

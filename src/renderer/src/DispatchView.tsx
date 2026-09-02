@@ -97,6 +97,19 @@ export function DispatchView(props: {
     }
   }
 
+  /** Diagnostic escape hatch, not a day-to-day feature — SimBrief's JSON schema isn't
+   *  documented anywhere (see simbrief-client.ts), so when a computed field like step
+   *  climbs comes out wrong the real fix is to look at what SimBrief actually sent. */
+  async function handleExportOfp(): Promise<void> {
+    if (!ofp) return
+    try {
+      const saved = await window.flightdeck.dispatchExportOfpJson(ofp.ofpJson)
+      if (saved) toast.success('OFP JSON exported.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   async function handleSaveFlight(): Promise<void> {
     if (!ofp || selectedAircraftId == null) return
     setSaving(true)
@@ -213,11 +226,12 @@ export function DispatchView(props: {
                 <CardTitle>
                   {ofp.flightNumber}: {ofp.depIcao} → {ofp.arrIcao} (altn {ofp.altnIcao})
                 </CardTitle>
-                {alreadyFlown && (
-                  <CardAction>
-                    <Badge variant="secondary">Flying</Badge>
-                  </CardAction>
-                )}
+                <CardAction className="flex items-center gap-2">
+                  {alreadyFlown && <Badge variant="secondary">Flying</Badge>}
+                  <Button type="button" variant="ghost" size="sm" onClick={handleExportOfp}>
+                    Export raw OFP
+                  </Button>
+                </CardAction>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">

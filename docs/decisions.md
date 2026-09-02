@@ -394,3 +394,20 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   New `AltitudeUnit` type (`ft`/`m`/`raw`), persisted the same way as `weightUnit`
   (app_setting key/value, no migration needed), `formatAltitude` (units.ts) doing the
   three-way formatting.
+- 2026-09-02: The `raw` altitude setting turned out wrong on real data — Callum's real
+  OFP shows `EGLL/0330/DENAK/0350/SUDAR/0370/KAMUD/1130/OMBON/1190` (a genuine "FL
+  STEPS" summary line, `waypoint/level` pairs), where "1130"/"1190" are metric flight
+  levels (China), not `feet/100`. Testing confirmed `computeStepClimbs` is finding the
+  right waypoint (KAMUD) but the underlying value there is SimBrief's real-feet
+  equivalent of 11,300 m (≈37,073 ft) — explains the "FL371" Callum saw, and rules out
+  my "SimBrief pre-scales the raw field" theory from the previous entry. Second wrong
+  guess in a row on an undocumented schema — stopped guessing a third time.
+  - Added `dispatchExportOfpJson` (main) + a small "Export raw OFP" button in
+    Dispatch's flight-details card (renderer) — a diagnostic escape hatch, not a
+    day-to-day feature, mirroring `aircraftExport`'s save-dialog pattern. Lets Callum
+    (or a future session) grep a real OFP for "0330"/"STEP" and find the actual field
+    SimBrief uses for this, rather than guessing again from a described symptom.
+    `stepClimbs`/the `raw` mode are left as-is (known wrong for a metric segment) until
+    that real data comes back — the two feet/meters-assuming modes, and the underlying
+    step-climb *detection* itself (finding the right waypoint), are unaffected and
+    correct for a non-metric route.
