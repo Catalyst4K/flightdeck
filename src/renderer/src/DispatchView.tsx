@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { Aircraft, DispatchOfp, FleetStats, WeightUnit } from '@shared/ipc'
+import type { Aircraft, AltitudeUnit, DispatchOfp, FleetStats, WeightUnit } from '@shared/ipc'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AirportSearch } from './AirportSearch'
 import { MetarPanel } from './MetarPanel'
-import { formatWeight, mToFt } from './units'
+import { formatAltitude, formatWeight, mToFt } from './units'
 
 function formatUtc(iso: string): string {
   return `${iso.slice(0, 16).replace('T', ' ')}Z`
@@ -29,6 +29,7 @@ function DetailField(props: { label: string; value: React.ReactNode }): React.JS
 
 export function DispatchView(props: {
   weightUnit: WeightUnit
+  altitudeUnit: AltitudeUnit
   /** Called after a planned flight is saved, so the app can switch to Track to preview it. */
   onPlanned?: () => void
   /** The currently fetched/created OFP — lifted to App so it survives switching away to
@@ -226,7 +227,7 @@ export function DispatchView(props: {
                   />
                   <DetailField
                     label="Cruise altitude"
-                    value={`${Math.round(mToFt(ofp.cruiseAltM)).toLocaleString()} ft`}
+                    value={formatAltitude(mToFt(ofp.cruiseAltM), props.altitudeUnit)}
                   />
                   <DetailField
                     label="Scheduled out / in"
@@ -247,7 +248,10 @@ export function DispatchView(props: {
                       ofp.stepClimbs.length === 0
                         ? 'None'
                         : ofp.stepClimbs
-                            .map((climb) => `${climb.toAltitudeFt.toLocaleString()} ft at ${climb.atIdent}`)
+                            .map(
+                              (climb) =>
+                                `${formatAltitude(climb.toAltitudeFt, props.altitudeUnit)} at ${climb.atIdent}`
+                            )
                             .join(', ')
                     }
                   />
