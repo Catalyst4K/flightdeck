@@ -1,10 +1,11 @@
 import { eq } from 'drizzle-orm'
-import type { WeightUnit } from '@shared/ipc'
+import type { AltitudeUnit, WeightUnit } from '@shared/ipc'
 import { appSetting } from './schema'
 import type { FlightdeckDb } from './client'
 
 const SIMBRIEF_USERNAME_KEY = 'simbriefUsername'
 const WEIGHT_UNIT_KEY = 'weightUnit'
+const ALTITUDE_UNIT_KEY = 'altitudeUnit'
 
 export function getSetting(db: FlightdeckDb, key: string): string | undefined {
   return db.select().from(appSetting).where(eq(appSetting.key, key)).get()?.value
@@ -31,4 +32,13 @@ export function getWeightUnit(db: FlightdeckDb): WeightUnit {
 
 export function setWeightUnit(db: FlightdeckDb, unit: WeightUnit): void {
   setSetting(db, WEIGHT_UNIT_KEY, unit)
+}
+
+export function getAltitudeUnit(db: FlightdeckDb): AltitudeUnit {
+  const value = getSetting(db, ALTITUDE_UNIT_KEY)
+  return value === 'm' || value === 'raw' ? value : 'ft'
+}
+
+export function setAltitudeUnit(db: FlightdeckDb, unit: AltitudeUnit): void {
+  setSetting(db, ALTITUDE_UNIT_KEY, unit)
 }

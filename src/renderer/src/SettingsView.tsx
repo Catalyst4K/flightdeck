@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { AircraftImportSummary, LogbookImportSummary, WeightUnit } from '@shared/ipc'
+import type { AircraftImportSummary, AltitudeUnit, LogbookImportSummary, WeightUnit } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -26,6 +26,8 @@ function summarizeLogbookImport(summary: LogbookImportSummary): string {
 export function SettingsView(props: {
   weightUnit: WeightUnit
   onWeightUnitChange: (unit: WeightUnit) => void
+  altitudeUnit: AltitudeUnit
+  onAltitudeUnitChange: (unit: AltitudeUnit) => void
 }): React.JSX.Element {
   const [simbriefUsername, setSimbriefUsername] = useState('')
   const [importingAircraft, setImportingAircraft] = useState(false)
@@ -82,21 +84,51 @@ export function SettingsView(props: {
         <CardHeader>
           <CardTitle>Units</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">Weights:</span>
-          <div className="flex gap-1.5">
-            {(['kg', 'lb'] as const).map((unit) => (
-              <Button
-                key={unit}
-                type="button"
-                size="sm"
-                variant={props.weightUnit === unit ? 'default' : 'outline'}
-                onClick={() => props.onWeightUnitChange(unit)}
-              >
-                {unit}
-              </Button>
-            ))}
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Weights:</span>
+            <div className="flex gap-1.5">
+              {(['kg', 'lb'] as const).map((unit) => (
+                <Button
+                  key={unit}
+                  type="button"
+                  size="sm"
+                  variant={props.weightUnit === unit ? 'default' : 'outline'}
+                  onClick={() => props.onWeightUnitChange(unit)}
+                >
+                  {unit}
+                </Button>
+              ))}
+            </div>
           </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">OFP altitudes:</span>
+            <div className="flex gap-1.5">
+              {(
+                [
+                  { unit: 'ft', label: 'Feet' },
+                  { unit: 'm', label: 'Meters' },
+                  { unit: 'raw', label: 'Raw' }
+                ] as const
+              ).map(({ unit, label }) => (
+                <Button
+                  key={unit}
+                  type="button"
+                  size="sm"
+                  variant={props.altitudeUnit === unit ? 'default' : 'outline'}
+                  onClick={() => props.onAltitudeUnitChange(unit)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            "Raw" shows the level exactly as SimBrief reported it (e.g. "FL1130") without
+            assuming it's really feet — useful for a route crossing into airspace that
+            uses metric flight levels, where SimBrief may already report the level in
+            meters under the same field.
+          </p>
         </CardContent>
       </Card>
 

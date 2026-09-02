@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { createDb, type FlightdeckDb } from './client'
-import { getSetting, getSimbriefUsername, setSetting, setSimbriefUsername } from './settings-repo'
+import {
+  getAltitudeUnit,
+  getSetting,
+  getSimbriefUsername,
+  setAltitudeUnit,
+  setSetting,
+  setSimbriefUsername
+} from './settings-repo'
 
 describe('settings repo', () => {
   let db: FlightdeckDb
@@ -31,5 +38,16 @@ describe('settings repo', () => {
   it('round-trips the SimBrief username', () => {
     setSimbriefUsername(db, 'LandingHangar711')
     expect(getSimbriefUsername(db)).toBe('LandingHangar711')
+  })
+
+  it('defaults the altitude unit to ft when never set', () => {
+    expect(getAltitudeUnit(db)).toBe('ft')
+  })
+
+  it('round-trips the altitude unit', () => {
+    setAltitudeUnit(db, 'm')
+    expect(getAltitudeUnit(db)).toBe('m')
+    setAltitudeUnit(db, 'raw')
+    expect(getAltitudeUnit(db)).toBe('raw')
   })
 })
