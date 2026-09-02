@@ -116,6 +116,65 @@ Two edge cases that a naive `is_sid_star === "1"` filter gets wrong:
   `is_sid_star: "1"`. Same is presumably true of the origin on some routes. Don't assume
   every marked fix is an enroute-style waypoint.
 
+### Confirmed on a route with transitions on both procedures
+
+A third OFP, generated specifically to produce transitions (KLAX→KJFK, A35K, runways
+forced via `origrwy=25R&destrwy=22L`, AIRAC 2608, 35 fixes):
+
+```
+general: sid_ident "DOTSS2"  sid_trans "CLEEE"   star_ident "PUCKY1"  star_trans "WLKES"
+```
+
+So transitions **do** populate — at least for US procedures. But they do not appear the way
+you'd expect in the navlog, and the two ends are **not symmetric**:
+
+```
+  0 DOCKR  sid_star=1 stage=CLB via=DOTSS2     ← SID legs
+  ...
+  7 HOMER  sid_star=1 stage=CLB via=DOTSS2
+  8 CLEEE  sid_star=0 stage=CLB via=DOTSS2     ← sid_trans: flagged 0, via = the SID
+  9 TOC    sid_star=0 stage=CLB via=DCT
+ ...
+ 27 MAGIO  sid_star=0 stage=DSC via=Q476
+ 28 WLKES  sid_star=0 stage=DSC via=Q476       ← star_trans: flagged 0, via = the AIRWAY
+ 29 JENNO  sid_star=1 stage=DSC via=PUCKY1     ← STAR legs
+ ...
+ 34 KJFK   sid_star=1 stage=DSC via=PUCKY1     ← destination airport, type "apt"
+```
+
+- **A transition never gets its own `via_airway`.** There is no `CLEEE` or `WLKES` airway
+  value anywhere; the transition name only exists in `general.sid_trans`/`star_trans`.
+- **Both transition fixes are `is_sid_star: "0"`** — the same exclusion already seen on
+  `BPK` (whose SID had no transition). So the rule generalises: **the fix a procedure
+  hands off at is always flagged `"0"`**, whether it's a transition fix or the SID's
+  namesake navaid.
+- **The asymmetry:** the SID's handoff fix carries `via_airway` = the SID
+  (`CLEEE` → `DOTSS2`), but the STAR's carries `via_airway` = the **inbound enroute
+  airway** (`WLKES` → `Q476`), not the STAR. So `via_airway` alone finds the SID's full
+  extent but not the STAR's entry point.
+
+**Working segmentation rule**, verified against all three OFPs (with a transition, without
+one, and with no STAR at all):
+
+- **SID** = fixes from the start while `via_airway === general.sid_ident`. Includes the
+  handoff fix in both the transition case (`CLEEE`) and the no-transition case (`BPK`).
+- **STAR** = from the fix whose `ident === general.star_trans` when that's non-empty,
+  otherwise from the first fix with `via_airway === general.star_ident`; runs to the last
+  fix. Starting at `star_trans` is what keeps the segments contiguous rather than leaving
+  the entry fix in the enroute segment.
+- **Enroute** = everything between.
+- Remember `general.*_ident`/`*_trans` are `{}` when absent, not `""`.
+
+### Pseudo-fixes: TOC and TOD are in the navlog
+
+`TOC` and `TOD` appear as ordinary array entries with `type: "ltlg"` (lat/long point) and
+`via_airway: "DCT"`. They are computed points, not navigation fixes. Anything rendering
+waypoint labels from the navlog will show them — worth knowing, since `route.ts` builds
+the map's waypoint pins straight off this array.
+
+Other observed `type` values: `wpt`, `vor`, `apt` (the destination airport itself),
+`ltlg`. `via_airway` is the literal string `"DCT"` on direct legs, not empty.
+
 ## `api_params` — the generation inputs, echoed back
 
 The response includes an `api_params` section containing the parameters the plan was
