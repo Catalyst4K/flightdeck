@@ -116,11 +116,13 @@ function FlightDetail(props: {
         </CardContent>
       </Card>
 
-      <FlightMap live={false} route={route} waypoints={waypoints} trackPoints={trackPoints} />
+      <div className="h-[min(36vh,360px)] min-h-56">
+        <FlightMap live={false} route={route} waypoints={waypoints} trackPoints={trackPoints} />
+      </div>
 
       {profile.length > 1 && (
         <div className="flex flex-wrap gap-4">
-          <Card className="w-[420px]">
+          <Card className="min-w-72 flex-1">
             <CardHeader>
               <CardTitle className="text-sm">Altitude</CardTitle>
             </CardHeader>
@@ -140,7 +142,7 @@ function FlightDetail(props: {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-          <Card className="w-[420px]">
+          <Card className="min-w-72 flex-1">
             <CardHeader>
               <CardTitle className="text-sm">Speed (IAS)</CardTitle>
             </CardHeader>
@@ -164,7 +166,7 @@ function FlightDetail(props: {
       )}
 
       {fuelData && (
-        <Card className="w-[280px]">
+        <Card className="w-full max-w-96">
           <CardHeader>
             <CardTitle className="text-sm">Fuel planned vs actual</CardTitle>
           </CardHeader>
