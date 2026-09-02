@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
+  type AltitudeUnit,
   type DispatchOfp,
   type DispatchOpenSimBriefParams,
   type NewFlight,
@@ -34,7 +35,14 @@ import {
   listFlights
 } from './db/flight-repo'
 import { importLogbookCsv } from './db/logbook-import'
-import { getSimbriefUsername, getWeightUnit, setSimbriefUsername, setWeightUnit } from './db/settings-repo'
+import {
+  getAltitudeUnit,
+  getSimbriefUsername,
+  getWeightUnit,
+  setAltitudeUnit,
+  setSimbriefUsername,
+  setWeightUnit
+} from './db/settings-repo'
 import { listTrackPoints } from './db/track-point-repo'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
 import { SimConnectService } from './sim/SimConnectService'
@@ -129,6 +137,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.settingsGetWeightUnit, () => getWeightUnit(db))
   ipcMain.handle(IpcChannels.settingsSetWeightUnit, (_event, unit: WeightUnit) => setWeightUnit(db, unit))
+  ipcMain.handle(IpcChannels.settingsGetAltitudeUnit, () => getAltitudeUnit(db))
+  ipcMain.handle(IpcChannels.settingsSetAltitudeUnit, (_event, unit: AltitudeUnit) => setAltitudeUnit(db, unit))
 
   const simConnectService = new SimConnectService()
   ipcMain.handle(IpcChannels.simConnectionStatusGet, () => simConnectService.getStatus())

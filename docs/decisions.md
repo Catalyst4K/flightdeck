@@ -381,3 +381,16 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   monotonic altitude changes too. If Dispatch's "Step climbs" section comes out empty
   or wrong against a real fetched OFP, `stage` is the field to re-check — asked Callum
   to try "Fetch latest OFP" and report back whether this needs correcting.
+- 2026-09-02: Added a Settings altitude-unit preference (Feet/Meters/Raw) for OFP-
+  derived altitudes (Dispatch's cruise altitude and step climbs) — prompted by Callum
+  describing real flights where SimBrief reports a level as "FL1130", which is actually
+  a metric flight level (crossing into airspace like China's that uses metric levels),
+  not really 113,000 ft. SimBrief apparently doesn't flag which unit a given level
+  actually is — the same field just holds whatever number produces the right FL when
+  divided by 100, whether that's a real feet-based level or a metric one. So Feet and
+  Meters both simply assume the value is real feet and convert (right most of the time,
+  wrong on a metric segment); Raw sidesteps the interpretation question entirely by
+  reproducing the exact FL-style number an OFP would show for that point, unconverted.
+  New `AltitudeUnit` type (`ft`/`m`/`raw`), persisted the same way as `weightUnit`
+  (app_setting key/value, no migration needed), `formatAltitude` (units.ts) doing the
+  three-way formatting.

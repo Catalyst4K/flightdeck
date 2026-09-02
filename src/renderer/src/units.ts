@@ -1,6 +1,6 @@
 // SI is stored internally end-to-end; convert to aviation units only here, at the UI
 // layer, per docs/decisions.md §5.
-import type { WeightUnit } from '@shared/ipc'
+import type { AltitudeUnit, WeightUnit } from '@shared/ipc'
 
 const KG_PER_LB = 0.45359237
 
@@ -36,4 +36,23 @@ export function unitToKg(value: number, unit: WeightUnit): number {
 
 export function formatWeight(kg: number | null, unit: WeightUnit): string {
   return kg == null ? '—' : `${Math.round(kgToUnit(kg, unit)).toLocaleString()} ${unit}`
+}
+
+/**
+ * Formats an altitude that came from a SimBrief OFP — `altitudeFt` should be the raw
+ * number SimBrief reported (or its exact inverse-converted equivalent, e.g.
+ * `mToFt(cruiseAltM)`), NOT a value already known to be real feet. 'ft'/'m' both
+ * assume it is real feet; 'raw' doesn't interpret it at all, just formats it the way an
+ * OFP would (see the AltitudeUnit doc comment in shared/ipc.ts for why that distinction
+ * matters for a flight crossing into e.g. Chinese metric-level airspace).
+ */
+export function formatAltitude(altitudeFt: number, unit: AltitudeUnit): string {
+  switch (unit) {
+    case 'ft':
+      return `${Math.round(altitudeFt).toLocaleString()} ft`
+    case 'm':
+      return `${Math.round(altitudeFt * M_PER_FT).toLocaleString()} m`
+    case 'raw':
+      return `FL${Math.round(altitudeFt / 100)}`
+  }
 }

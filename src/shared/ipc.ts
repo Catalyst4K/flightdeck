@@ -289,6 +289,19 @@ export interface DispatchOfp {
  */
 export type WeightUnit = 'kg' | 'lb'
 
+/**
+ * Display unit for OFP-derived altitudes (Dispatch's cruise altitude and step climbs).
+ * Storage stays whatever SimBrief itself provided — see the caveat on
+ * computeStepClimbs in simbrief-client.ts: a SimBrief-computed level is sometimes
+ * already a metric flight level (e.g. crossing Chinese airspace), not literal feet, with
+ * no field distinguishing which. 'ft'/'m' both assume it's real feet and convert (right
+ * most of the time, wrong for a metric segment); 'raw' sidesteps the question entirely
+ * by showing the untouched number in FL notation (e.g. "FL1130"), exactly as SimBrief's
+ * own OFP text would for that point, whichever unit it actually represents. Defaults to
+ * 'ft' if never set.
+ */
+export type AltitudeUnit = 'ft' | 'm' | 'raw'
+
 /** The app's tabs — also the native menu bar's top-level items, see main/menu.ts. */
 export type AppPage = 'fleet' | 'dispatch' | 'track' | 'logbook' | 'settings'
 
@@ -323,6 +336,8 @@ export const IpcChannels = {
   settingsSetSimbriefUsername: 'settings:set-simbrief-username',
   settingsGetWeightUnit: 'settings:get-weight-unit',
   settingsSetWeightUnit: 'settings:set-weight-unit',
+  settingsGetAltitudeUnit: 'settings:get-altitude-unit',
+  settingsSetAltitudeUnit: 'settings:set-altitude-unit',
   trackingStart: 'tracking:start',
   trackingStop: 'tracking:stop',
   trackingFinish: 'tracking:finish',
@@ -374,6 +389,8 @@ export interface FlightdeckApi {
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>
   settingsSetWeightUnit: (unit: WeightUnit) => Promise<void>
+  settingsGetAltitudeUnit: () => Promise<AltitudeUnit>
+  settingsSetAltitudeUnit: (unit: AltitudeUnit) => Promise<void>
   /** Begins tracking a planned flight. Throws if the sim isn't connected or another flight is already tracked. */
   trackingStart: (flightId: number) => Promise<void>
   /** Cancels tracking mid-flight; marks the flight 'abandoned' rather than 'completed'. */

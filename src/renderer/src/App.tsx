@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BookOpen, Plane, Radar, Route, Settings as SettingsIcon } from 'lucide-react'
-import type { AppPage, DispatchOfp, SimConnectionStatus, SimTelemetry, WeightUnit } from '@shared/ipc'
+import type { AltitudeUnit, AppPage, DispatchOfp, SimConnectionStatus, SimTelemetry, WeightUnit } from '@shared/ipc'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
@@ -43,6 +43,7 @@ function connectionStatusVariant(status: SimConnectionStatus): 'default' | 'seco
 export default function App(): React.JSX.Element {
   const [page, setPage] = useState<AppPage>('fleet')
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
+  const [altitudeUnit, setAltitudeUnit] = useState<AltitudeUnit>('ft')
   const [simStatus, setSimStatus] = useState<SimConnectionStatus>({ state: 'disconnected' })
   const [telemetry, setTelemetry] = useState<SimTelemetry | null>(null)
   // Lifted out of DispatchView (rather than local state there) for two reasons: Track
@@ -57,6 +58,7 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     window.flightdeck.settingsGetWeightUnit().then(setWeightUnit)
+    window.flightdeck.settingsGetAltitudeUnit().then(setAltitudeUnit)
   }, [])
 
   useEffect(() => {
@@ -75,6 +77,11 @@ export default function App(): React.JSX.Element {
   async function handleWeightUnitChange(unit: WeightUnit): Promise<void> {
     setWeightUnit(unit)
     await window.flightdeck.settingsSetWeightUnit(unit)
+  }
+
+  async function handleAltitudeUnitChange(unit: AltitudeUnit): Promise<void> {
+    setAltitudeUnit(unit)
+    await window.flightdeck.settingsSetAltitudeUnit(unit)
   }
 
   return (
@@ -99,6 +106,7 @@ export default function App(): React.JSX.Element {
           {page === 'dispatch' && (
             <DispatchView
               weightUnit={weightUnit}
+              altitudeUnit={altitudeUnit}
               onPlanned={() => setPage('track')}
               ofp={dispatchOfp}
               onOfpChange={setDispatchOfp}
@@ -118,7 +126,12 @@ export default function App(): React.JSX.Element {
           )}
           {page === 'logbook' && <LogbookView weightUnit={weightUnit} />}
           {page === 'settings' && (
-            <SettingsView weightUnit={weightUnit} onWeightUnitChange={handleWeightUnitChange} />
+            <SettingsView
+              weightUnit={weightUnit}
+              onWeightUnitChange={handleWeightUnitChange}
+              altitudeUnit={altitudeUnit}
+              onAltitudeUnitChange={handleAltitudeUnitChange}
+            />
           )}
         </div>
       </Tabs>
