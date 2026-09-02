@@ -1,5 +1,6 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
+import { writeFile } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
@@ -128,6 +129,17 @@ app.whenReady().then(() => {
       `https://dispatch.simbrief.com/options/custom?orig=${encodeURIComponent(origIcao)}` +
       `&dest=${encodeURIComponent(destIcao)}&${airframeParam}`
     return shell.openExternal(url)
+  })
+
+  ipcMain.handle(IpcChannels.dispatchExportOfpJson, async (_event, ofpJson: string) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(window, {
+      title: 'Export OFP JSON',
+      defaultPath: 'flightdeck-ofp.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    if (canceled || !filePath) return false
+    await writeFile(filePath, ofpJson, 'utf-8')
+    return true
   })
 
   ipcMain.handle(IpcChannels.settingsGetSimbriefUsername, () => getSimbriefUsername(db) ?? null)
