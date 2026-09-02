@@ -367,3 +367,17 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   that App wires to clearing `dispatchOfp`/`dispatchedOfpId`. Also dropped Track's
   "Previewing the OFP fetched in Dispatch…" empty-state text — unnecessary; the map
   already shows the preview route without needing a caption to explain it.
+- 2026-09-02: Added planned step climbs to Dispatch's OFP details — **not yet verified
+  against a real SimBrief response**, flagging this explicitly since every other field
+  in simbrief-client.ts was checked against a real live fetch before being trusted
+  (see the file's own header comment) and this one couldn't be: SimBrief's JSON schema
+  isn't documented anywhere, and generating a real OFP requires a personal SimBrief
+  account, which isn't something to fetch on someone else's behalf just to check a
+  field name. Best-effort based on how SimBrief's own OFP text output derives its
+  "PLANNED STEP CLIMBS" section: `computeStepClimbs` looks for a `stage` field on each
+  navlog fix ('CLB'/'CRZ'/'DSC', per public discussion of the schema — not confirmed
+  first-hand) and flags an altitude increase between two consecutive CRZ-stage fixes,
+  deliberately excluding the initial climb-out and the descent even though both are
+  monotonic altitude changes too. If Dispatch's "Step climbs" section comes out empty
+  or wrong against a real fetched OFP, `stage` is the field to re-check — asked Callum
+  to try "Fetch latest OFP" and report back whether this needs correcting.
