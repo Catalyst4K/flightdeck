@@ -202,6 +202,35 @@ duration fields are seconds.
   reliably fetching back a plan Flightdeck itself asked for, instead of hoping "latest"
   is still the right one.
 
+## Saved airframes
+
+Saved airframes live only in SimBrief's web UI — there is no API to create, edit or list
+them (`docs/decisions.md` §4 covers why Flightdeck references a saved airframe ID rather
+than pushing `acdata` per request).
+
+- **The list page** is `https://dispatch.simbrief.com/airframes` (Dispatch → Saved
+  Airframes).
+- **A single airframe's editor is directly linkable**, by path rather than query
+  parameter: `https://dispatch.simbrief.com/airframes/saved/<id>`. Confirmed 200.
+- **The path ID is the internal ID's suffix.** Verified against a real airframe of
+  Callum's: internal ID `1191852_1763944989305` ↔ URL
+  `.../airframes/saved/1763944989305`. So the internal ID is
+  `<simbrief user id>_<airframe id>` and the URL takes the part after the underscore.
+  Callum's user ID is `1191852`, matching `params.user_id` in his fetched OFPs.
+
+  So deriving the edit URL from a stored `aircraft.simbrief_airframe_id` is
+  `id.split('_')[1]` — **treat that suffix as an opaque string, not a timestamp.** It
+  happens to look like a millisecond epoch here (1763944989305 = 2025-11-24T00:43:09Z,
+  presumably the airframe's creation time), and the older format documented in
+  `docs/decisions.md` (`123456_1582090020`) has a 10-digit *seconds* value instead. Since
+  the rule is "take the suffix verbatim", that drift doesn't matter — but any code that
+  parses, converts or validates it as a date would break on one format or the other.
+  Fall back to the plain airframes list if there's no underscore.
+
+**Unverified:** whether a *seconds*-format suffix still resolves under
+`/airframes/saved/`. No old airframe has been tried. The fallback to the list page covers
+it either way.
+
 ## Generation
 
 Unchanged from the 2026-09-01 finding in `docs/decisions.md`: SimBrief's official API is
