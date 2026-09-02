@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Aircraft, AltitudeUnit, DispatchOfp, FleetStats, WeightUnit } from '@shared/ipc'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,6 +62,9 @@ export function DispatchView(props: {
   const [destIcao, setDestIcao] = useState('')
   const [fetching, setFetching] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Set only when Fly would abandon a flight Track already has in progress — see
+  // handleFlyClick. Holds the warning text to show; null means no confirmation needed.
+  const [flyWarning, setFlyWarning] = useState<string | null>(null)
 
   useEffect(() => {
     window.flightdeck.aircraftList().then(setAircraft)
@@ -95,6 +109,38 @@ export function DispatchView(props: {
     } finally {
       setFetching(false)
     }
+  }
+
+  // Fly creates a new flight, and the app only ever tracks one flight "in progress" at a
+  // time (main/index.ts's flightCreate handler abandons whatever was already active or
+  // planned) — so pressing Fly while Track already has something going on would silently
+  // abandon it with no warning. Check first and confirm before doing anything destructive.
+  async function handleFlyClick(): Promise<void> {
+    if (!ofp || selectedAircraftId == null) return
+    const [active, flights] = await Promise.all([
+      window.flightdeck.trackingGetActive(),
+      window.flightdeck.flightList()
+    ])
+    const activeFlight = active ? flights.find((f) => f.id === active.flightId) : undefined
+    const otherPlanned = flights.filter((f) => f.status === 'planned')
+    if (activeFlight) {
+      setFlyWarning(
+        `This will abandon the flight currently being tracked, ${activeFlight.flightNumber ?? `#${activeFlight.id}`}.`
+      )
+    } else if (otherPlanned.length > 0) {
+      setFlyWarning(
+        otherPlanned.length === 1
+          ? `This will abandon the other planned flight, ${otherPlanned[0].flightNumber ?? `#${otherPlanned[0].id}`}.`
+          : `This will abandon ${otherPlanned.length} other planned flights.`
+      )
+    } else {
+      await handleSaveFlight()
+    }
+  }
+
+  async function handleConfirmFly(): Promise<void> {
+    setFlyWarning(null)
+    await handleSaveFlight()
   }
 
   async function handleSaveFlight(): Promise<void> {
@@ -213,11 +259,19 @@ export function DispatchView(props: {
                 <CardTitle>
                   {ofp.flightNumber}: {ofp.depIcao} → {ofp.arrIcao} (altn {ofp.altnIcao})
                 </CardTitle>
-                {alreadyFlown && (
-                  <CardAction>
-                    <Badge variant="secondary">Flying</Badge>
-                  </CardAction>
-                )}
+                <CardAction className="flex items-center gap-2">
+                  {alreadyFlown && <Badge variant="secondary">Flying</Badge>}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Unload flight plan"
+                    title="Unload flight plan"
+                    onClick={() => props.onOfpChange(null)}
+                  >
+                    <X />
+                  </Button>
+                </CardAction>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
@@ -293,7 +347,7 @@ export function DispatchView(props: {
                       </p>
                     )}
 
-                    <Button type="button" onClick={handleSaveFlight} disabled={saving || selectedAircraftId == null}>
+                    <Button type="button" onClick={handleFlyClick} disabled={saving || selectedAircraftId == null}>
                       {saving ? 'Starting…' : 'Fly'}
                     </Button>
                   </>
@@ -305,6 +359,19 @@ export function DispatchView(props: {
           )}
         </div>
       </div>
+
+      <AlertDialog open={flyWarning !== null} onOpenChange={(open) => !open && setFlyWarning(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fly this plan instead?</AlertDialogTitle>
+            <AlertDialogDescription>{flyWarning}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Back</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmFly}>Fly</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

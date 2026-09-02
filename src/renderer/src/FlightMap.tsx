@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { GeoJSONSource, LngLatBounds, Map as MapLibreMap, Marker, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+import { Locate, LocateFixed, ZoomIn, ZoomOut } from 'lucide-react'
 import type { SimTelemetry, TrackPoint } from '@shared/ipc'
+import { Button } from '@/components/ui/button'
 import type { Waypoint } from './route'
 import { mToFt, msToKt } from './units'
 
@@ -98,6 +100,11 @@ export function FlightMap({
   // point in one batch (trackPointList), so length would jump straight past 1.
   const hasCenteredRef = useRef(false)
   const [mapReady, setMapReady] = useState(false)
+  // Whether the camera keeps recentering on the aircraft as new track points arrive
+  // (live mode only) — a user panning around to look at something shouldn't keep
+  // getting yanked back. Defaults on, matching the always-follow behavior before this
+  // was made toggleable.
+  const [followEnabled, setFollowEnabled] = useState(true)
 
   // Map setup — once. Data is pushed in via separate effects below as it changes.
   useEffect(() => {
@@ -237,7 +244,7 @@ export function FlightMap({
       source?.setData(lineString([...priorCoords, [to.longitude, to.latitude]]))
       markerRef.current.setLngLat([to.longitude, to.latitude])
       markerRef.current.setRotation(to.headingTrueDeg)
-      mapRef.current.jumpTo({ center: [to.longitude, to.latitude], zoom: FOLLOW_ZOOM })
+      if (followEnabled) mapRef.current.jumpTo({ center: [to.longitude, to.latitude], zoom: FOLLOW_ZOOM })
       return
     }
 
@@ -246,7 +253,7 @@ export function FlightMap({
       source?.setData(lineString([...priorCoords, [to.longitude, to.latitude]]))
       markerRef.current.setLngLat([to.longitude, to.latitude])
       markerRef.current.setRotation(to.headingTrueDeg)
-      mapRef.current.easeTo({ center: [to.longitude, to.latitude], duration: 500 })
+      if (followEnabled) mapRef.current.easeTo({ center: [to.longitude, to.latitude], duration: 500 })
       return
     }
 
@@ -274,14 +281,65 @@ export function FlightMap({
       source?.setData(lineString([...priorCoords, [lng, lat]]))
       if (t < 1) frame = requestAnimationFrame(step)
     })
-    mapRef.current.easeTo({ center: [to.longitude, to.latitude], duration: durationMs })
+    if (followEnabled) mapRef.current.easeTo({ center: [to.longitude, to.latitude], duration: durationMs })
 
     return () => cancelAnimationFrame(frame)
-  }, [mapReady, trackPoints, live])
+  }, [mapReady, trackPoints, live, followEnabled])
+
+  // Re-center immediately when follow is switched back on, rather than waiting for the
+  // next track point to arrive.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !live || !followEnabled) return
+    const last = trackPoints[trackPoints.length - 1]
+    if (last) mapRef.current.easeTo({ center: [last.longitude, last.latitude], duration: 500 })
+    // Only on the follow-enabled transition itself — trackPoints already has its own
+    // effect above driving the camera while following.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followEnabled])
+
+  const mapControlButtonClassName = 'bg-popover/85 backdrop-blur-sm hover:bg-popover'
 
   return (
     <div className="relative">
       <div ref={mapContainerRef} className="h-[500px] w-full overflow-hidden rounded-xl border border-border" />
+      <div className="absolute top-3 right-3 flex flex-col gap-1.5">
+        {live && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className={mapControlButtonClassName}
+            aria-label={followEnabled ? 'Stop centering on aircraft' : 'Center on aircraft'}
+            title={followEnabled ? 'Stop centering on aircraft' : 'Center on aircraft'}
+            aria-pressed={followEnabled}
+            onClick={() => setFollowEnabled((v) => !v)}
+          >
+            {followEnabled ? <LocateFixed className="text-accent" /> : <Locate />}
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className={mapControlButtonClassName}
+          aria-label="Zoom in"
+          title="Zoom in"
+          onClick={() => mapRef.current?.zoomIn()}
+        >
+          <ZoomIn />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className={mapControlButtonClassName}
+          aria-label="Zoom out"
+          title="Zoom out"
+          onClick={() => mapRef.current?.zoomOut()}
+        >
+          <ZoomOut />
+        </Button>
+      </div>
       <div className="absolute bottom-3 left-3 rounded-full border border-border bg-popover/85 px-3 py-1 font-mono text-xs text-popover-foreground backdrop-blur-sm">
         Speed: {telemetry ? `${Math.round(msToKt(telemetry.indicatedAirspeedMs))} kt` : 'N/A'} · Altitude:{' '}
         {telemetry ? `${Math.round(mToFt(telemetry.altitudeM)).toLocaleString()} ft` : 'N/A'} · Heading:{' '}

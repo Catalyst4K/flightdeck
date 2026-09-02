@@ -444,3 +444,36 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
 - 2026-09-02: Removed the "Export raw OFP" button and `dispatchExportOfpJson` IPC
   channel — it did its job (surfaced the real `stepclimb_string` field above) and isn't
   a feature end users need day to day, per its own doc comment when it was added.
+- 2026-09-02: Track page — the flight-info bar (both the active-tracking bar and the
+  planned-flights list) now shows "Flight Num: [airline logo] BAW31  A35K · G-XWBS"
+  instead of just "BAW31 (G-XWBS)". Extracted `AirlineLogo` out of FleetView.tsx into its
+  own file (`AirlineLogo.tsx`) since Track needed it too — same Kiwi.com-by-IATA image
+  service, no new data source. Added a follow-on-aircraft toggle and zoom in/out buttons
+  to `FlightMap` (top-right, icon buttons) — follow defaults on (matching the prior
+  always-follow behavior) and only shows in live (Track) mode, not Logbook's static
+  replay; toggling it back on re-centers immediately rather than waiting for the next
+  track point.
+- 2026-09-02: Added a small "✕" unload button to Dispatch's flight-details card —
+  clears the fetched/created OFP (`onOfpChange(null)`) without needing to fetch a new
+  one to replace it. Track's map already re-derives its route reactively from
+  `previewOfpJson` with no separate stored copy, so unloading here removes the route
+  from Track's map for free, *unless* the OFP has already been saved as a real flight
+  (`alreadyFlown`) — in that case Track is showing the saved flight, not the Dispatch
+  preview, so unloading Dispatch's reference correctly leaves it alone.
+- 2026-09-02: Pressing "Fly" now confirms first if it would abandon a flight Track
+  already has in progress. `flightCreate` (main/index.ts) already enforces "only one
+  flight in progress" by silently abandoning any active/planned flight before creating
+  the new one — Callum flagged that Dispatch gave zero warning before doing this, which
+  is a real way to lose an in-progress (even mid-air) flight's tracking by mistake, not
+  just a rough edge. `handleFlyClick` checks `trackingGetActive`/`flightList` first and
+  only asks for confirmation when there's actually something to abandon.
+- 2026-09-02: Investigating auto-starting tracking after Fly (skip the separate "Start
+  tracking" click on Track) by detecting from telemetry that a new flight has actually
+  begun. Callum's noted SimConnect can keep reporting the *previous* flight's data for a
+  bit after a new one loads — building a detector on a guess about how long that lasts
+  or what stays stale would repeat the stepClimbs mistake, so this isn't built yet.
+  Added `scripts/spike-flight-reload.ts` (throwaway, per CLAUDE.md's M1/M6 rule) to log
+  the real transition — TITLE/ATC ID/on-ground/speed/position across a real "finish one
+  flight, load a different one" reload — and specifically flags TITLE/ATC ID changes,
+  on the theory those might update immediately even if position/on-ground lag. Waiting
+  on a real run against a live sim before designing the detector.

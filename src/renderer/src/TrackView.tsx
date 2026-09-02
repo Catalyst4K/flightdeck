@@ -13,8 +13,26 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { AirlineLogo } from './AirlineLogo'
 import { FlightMap } from './FlightMap'
 import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
+
+/** "Flight Num: [airline logo] BAW31   A35K · G-XWBS" — the identity strip shown for a
+ *  flight on this page, whether it's actively being tracked or just queued up to start. */
+function FlightIdentity(props: { flightNumber: string; aircraft: Aircraft | undefined }): React.JSX.Element {
+  return (
+    <span className="flex items-center gap-1.5 text-sm text-foreground">
+      <span className="font-medium text-foreground">Flight Num:</span>
+      <AirlineLogo iata={props.aircraft?.operatorIata ?? null} />
+      <span>{props.flightNumber}</span>
+      {props.aircraft && (
+        <span className="text-muted-foreground">
+          {props.aircraft.icaoType} · {props.aircraft.registration}
+        </span>
+      )}
+    </span>
+  )
+}
 
 type ConfirmAction =
   | { kind: 'cancel-active'; title: string; description: string }
@@ -144,10 +162,15 @@ export function TrackView(props: {
       {active ? (
         <Card>
           <CardContent className="flex items-center justify-between gap-4">
-            <p className="text-sm text-foreground">
-              Tracking <span className="font-medium">{activeLabel}</span> — phase:{' '}
-              <span className="font-mono">{active.phase}</span>
-            </p>
+            <div className="flex items-center gap-3">
+              <FlightIdentity
+                flightNumber={activeLabel}
+                aircraft={aircraft.find((a) => a.id === activeFlight?.aircraftId)}
+              />
+              <span className="text-sm text-muted-foreground">
+                — phase: <span className="font-mono">{active.phase}</span>
+              </span>
+            </div>
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -185,13 +208,10 @@ export function TrackView(props: {
         <div className="flex flex-col gap-2">
           {plannedFlights.map((f) => {
             const label = f.flightNumber ?? `${f.depIcao} → ${f.arrIcao}`
-            const registration = aircraft.find((a) => a.id === f.aircraftId)?.registration ?? f.aircraftId
             return (
               <Card key={f.id}>
                 <CardContent className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-foreground">
-                    {label} ({registration})
-                  </span>
+                  <FlightIdentity flightNumber={label} aircraft={aircraft.find((a) => a.id === f.aircraftId)} />
                   <div className="flex gap-2">
                     <Button type="button" size="sm" disabled={starting} onClick={() => handleStart(f.id)}>
                       Start tracking
