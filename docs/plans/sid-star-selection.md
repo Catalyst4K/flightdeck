@@ -72,6 +72,25 @@ SID / enroute / STAR" half of this feature is therefore not blocked on Navigraph
 ship on its own**, which is worth considering: it's the smaller half, it delivers the
 "see them as distinct segments" ask, and it's implementable today.
 
+Since verified further against a stored EGLL→VHHH OFP that has **both** a SID (`BPK7F`)
+and a STAR (`SIER7B`) — the arrival side behaves identically. Two edge cases came out of
+it that the segmentation function must handle, both detailed in `docs/simbrief-notes.md`:
+
+- **Segment on `via_airway` + `stage`, not on `is_sid_star` alone.** The waypoint a SID
+  terminates at — `BPK`, the navaid the BPK7F is named after — has `is_sid_star: "0"` but
+  `via_airway: "BPK7F"`. Filtering on the flag leaves a one-waypoint gap and splits the
+  route one fix early.
+- **The destination airport is itself a fix inside the STAR segment** (`VHHH`,
+  `is_sid_star: "1"`). Don't assume every procedure fix is an enroute-style waypoint.
+
+Still unverified: **a procedure with a transition.** `sid_trans`/`star_trans` are empty on
+all nine stored OFPs, so nothing confirms how a runway or enroute transition appears in
+either `general` or the navlog. It matters because Navigraph's `tbl_sids`/`tbl_stars` are
+keyed by `transition_identifier` as well as `procedure_identifier` — so matching a
+SimBrief-chosen procedure to a navdata row needs the transition, and overriding one needs
+to write it back. Worth capturing one OFP with a transition before building the matching
+logic; a US arrival is the easiest way to get one.
+
 Note the `{}` trap when reading `sid_ident`/`star_ident` — an absent procedure comes back
 as an empty object, not an empty string, and the existing `str()` helper would turn that
 into `"[object Object]"`. See `docs/simbrief-notes.md`.
