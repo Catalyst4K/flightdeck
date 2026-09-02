@@ -18,6 +18,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "cross-env ELECTRON_RUN_AS_NODE=1 electron ./node_modules/tsx/dist/cli.mjs scripts/db-migrate.ts",
     "spike:simconnect": "tsx scripts/spike-simconnect.ts",
+    "spike:flight-reload": "tsx scripts/spike-flight-reload.ts",
     "package": "electron-vite build && electron-builder --publish=never",
     "package:win": "electron-vite build && electron-builder --win --publish=never",
     "package:mac": "electron-vite build && electron-builder --mac --publish=never",
