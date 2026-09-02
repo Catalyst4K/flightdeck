@@ -14,7 +14,6 @@ import { searchAircraftTypes } from './aircraft-lookup/icao-types'
 import { searchAirlines } from './airlines/airline-search'
 import { fetchMetars } from './weather/metar-client'
 import { searchAirports } from './airports/airport-search'
-import { buildAppMenu } from './menu'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
 import {
@@ -47,6 +46,7 @@ import { listTrackPoints } from './db/track-point-repo'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
 import { SimConnectService } from './sim/SimConnectService'
 import { TrackingController } from './tracking/TrackingController'
+import { AutoStartDetector } from './tracking/AutoStartDetector'
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -75,7 +75,9 @@ app.whenReady().then(() => {
   migrateDb(dbPath)
   const { db } = createDb(dbPath)
 
-  Menu.setApplicationMenu(buildAppMenu())
+  // No native menu bar — in-app navigation (the top tab bar in App.tsx) is the only
+  // way to move around; a bare File/Edit/Window bar above it was clutter, not useful.
+  Menu.setApplicationMenu(null)
   const window = createWindow()
 
   ipcMain.handle(IpcChannels.aircraftList, () => listAircraft(db))
@@ -156,7 +158,23 @@ app.whenReady().then(() => {
     if (!window.isDestroyed()) window.webContents.send(IpcChannels.trackingPoint, point)
   })
 
-  ipcMain.handle(IpcChannels.trackingStart, (_event, flightId: number) => trackingController.start(flightId))
+  // Auto-starts tracking once the sim has genuinely settled into a freshly-planned flight
+  // (docs/decisions.md, scripts/spike-flight-reload.ts) — "Start tracking" stays as the
+  // manual fallback for whenever this doesn't fire (e.g. the pilot doesn't reload MSFS).
+  const autoStartDetector = new AutoStartDetector(simConnectService)
+  autoStartDetector.on('ready', (flightId) => {
+    try {
+      trackingController.start(flightId)
+    } catch {
+      // The flight may have been cancelled, or already started via the manual button,
+      // between arming and this firing — safe to ignore either way.
+    }
+  })
+
+  ipcMain.handle(IpcChannels.trackingStart, (_event, flightId: number) => {
+    autoStartDetector.disarm()
+    trackingController.start(flightId)
+  })
   ipcMain.handle(IpcChannels.trackingStop, () => trackingController.stop())
   ipcMain.handle(IpcChannels.trackingFinish, () => trackingController.finish())
   ipcMain.handle(IpcChannels.trackingGetActive, () => trackingController.getActive() ?? null)
@@ -168,10 +186,13 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.flightCreate, (_event, input: NewFlight) => {
     trackingController.stop()
     abandonAllPlanned(db)
-    return createFlight(db, input)
+    const flight = createFlight(db, input)
+    autoStartDetector.arm(flight.id, simConnectService.getLastTelemetry())
+    return flight
   })
   ipcMain.handle(IpcChannels.flightCancel, (_event, id: number) => {
     abandonFlight(db, id)
+    autoStartDetector.disarm()
   })
 
   ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))

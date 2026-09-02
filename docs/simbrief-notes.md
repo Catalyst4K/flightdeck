@@ -116,6 +116,65 @@ Two edge cases that a naive `is_sid_star === "1"` filter gets wrong:
   `is_sid_star: "1"`. Same is presumably true of the origin on some routes. Don't assume
   every marked fix is an enroute-style waypoint.
 
+### Confirmed on a route with transitions on both procedures
+
+A third OFP, generated specifically to produce transitions (KLAX→KJFK, A35K, runways
+forced via `origrwy=25R&destrwy=22L`, AIRAC 2608, 35 fixes):
+
+```
+general: sid_ident "DOTSS2"  sid_trans "CLEEE"   star_ident "PUCKY1"  star_trans "WLKES"
+```
+
+So transitions **do** populate — at least for US procedures. But they do not appear the way
+you'd expect in the navlog, and the two ends are **not symmetric**:
+
+```
+  0 DOCKR  sid_star=1 stage=CLB via=DOTSS2     ← SID legs
+  ...
+  7 HOMER  sid_star=1 stage=CLB via=DOTSS2
+  8 CLEEE  sid_star=0 stage=CLB via=DOTSS2     ← sid_trans: flagged 0, via = the SID
+  9 TOC    sid_star=0 stage=CLB via=DCT
+ ...
+ 27 MAGIO  sid_star=0 stage=DSC via=Q476
+ 28 WLKES  sid_star=0 stage=DSC via=Q476       ← star_trans: flagged 0, via = the AIRWAY
+ 29 JENNO  sid_star=1 stage=DSC via=PUCKY1     ← STAR legs
+ ...
+ 34 KJFK   sid_star=1 stage=DSC via=PUCKY1     ← destination airport, type "apt"
+```
+
+- **A transition never gets its own `via_airway`.** There is no `CLEEE` or `WLKES` airway
+  value anywhere; the transition name only exists in `general.sid_trans`/`star_trans`.
+- **Both transition fixes are `is_sid_star: "0"`** — the same exclusion already seen on
+  `BPK` (whose SID had no transition). So the rule generalises: **the fix a procedure
+  hands off at is always flagged `"0"`**, whether it's a transition fix or the SID's
+  namesake navaid.
+- **The asymmetry:** the SID's handoff fix carries `via_airway` = the SID
+  (`CLEEE` → `DOTSS2`), but the STAR's carries `via_airway` = the **inbound enroute
+  airway** (`WLKES` → `Q476`), not the STAR. So `via_airway` alone finds the SID's full
+  extent but not the STAR's entry point.
+
+**Working segmentation rule**, verified against all three OFPs (with a transition, without
+one, and with no STAR at all):
+
+- **SID** = fixes from the start while `via_airway === general.sid_ident`. Includes the
+  handoff fix in both the transition case (`CLEEE`) and the no-transition case (`BPK`).
+- **STAR** = from the fix whose `ident === general.star_trans` when that's non-empty,
+  otherwise from the first fix with `via_airway === general.star_ident`; runs to the last
+  fix. Starting at `star_trans` is what keeps the segments contiguous rather than leaving
+  the entry fix in the enroute segment.
+- **Enroute** = everything between.
+- Remember `general.*_ident`/`*_trans` are `{}` when absent, not `""`.
+
+### Pseudo-fixes: TOC and TOD are in the navlog
+
+`TOC` and `TOD` appear as ordinary array entries with `type: "ltlg"` (lat/long point) and
+`via_airway: "DCT"`. They are computed points, not navigation fixes. Anything rendering
+waypoint labels from the navlog will show them — worth knowing, since `route.ts` builds
+the map's waypoint pins straight off this array.
+
+Other observed `type` values: `wpt`, `vor`, `apt` (the destination airport itself),
+`ltlg`. `via_airway` is the literal string `"DCT"` on direct legs, not empty.
+
 ## `api_params` — the generation inputs, echoed back
 
 The response includes an `api_params` section containing the parameters the plan was
@@ -270,10 +329,57 @@ What works today with no key at all is the URL prefill the app already uses:
 `https://dispatch.simbrief.com/options/custom?orig=&dest=&airframe=`-or-`type=`,
 verified live in M3 and again on 2026-09-01.
 
-**Unverified, and worth five minutes before building anything on it:** whether that same
-prefill URL accepts the rest of the documented input parameters (`airline`, `fltnum`,
-`date`, `deph`, `depm`, `pax`, `cargo`, `civalue`, `static_id`, …). The parameter names
-are documented for the *API form*, and the prefill URL is known to accept at least
-`orig`/`dest`/`type`/`airframe` from that same set — but "some of the set works" is not
-"all of the set works". Test by opening a URL with the extra parameters and checking
-whether SimBrief's dispatch form comes up populated.
+### The prefill URL honours the API's parameters — verified 2026-09-02
+
+Tested live, logged in, with:
+
+```
+https://dispatch.simbrief.com/options/custom
+  ?orig=EGLL&dest=WSSS&type=A388&airline=BAW&fltnum=002&date=020926&deph=18&depm=25
+```
+
+The dispatch form came up with Airline `BAW`, Flight Number `002`, Depart `EGLL`, Arrive
+`WSSS`, Aircraft Type `A388 - A380-800`, Variant/Airframe `Default`. So the documented API
+input names work on the keyless prefill URL, not just in the API form — no API key needed
+for any of it.
+
+Two things filled themselves in that weren't passed: Alternate (`WIBB`) and the ATC
+callsign placeholder (`BAW2`, derived from airline + flight number). SimBrief picks those
+itself, so there's no need to compute them.
+
+### `date` is a unix epoch, not a date string
+
+The one parameter that did **not** work as guessed. `date=020926` produced a Departure Time
+of `02 Jan 1970 - 00:13`, which decodes exactly:
+
+```
+20926          date=020926 parsed as the integer 20926, i.e. epoch seconds
++ 64800        deph=18  → 18 × 3600
++  1500        depm=25  → 25 × 60
+= 87226 s   →  1970-01-02T00:13:46Z
+```
+
+So:
+
+- **`date` takes unix epoch seconds**, and `ddmmyy` is silently misread as a tiny epoch
+  rather than rejected — a wrong-format date produces a 1970 departure, not an error.
+- **`deph` and `depm` are plain hour and minute integers**, as documented, and both were
+  applied correctly (they're what contributed the 64800 and 1500 above).
+- SimBrief computes departure time as `date + deph×3600 + depm×60`, so **`date` should be
+  midnight UTC of the departure day.**
+
+That matches the `api_params` echo exactly: the reference OFP has `date: "1788307200"` =
+2026-09-02T00:00:00Z, `dephour: "64800"`, `depmin: "1500"`, and `times.sched_out`
+1788373500 = 2026-09-02T18:25:00Z — precisely 66,300 s later. So the echo's odd
+seconds-based `dephour`/`depmin` are just SimBrief's internal form of the `deph`/`depm`
+inputs, and `date` is the same unit in and out.
+
+Everything is UTC.
+
+### Other observations from that page
+
+- **Cost Index** shows a greyed `AUTO` placeholder, so an omitted/empty `civalue` means
+  auto — consistent with `"auto"` being a real value elsewhere in `api_params`.
+- **Saved airframes and default variants share one "Variant or Airframe" dropdown**
+  (sortable by registration), with an **"Open Airframe Editor"** button on the same page.
+  Passing `type=` alone selects `Default` in that dropdown.
