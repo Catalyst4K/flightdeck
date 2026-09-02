@@ -220,7 +220,16 @@ export function FlightMap({
     if (!mapReady || !mapRef.current || !live) return
 
     const to = trackPoints[trackPoints.length - 1]
-    if (!to || !markerRef.current) return
+    if (!to) {
+      // No points to show (e.g. the flight was just cancelled, finished, or auto-
+      // completed) — clear the trail and pull the marker off the map rather than leaving
+      // the last-drawn position stuck there indefinitely.
+      mapRef.current.getSource<GeoJSONSource>(TRAIL_SOURCE_ID)?.setData(lineString([]))
+      if (markerRef.current?.getElement().isConnected) markerRef.current.remove()
+      hasCenteredRef.current = false
+      return
+    }
+    if (!markerRef.current) return
     if (!markerRef.current.getElement().isConnected) {
       // Marker.addTo() reads the marker's position immediately, so it must already have
       // one — attach it here, before any of the branches below, all of which assume the
@@ -300,8 +309,11 @@ export function FlightMap({
   const mapControlButtonClassName = 'bg-popover/85 backdrop-blur-sm hover:bg-popover'
 
   return (
-    <div className="relative">
-      <div ref={mapContainerRef} className="h-[500px] w-full overflow-hidden rounded-xl border border-border" />
+    <div className="relative h-full">
+      <div
+        ref={mapContainerRef}
+        className="h-full min-h-64 w-full overflow-hidden rounded-xl border border-border"
+      />
       <div className="absolute top-3 right-3 flex flex-col gap-1.5">
         {live && (
           <Button
@@ -340,11 +352,13 @@ export function FlightMap({
           <ZoomOut />
         </Button>
       </div>
-      <div className="absolute bottom-3 left-3 rounded-full border border-border bg-popover/85 px-3 py-1 font-mono text-xs text-popover-foreground backdrop-blur-sm">
-        Speed: {telemetry ? `${Math.round(msToKt(telemetry.indicatedAirspeedMs))} kt` : 'N/A'} · Altitude:{' '}
-        {telemetry ? `${Math.round(mToFt(telemetry.altitudeM)).toLocaleString()} ft` : 'N/A'} · Heading:{' '}
-        {telemetry ? `${Math.round(telemetry.headingTrueDeg)}°` : 'N/A'}
-      </div>
+      {live && (
+        <div className="absolute bottom-3 left-3 rounded-full border border-border bg-popover/85 px-3 py-1 font-mono text-xs text-popover-foreground backdrop-blur-sm">
+          Speed: {telemetry ? `${Math.round(msToKt(telemetry.indicatedAirspeedMs))} kt` : 'N/A'} · Altitude:{' '}
+          {telemetry ? `${Math.round(mToFt(telemetry.altitudeM)).toLocaleString()} ft` : 'N/A'} · Heading:{' '}
+          {telemetry ? `${Math.round(telemetry.headingTrueDeg)}°` : 'N/A'}
+        </div>
+      )}
     </div>
   )
 }
