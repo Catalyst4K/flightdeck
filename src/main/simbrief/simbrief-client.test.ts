@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchLatestOfp } from './simbrief-client'
+import { computeStepClimbs, fetchLatestOfp } from './simbrief-client'
 
 // Minimal fixture using the real field names/shape verified against a live SimBrief OFP
 // response (see docs note in simbrief-client.ts) — not real personal flight data.
@@ -56,6 +56,25 @@ describe('fetchLatestOfp', () => {
       { ident: 'BPK', altitudeFt: 4000, distanceNm: 5 },
       { ident: 'VHHH', altitudeFt: 0, distanceNm: 20 }
     ])
+    expect(ofp.stepClimbs).toEqual([])
+  })
+
+  it('surfaces a step climb from real-shaped navlog fixes with a stage field', async () => {
+    const withStage = fixture('kgs') as { navlog: { fix: Record<string, unknown>[] } }
+    withStage.navlog.fix = [
+      { ident: 'BPK', altitude_feet: '4000', distance: '5', stage: 'CLB' },
+      { ident: 'MID1', altitude_feet: '35000', distance: '400', stage: 'CRZ' },
+      { ident: 'MID2', altitude_feet: '37000', distance: '900', stage: 'CRZ' },
+      { ident: 'VHHH', altitude_feet: '0', distance: '20', stage: 'DSC' }
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => withStage }))
+    )
+
+    const ofp = await fetchLatestOfp('LandingHangar711')
+
+    expect(ofp.stepClimbs).toEqual([{ atIdent: 'MID2', fromAltitudeFt: 35000, toAltitudeFt: 37000 }])
   })
 
   it('converts weights when the SimBrief profile uses lbs', async () => {
@@ -85,5 +104,62 @@ describe('fetchLatestOfp', () => {
       vi.fn(async () => ({ ok: false, status: 400, json: async () => ({}) }))
     )
     await expect(fetchLatestOfp('nobody')).rejects.toThrow('400')
+  })
+})
+
+// NOT YET VERIFIED against a real SimBrief response — see the caveat comment on
+// computeStepClimbs in simbrief-client.ts. These lock in the *intended* behavior
+// (CRZ-to-CRZ altitude increases only) so a future correction has a clear spec to
+// change deliberately, not silently.
+describe('computeStepClimbs', () => {
+  it('finds no step climbs for a single cruise altitude', () => {
+    const fixes = [
+      { ident: 'A', altitudeFt: 10000, stage: 'CLB' },
+      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' },
+      { ident: 'C', altitudeFt: 35000, stage: 'CRZ' },
+      { ident: 'D', altitudeFt: 10000, stage: 'DSC' }
+    ]
+    expect(computeStepClimbs(fixes)).toEqual([])
+  })
+
+  it('finds a single step climb between two CRZ fixes', () => {
+    const fixes = [
+      { ident: 'A', altitudeFt: 10000, stage: 'CLB' },
+      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' },
+      { ident: 'C', altitudeFt: 37000, stage: 'CRZ' },
+      { ident: 'D', altitudeFt: 10000, stage: 'DSC' }
+    ]
+    expect(computeStepClimbs(fixes)).toEqual([{ atIdent: 'C', fromAltitudeFt: 35000, toAltitudeFt: 37000 }])
+  })
+
+  it('finds multiple step climbs in sequence', () => {
+    const fixes = [
+      { ident: 'A', altitudeFt: 33000, stage: 'CRZ' },
+      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' },
+      { ident: 'C', altitudeFt: 39000, stage: 'CRZ' }
+    ]
+    expect(computeStepClimbs(fixes)).toEqual([
+      { atIdent: 'B', fromAltitudeFt: 33000, toAltitudeFt: 35000 },
+      { atIdent: 'C', fromAltitudeFt: 35000, toAltitudeFt: 39000 }
+    ])
+  })
+
+  it('ignores the initial climb-out and the descent, even though both change altitude monotonically', () => {
+    const fixes = [
+      { ident: 'A', altitudeFt: 0, stage: 'CLB' },
+      { ident: 'B', altitudeFt: 20000, stage: 'CLB' },
+      { ident: 'C', altitudeFt: 35000, stage: 'CRZ' },
+      { ident: 'D', altitudeFt: 15000, stage: 'DSC' },
+      { ident: 'E', altitudeFt: 0, stage: 'DSC' }
+    ]
+    expect(computeStepClimbs(fixes)).toEqual([])
+  })
+
+  it('does not report a step climb for a descent step between two CRZ-labeled fixes', () => {
+    const fixes = [
+      { ident: 'A', altitudeFt: 37000, stage: 'CRZ' },
+      { ident: 'B', altitudeFt: 35000, stage: 'CRZ' }
+    ]
+    expect(computeStepClimbs(fixes)).toEqual([])
   })
 })
