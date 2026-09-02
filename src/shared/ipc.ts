@@ -249,6 +249,13 @@ export interface DispatchWaypoint {
   distanceNm: number
 }
 
+/** A planned mid-cruise altitude increase — see computeStepClimbs in simbrief-client.ts. */
+export interface DispatchStepClimb {
+  atIdent: string
+  fromAltitudeFt: number
+  toAltitudeFt: number
+}
+
 /** A freshly-fetched OFP, not yet saved as a Flight — the renderer confirms/picks the aircraft first. */
 export interface DispatchOfp {
   ofpId: string
@@ -269,6 +276,7 @@ export interface DispatchOfp {
   towKg: number
   ldwKg: number
   waypoints: DispatchWaypoint[]
+  stepClimbs: DispatchStepClimb[]
   ofpJson: string
   /** Fleet aircraft whose registration matches `aircraftRegistration`, if any. */
   matchedAircraftId: number | null

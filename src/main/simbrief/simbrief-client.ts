@@ -14,6 +14,13 @@
 
 const LB_PER_KG = 2.2046226218
 
+export interface SimBriefStepClimb {
+  /** Waypoint where the new, higher cruise altitude begins. */
+  atIdent: string
+  fromAltitudeFt: number
+  toAltitudeFt: number
+}
+
 export interface SimBriefOfp {
   ofpId: string
   aircraftIcaoType: string
@@ -34,6 +41,10 @@ export interface SimBriefOfp {
   towKg: number
   ldwKg: number
   waypoints: { ident: string; altitudeFt: number; distanceNm: number }[]
+  /** Planned mid-cruise altitude increases (see computeStepClimbs) — NOT yet verified
+   *  against a real SimBrief response (see the comment on computeStepClimbs below);
+   *  flag it if this comes out empty/wrong against a real fetched OFP. */
+  stepClimbs: SimBriefStepClimb[]
   /** The full response, stored verbatim per PLAN.md §5 ("Store the raw JSON"). */
   rawJson: string
 }
@@ -52,6 +63,32 @@ function str(value: unknown): string {
 
 function epochSecondsToIso(value: unknown): string {
   return new Date(num(value) * 1000).toISOString()
+}
+
+/**
+ * NOT YET VERIFIED against a real SimBrief response — SimBrief's JSON schema isn't
+ * documented anywhere (see the file header), and unlike every other field in this file
+ * this one hasn't been checked against a live fetch. Best-effort based on how SimBrief's
+ * own OFP text output derives its "PLANNED STEP CLIMBS" section: each navlog fix during
+ * the cruise phase carries a `stage` field ('CLB'/'CRZ'/'DSC' per public discussion of
+ * the schema), and a step climb is wherever cruise altitude increases between two CRZ
+ * fixes — deliberately restricted to CRZ-to-CRZ so the initial climb-out and the descent
+ * (both naturally monotonic altitude changes too) never get misread as step climbs. If
+ * this comes out empty or wrong against a real OFP, `stage` is the thing to re-check.
+ */
+export function computeStepClimbs(
+  fixes: { ident: string; altitudeFt: number; stage: string }[]
+): SimBriefStepClimb[] {
+  const climbs: SimBriefStepClimb[] = []
+  let cruiseAltitudeFt: number | null = null
+  for (const fix of fixes) {
+    if (fix.stage !== 'CRZ') continue
+    if (cruiseAltitudeFt !== null && fix.altitudeFt > cruiseAltitudeFt) {
+      climbs.push({ atIdent: fix.ident, fromAltitudeFt: cruiseAltitudeFt, toAltitudeFt: fix.altitudeFt })
+    }
+    cruiseAltitudeFt = fix.altitudeFt
+  }
+  return climbs
 }
 
 export async function fetchLatestOfp(username: string): Promise<SimBriefOfp> {
@@ -105,6 +142,13 @@ export async function fetchLatestOfp(username: string): Promise<SimBriefOfp> {
       altitudeFt: num(fix.altitude_feet ?? 0),
       distanceNm: num(fix.distance ?? 0)
     })),
+    stepClimbs: computeStepClimbs(
+      fixes.map((fix) => ({
+        ident: str(fix.ident),
+        altitudeFt: num(fix.altitude_feet ?? 0),
+        stage: str(fix.stage)
+      }))
+    ),
     rawJson: JSON.stringify(raw)
   }
 }
