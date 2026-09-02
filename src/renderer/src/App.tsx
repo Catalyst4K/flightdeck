@@ -66,7 +66,12 @@ export default function App(): React.JSX.Element {
     // on app launch) already resolved before this component mounted — the push channel
     // below only delivers *future* changes, Electron doesn't replay missed IPC sends.
     window.flightdeck.getSimConnectionStatus().then(setSimStatus)
-    const unsubscribeStatus = window.flightdeck.onSimConnectionStatus(setSimStatus)
+    const unsubscribeStatus = window.flightdeck.onSimConnectionStatus((status) => {
+      setSimStatus(status)
+      // The sim stopped sending updates — clear the last-known values rather than
+      // leaving them frozen on screen (e.g. Track's map overlay) looking current.
+      if (status.state !== 'connected') setTelemetry(null)
+    })
     const unsubscribeTelemetry = window.flightdeck.onSimTelemetry(setTelemetry)
     return () => {
       unsubscribeStatus()
@@ -118,7 +123,7 @@ export default function App(): React.JSX.Element {
             <TrackView
               previewOfpJson={dispatchOfp?.ofpJson ?? null}
               telemetry={telemetry}
-              onFlightCancelled={() => {
+              onFlightEnded={() => {
                 setDispatchOfp(null)
                 setDispatchedOfpId(null)
               }}

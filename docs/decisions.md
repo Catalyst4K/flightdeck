@@ -477,3 +477,70 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   flight, load a different one" reload — and specifically flags TITLE/ATC ID changes,
   on the theory those might update immediately even if position/on-ground lag. Waiting
   on a real run against a live sim before designing the detector.
+- 2026-09-02: Ran the flight-reload spike against a live MSFS 2024 session (Heathrow
+  A320 → Hong Kong A350) and got a real answer, so built and shipped the auto-start
+  detector; deleted the spike script per its own comment. Findings: TITLE changes
+  instantly, but nothing else can be trusted off that alone. `onGround` flips `true`
+  ~30s before altitude catches up. Altitude itself doesn't monotonically settle — it
+  spikes to a garbage plateau (~53,800ft in this run) and *holds it rock-steady for
+  several consecutive seconds* before continuing to decay through more implausible
+  values, finally settling near real field elevation roughly 85-100s after TITLE first
+  changed. ATC ID did *not* change across this reload (same tail number both sides) so
+  it's not a usable signal; groundSpeed and engine-combustion stayed sane (0kt, off)
+  throughout. The dangerous part: a naive "onGround + unchanged from previous sample"
+  check would have false-fired during that mid-decay plateau — it looked exactly like a
+  settled aircraft for 4 straight ticks while sitting at 53,774ft.
+  `src/main/tracking/AutoStartDetector.ts` (new): armed by `flightCreate` right after a
+  flight is created (baseline = whatever telemetry looked like at that instant), fires
+  a `ready` event consumed by `main/index.ts` to call `trackingController.start()`
+  automatically. Requires 8 consecutive 1Hz samples that are all simultaneously: on the
+  ground, altitude under a 3000m/~9800ft plausibility ceiling (comfortably above all but
+  a handful of real-world airports, far below the reload's garbage plateaus), and
+  unchanged (position/altitude/groundspeed) from the immediately preceding sample — the
+  ceiling is what specifically defeats the mid-decay plateau trap. If a flight is
+  cancelled before it fires, `flightCancel` disarms it; if the user starts tracking
+  manually first, `trackingStart` disarms it too (a stale `ready` event would otherwise
+  hit `TrackingController.start()`'s "already tracking" guard — harmless, but disarming
+  is cheap and cleaner).
+
+  First revision also required an actual *disturbance* from the armed baseline (a TITLE
+  change, position reset to 0,0, or an implausible altitude jump) before it would start
+  counting stable samples at all, on the assumption a reload always happens after
+  arming. Callum caught this live within minutes: he'd already loaded into the Hong
+  Kong flight in MSFS *before* pressing Fly, so nothing ever changed post-arm and it
+  silently never fired. Removed that precondition — the reload-garbage rejection above
+  doesn't actually depend on it, it's carried entirely by the on-ground/ceiling/unchanged
+  checks. The trade-off: if the sim is left mid-transition from a *different* previous
+  flight (stale position at the wrong airport) for the full ~8s window right as Fly is
+  pressed, it could now start against that stale data — a narrower risk than the one
+  removed, and Dispatch's "Fly" confirmation dialog plus the manual "Start tracking"
+  button remain as guardrails. If nothing about the sim's state changes and it was
+  already implausible at arm time (e.g. not on the ground), it still just never fires;
+  "Start tracking" stays as the permanent manual fallback either way.
+- 2026-09-02: Confirmed turnaround flights (finish leg 1, save it, never leave the sim,
+  plan+Fly leg 2 for the return) work with the auto-start detector as-is — there's no
+  reload discontinuity to filter out in this case, so the already-stable telemetry at
+  the gate satisfies the detector almost immediately once armed. Found and fixed one
+  real gap while checking: `TrackView.tsx`'s `onTrackingPoint` handler set `active` to
+  `{flightId, phase: 'shutdown'}` even for the point that triggers auto-completion, and
+  never cleared it afterward — only the manual "Cancel flight"/"Finish & save" buttons
+  called `setActive(null)`. For a single flight this self-healed the moment the page
+  remounted (its mount effect re-fetches real state via `trackingGetActive`), but a
+  turnaround pilot has no reason to ever leave the Track page between legs, so the
+  "Tracking BAW31 — phase: shutdown" banner (with live Cancel/Finish buttons for a
+  flight the backend had already completed) would sit there stuck through the whole
+  gap. Now a shutdown point calls `setActive(null)` directly instead of setting the
+  stale shutdown state at all.
+- 2026-09-02: Callum reported the map's plane icon and breadcrumb trail stayed visible
+  after cancelling an active flight (and quitting MSFS entirely) — turned out to be two
+  bugs stacked. `TrackView.tsx`'s `trackPoints` state was never cleared on *any* of the
+  three ways tracking stops (Cancel, Finish & save, or the shutdown-detection
+  auto-complete path just fixed above) — all three now `setTrackPoints([])`. Separately,
+  `FlightMap.tsx`'s live-mode effect keyed entirely off `trackPoints[length - 1]`: when
+  that's empty it just returned early, never actually clearing the previously-drawn
+  breadcrumb line or removing the marker from the map — so even with `trackPoints`
+  correctly reset, the map would've kept showing the last-drawn position forever. Now an
+  empty `trackPoints` explicitly clears the trail source and calls `marker.remove()`,
+  and also resets `hasCenteredRef` so the *next* flight's first point does a clean
+  `jumpTo` again instead of animating an `easeTo` across the map from the stale leftover
+  position — directly relevant to the turnaround workflow this was found while testing.

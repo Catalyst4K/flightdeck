@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { ActiveTracking, Aircraft, Flight, SimTelemetry, TrackPoint } from '@shared/ipc'
 import {
@@ -45,10 +45,12 @@ export function TrackView(props: {
   previewOfpJson?: string | null
   /** Live sim telemetry, shown as a small overlay on the map. */
   telemetry?: SimTelemetry | null
-  /** Called after a flight (active or planned) is cancelled here, so Dispatch's
-   *  persisted OFP reference — which otherwise survives independently of this — can be
-   *  cleared too rather than going on claiming to reference an abandoned flight. */
-  onFlightCancelled?: () => void
+  /** Called whenever a flight stops being current here — cancelled (active or planned),
+   *  finished manually, or auto-completed via shutdown detection — so Dispatch's
+   *  persisted OFP reference (which otherwise survives independently of this) can be
+   *  cleared too, rather than going on claiming to reference a flight that's no longer
+   *  in progress. */
+  onFlightEnded?: () => void
 }): React.JSX.Element {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [flights, setFlights] = useState<Flight[]>([])
@@ -56,6 +58,12 @@ export function TrackView(props: {
   const [trackPoints, setTrackPoints] = useState<TrackPoint[]>([])
   const [starting, setStarting] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
+  const [completedLabel, setCompletedLabel] = useState<string | null>(null)
+  // The onTrackingPoint listener below is registered once on mount, so it closes over
+  // whatever `flights`/`props.onFlightEnded` were at that time — refs kept in step with
+  // the real values let it use both without going stale.
+  const flightsRef = useRef<Flight[]>([])
+  const onFlightEndedRef = useRef(props.onFlightEnded)
 
   function reload(): Promise<void> {
     return Promise.all([window.flightdeck.aircraftList(), window.flightdeck.flightList()]).then(
@@ -67,17 +75,37 @@ export function TrackView(props: {
   }
 
   useEffect(() => {
+    flightsRef.current = flights
+  }, [flights])
+
+  useEffect(() => {
+    onFlightEndedRef.current = props.onFlightEnded
+  }, [props.onFlightEnded])
+
+  useEffect(() => {
     reload()
     window.flightdeck.trackingGetActive().then((a) => {
       setActive(a)
       if (a) window.flightdeck.trackPointList(a.flightId).then(setTrackPoints)
     })
     const unsubscribe = window.flightdeck.onTrackingPoint((point) => {
-      setActive({ flightId: point.flightId, phase: point.phase })
+      if (point.phase === 'shutdown') {
+        // Auto-completed (as opposed to a manual "Finish & save") — clear the banner and
+        // the map's trail immediately rather than leaving them showing a flight the
+        // backend already completed. Matters most for a turnaround: staying on this page
+        // between legs means there's no page remount to accidentally paper over it.
+        const completed = flightsRef.current.find((f) => f.id === point.flightId)
+        setCompletedLabel(completed?.flightNumber ?? `Flight #${point.flightId}`)
+        setActive(null)
+        setTrackPoints([])
+        reload()
+        onFlightEndedRef.current?.()
+        return
+      }
       setTrackPoints((current) =>
         current.length && current[0].flightId !== point.flightId ? [point] : [...current, point]
       )
-      if (point.phase === 'shutdown') reload()
+      setActive({ flightId: point.flightId, phase: point.phase })
     })
     return unsubscribe
   }, [])
@@ -104,16 +132,19 @@ export function TrackView(props: {
       if (action.kind === 'cancel-active') {
         await window.flightdeck.trackingStop()
         setActive(null)
+        setTrackPoints([])
         await reload()
-        props.onFlightCancelled?.()
+        props.onFlightEnded?.()
       } else if (action.kind === 'finish') {
         await window.flightdeck.trackingFinish()
         setActive(null)
+        setTrackPoints([])
         await reload()
+        props.onFlightEnded?.()
       } else {
         await window.flightdeck.flightCancel(action.id)
         await reload()
-        props.onFlightCancelled?.()
+        props.onFlightEnded?.()
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -156,7 +187,7 @@ export function TrackView(props: {
   const waypoints = previewFlight ? flightWaypoints : dispatchPreviewWaypoints
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex h-full flex-col gap-4">
       <h1 className="font-heading text-2xl font-semibold text-foreground">Track</h1>
 
       {active ? (
@@ -168,7 +199,7 @@ export function TrackView(props: {
                 aircraft={aircraft.find((a) => a.id === activeFlight?.aircraftId)}
               />
               <span className="text-sm text-muted-foreground">
-                — phase: <span className="font-mono">{active.phase}</span>
+                Phase: <span className="font-mono capitalize">{active.phase}</span>
               </span>
             </div>
             <div className="flex gap-2">
@@ -239,7 +270,9 @@ export function TrackView(props: {
         </div>
       )}
 
-      <FlightMap live route={route} waypoints={waypoints} trackPoints={trackPoints} telemetry={props.telemetry} />
+      <div className="min-h-0 flex-1">
+        <FlightMap live route={route} waypoints={waypoints} trackPoints={trackPoints} telemetry={props.telemetry} />
+      </div>
 
       <AlertDialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
         <AlertDialogContent>
@@ -255,6 +288,20 @@ export function TrackView(props: {
             >
               {confirmAction?.kind === 'finish' ? 'Finish & save' : 'Cancel flight'}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={completedLabel !== null} onOpenChange={(open) => !open && setCompletedLabel(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Flight ended</AlertDialogTitle>
+            <AlertDialogDescription>
+              {completedLabel} was automatically detected as complete and saved to your logbook.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setCompletedLabel(null)}>OK</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
