@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
+  type AltitudeUnit,
   type DispatchOpenSimBriefParams,
   type FlightdeckApi,
   type NewAircraft,
@@ -41,6 +42,8 @@ const api: FlightdeckApi = {
     ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username),
   settingsGetWeightUnit: () => ipcRenderer.invoke(IpcChannels.settingsGetWeightUnit),
   settingsSetWeightUnit: (unit: WeightUnit) => ipcRenderer.invoke(IpcChannels.settingsSetWeightUnit, unit),
+  settingsGetAltitudeUnit: () => ipcRenderer.invoke(IpcChannels.settingsGetAltitudeUnit),
+  settingsSetAltitudeUnit: (unit: AltitudeUnit) => ipcRenderer.invoke(IpcChannels.settingsSetAltitudeUnit, unit),
   trackingStart: (flightId: number) => ipcRenderer.invoke(IpcChannels.trackingStart, flightId),
   trackingStop: () => ipcRenderer.invoke(IpcChannels.trackingStop),
   trackingFinish: () => ipcRenderer.invoke(IpcChannels.trackingFinish),
