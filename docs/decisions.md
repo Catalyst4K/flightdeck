@@ -955,3 +955,30 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   guard captured only the bounce's first touchdown (matching the spike's harder-touchdown
   numbers exactly) and produced exactly one `landing` row, not two. Full write-up:
   `docs/simconnect-notes.md`.
+- 2026-09-03: **Fixed a real auto-start-tracking bug Callum hit live**: pressing "Fly" in
+  Dispatch while MSFS was still sitting on its flight-picker/World Map screen armed
+  `AutoStartDetector` against that menu's own live background scene — parked, on the
+  ground, perfectly stationary (Callum's case: sitting at Boeing Field) — which every
+  existing check (on ground, altitude sane, position/altitude unchanging) accepts just as
+  readily as a genuinely parked, armed flight. It fired there, then the real load-in
+  teleported the aircraft to the actual departure airport, recording one breadcrumb trail
+  straight across the globe between the two.
+  - **Fix**: `AutoStartDetector.arm()` now takes the armed flight's `depIcao` and resolves
+    a rough anchor position for it from the already-vendored runway data (new
+    `resolveAirportPosition`/`airportPosition` in `runway-lookup.ts` — the mean of that
+    airport's runway-end thresholds, not a precise position). `isStableStep` rejects a
+    sample more than ~1.1° away from that anchor, which comfortably separates any two real
+    airports without needing precision. When the departure airport isn't in the vendored
+    runway data at all, the check is skipped entirely — same behavior as before this
+    existed, rather than silently refusing to ever auto-start for that airport.
+  - This is exactly the risk the class's own doc comment had already named and accepted as
+    a narrower trade-off (a stale position from a *different* previous flight) — it turned
+    out to be broader in practice, since MSFS's own menu counts as "a different flight"
+    too. Doesn't require reintroducing the earlier "needs a disturbance from the armed
+    baseline first" precondition that was deliberately dropped (it didn't fit Callum's
+    normal "load the flight in MSFS, then press Fly" order) — the departure-position check
+    is orthogonal to that and catches this case without it.
+  - Not caught by this fix, and not worth chasing: two airports that happen to be within
+    the coarse ~1.1° threshold of each other. Dispatch's "Fly" confirmation dialog and the
+    manual "Start tracking" button remain the guardrails for whatever this narrower
+    residual risk still misses.
