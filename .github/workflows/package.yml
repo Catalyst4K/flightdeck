@@ -32,6 +32,14 @@ jobs:
       - run: npm ci
       - name: Build renderer/main/preload
         run: npm run build
+        env:
+          # Application-level SimBrief key, baked into this build (docs/decisions.md,
+          # docs/plans/simbrief-plan-generation.md) — set as a repo secret, never in
+          # source. This workflow only runs on push-to-main or manual dispatch, never on
+          # pull_request, so this never runs against a fork's code (CLAUDE.md's Security
+          # section). A build with the secret unset still succeeds — the app just falls
+          # back to the existing keyless/user-supplied-key paths, not a build failure.
+          MAIN_VITE_SIMBRIEF_API_KEY: ${{ secrets.SIMBRIEF_API_KEY }}
       - name: Package (Windows)
         if: runner.os == 'Windows'
         run: npx electron-builder --win --publish=never

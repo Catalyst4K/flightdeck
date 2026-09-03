@@ -55,37 +55,66 @@ that shape the implementation):
   entire time the generation popup is up — so the popup closing never brings that count to
   zero. No change needed to the app's existing window-lifecycle handling; just don't
   register a second, conflicting `window-all-closed` listener.
-- **Login persistence works, once the process survives long enough to flush it.** The
-  spike's first run appeared not to save the login — actually a symptom of the bug above
-  (the whole process got killed the instant the window closed, likely before the session
-  cookie write finished). Once that was fixed, the second run completed the full
-  login-through-generation flow in one go. Electron's default session is disk-backed
-  under the app's `userData` directory by default; nothing extra needs building for this
-  as long as the popup is a normal window in the app's default session (not a fresh
-  in-memory partition).
+- **Login does not persist across a process restart — confirmed live, correcting an
+  earlier wrong guess.** The original spike write-up guessed the first run's re-prompt was
+  just the process dying before a cookie flush completed, and that fixing that bug would
+  make login "stick" between runs. A follow-up check disproved that: after a completed,
+  successful generation, a **fresh navigation to simbrief.com in the same persisted
+  session** showed zero cookies for that domain and a fully logged-out homepage — not a
+  timing bug, but session-scoped auth that doesn't survive a restart at all. (This checked
+  SimBrief's own ordinary public website, not the restricted developer package — no
+  concern there.) Practical effect: within one continuous run of the app, a second
+  Generate click may skip the login screen; a full app restart should assume it won't.
+  Nothing to build differently for this — just don't design around "login happens once,
+  ever," and see the Settings section below for why the username still has to be entered
+  directly rather than derived from a login.
 
-## Credential storage — agreed with Callum 2026-09-03, recorded in `docs/decisions.md`
+## Credential storage — revised 2026-09-03, recorded in `docs/decisions.md`
 
-The API key goes in the existing `app_setting` key/value table, entered via a masked
-Settings field — the same pattern `simbriefUsername` already uses. An OS-native
-credential store was considered and set aside: it's a new dependency (supply-chain
-scrutiny CLAUDE.md already flags) that would make this one setting behave differently
-from every other one, for a local-only single-user app where the SQLite DB is already the
-trust boundary.
+**Superseded the original per-user Settings design below the same day it was built.**
+First shipped as a masked Settings field (`app_setting` table, same pattern as
+`simbriefUsername`) — reasonable as a first cut, but wrong for how this app is actually
+distributed. Re-reading the mechanism: **the API key doesn't identify who's generating a
+plan — the pilot's own interactive SimBrief login in the popup does that.** The key only
+authorizes a request as coming from a registered application. That's the same shape as
+the original VA-website use case the SimBrief package was built for: one VA, one key,
+many different pilots each logging into their own account. Flightdeck fits that shape
+too — it's one freely-distributed application, not a hosted multi-tenant service, and the
+email requesting the key (see `docs/decisions.md`) already disclosed the eventual public
+release and got the key anyway.
+
+So the key is **application-level, baked in at build time, not stored per-user or exposed
+in Settings at all**: `MAIN_VITE_SIMBRIEF_API_KEY` (`.env.example`, loaded via
+electron-vite's `MAIN_VITE_` prefix — see `src/main/vite-env.d.ts` for the `import.meta.env`
+typing), read once as `simbrief-generate.ts`'s exported `BUILT_IN_API_KEY`. A real,
+distributed binary means the key is technically extractable regardless (encrypting it
+would just ship the decryption method alongside it — not a real protection), but that's a
+materially smaller risk than the alternative of running a server to broker it, which
+would be a new "introduces a server" decision in its own right (CLAUDE.md) — not needed
+here since the key genuinely isn't a secret tied to any one person's identity.
+
+The per-user Settings field, its `app_setting` row, and the three-file IPC lockstep that
+backed it were all removed as soon as the built-in key replaced them — no dead
+half-supported path left behind.
 
 ## Implementation
 
-### 1. Settings: SimBrief API key
+### 1. Settings: username and a Navigraph login button (no API key field)
 
-- `src/main/db/settings-repo.ts`: `getSimbriefApiKey`/`setSimbriefApiKey`, mirroring
-  `getSimbriefUsername`/`setSimbriefUsername` exactly (same `app_setting` key/value
-  shape, new key e.g. `simbriefApiKey`).
-- `src/shared/ipc.ts` → `preload/index.ts` → `src/main/index.ts`: new IPC channels
-  `settingsGetSimbriefApiKey`/`settingsSetSimbriefApiKey`, same lockstep as every other
-  setting.
-- `SettingsView.tsx`: a masked (`type="password"`) input next to the existing SimBrief
-  username field, with a "Clear" action. Never logged, never echoed back unmasked once
-  saved — same expectation CLAUDE.md already sets for the Navigraph tokens note.
+**Auto-deriving the username from a login was tried and doesn't work** — checked live
+(see above): no persistent, scrapable "logged in" state exists after a generation
+completes. So the username field stays exactly as it is today (`simbriefUsername`,
+manually entered, still the only thing `fetchLatestOfp`/"Fetch latest OFP" needs — that
+feature is unrelated to login and isn't changing).
+
+- **No Settings field for the API key** — it's built into the app (see Credential
+  storage above), not something a user sets.
+- **"Log in to Navigraph" button**, next to the username field. Opens the same kind of
+  `BrowserWindow` the generation flow uses, pointed at a plain login URL (no generation
+  request attached), so the pilot can authenticate ahead of time and — within that same
+  app run only, per the finding above — Generate won't need to show a login screen. Purely
+  a convenience; nothing else in the app depends on this having been clicked first, since
+  the generation window handles its own login inline regardless.
 
 ### 2. Main process: trigger + await generation
 
@@ -122,13 +151,16 @@ this one owns a `BrowserWindow` and has real side effects:
 
 ### 4. Renderer
 
-- `DispatchView.tsx`'s "Plan a flight" panel: a "Generate…" button alongside the existing
-  "Plan on SimBrief…" one, enabled only when a SimBrief API key is saved (checked via a
-  new settings-get call on mount, same pattern as `useLandingThresholds`). Clicking it
-  shows a loading state ("Generating — check the SimBrief window") until the IPC call
-  resolves, then runs the same fetch-and-match flow "Fetch latest OFP" already runs.
-- The existing "Plan on SimBrief…" (external browser) button stays, unconditionally —
-  the fallback for no key, and simply a user preference either way.
+- `DispatchView.tsx`'s "Plan a flight" panel: **"Generate…" replaces "Plan on
+  SimBrief…"** as the primary button whenever generation is available (checked via
+  `dispatchGenerationAvailable` on mount, which just reflects whether this build has a
+  built-in key — true for any normal build). Clicking it shows a loading state until the
+  IPC call resolves, then runs the same fetch-and-match flow "Fetch latest OFP" already
+  runs.
+- **"Plan on SimBrief…" (external browser) only reappears as a fallback** for a build
+  with no key baked in — e.g. built from source with no `.env` configured — so Dispatch
+  never has zero ways to create a plan. Not a user preference toggle; whichever one
+  applies is chosen automatically.
 
 ## Not in this plan
 
@@ -157,7 +189,9 @@ this one owns a `BrowserWindow` and has real side effects:
 - `npm run typecheck && npm run lint && npm test` — new unit coverage for the
   this-path-specific date-building helper (distinct from `dispatch-time.ts`'s existing
   tests), same rigor as that file's own UTC/rollover cases.
-- Live: save a real API key in Settings, pick a fleet aircraft with a known airline,
-  click Generate, confirm the popup opens, log in if prompted, confirm the app
-  automatically shows the generated OFP once the window closes with no extra clicks.
-  Run it a second time in the same session to confirm the saved login carries over.
+- Live: with `.env` set locally (or a packaged build with the CI secret configured),
+  pick a fleet aircraft with a known airline, click Generate, confirm the popup opens, log
+  in if prompted, confirm the app automatically shows the generated OFP once the window
+  closes with no extra clicks. Run it a second time in the same session to confirm the
+  saved login carries over within one run (see the login-persistence finding above for
+  why it won't across a restart).

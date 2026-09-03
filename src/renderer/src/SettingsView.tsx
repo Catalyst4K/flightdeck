@@ -37,6 +37,7 @@ export function SettingsView(props: {
   onAltitudeUnitChange: (unit: AltitudeUnit) => void
 }): React.JSX.Element {
   const [simbriefUsername, setSimbriefUsername] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
   const [importingAircraft, setImportingAircraft] = useState(false)
   const [importingLogbook, setImportingLogbook] = useState(false)
   const [gsx, setGsx] = useState<GsxSettings>({ enabled: false, folderPath: null })
@@ -72,6 +73,15 @@ export function SettingsView(props: {
     event.preventDefault()
     await window.flightdeck.settingsSetSimbriefUsername(simbriefUsername.trim())
     toast.success('SimBrief username saved.')
+  }
+
+  async function handleLoginToNavigraph(): Promise<void> {
+    setLoggingIn(true)
+    try {
+      await window.flightdeck.dispatchLoginSimbrief()
+    } finally {
+      setLoggingIn(false)
+    }
   }
 
   async function handleImportAircraft(): Promise<void> {
@@ -166,9 +176,9 @@ export function SettingsView(props: {
       <Card className="max-w-sm">
         <CardHeader>
           <CardTitle>Credentials</CardTitle>
-          <CardDescription>Used by Dispatch to fetch your latest OFP from SimBrief.</CardDescription>
+          <CardDescription>Used by Dispatch to fetch and generate plans on SimBrief.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           <form onSubmit={handleSaveSimbriefUsername} className="flex items-end gap-2">
             <Label className="flex flex-1 flex-col items-start gap-1.5">
               SimBrief username
@@ -182,6 +192,15 @@ export function SettingsView(props: {
               Save
             </Button>
           </form>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              Pre-authenticates plan generation for this app session. Doesn't persist across
+              a restart, and Generate will prompt for login inline if you skip this.
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={handleLoginToNavigraph} disabled={loggingIn}>
+              {loggingIn ? 'Logging in…' : 'Log in to Navigraph'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

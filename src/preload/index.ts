@@ -44,6 +44,10 @@ const api: FlightdeckApi = {
   settingsGetSimbriefUsername: () => ipcRenderer.invoke(IpcChannels.settingsGetSimbriefUsername),
   settingsSetSimbriefUsername: (username: string) =>
     ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username),
+  dispatchGenerateOfp: (params: DispatchOpenSimBriefParams) =>
+    ipcRenderer.invoke(IpcChannels.dispatchGenerateOfp, params),
+  dispatchLoginSimbrief: () => ipcRenderer.invoke(IpcChannels.dispatchLoginSimbrief),
+  dispatchGenerationAvailable: () => ipcRenderer.invoke(IpcChannels.dispatchGenerationAvailable),
   settingsGetWeightUnit: () => ipcRenderer.invoke(IpcChannels.settingsGetWeightUnit),
   settingsSetWeightUnit: (unit: WeightUnit) => ipcRenderer.invoke(IpcChannels.settingsSetWeightUnit, unit),
   settingsGetAltitudeUnit: () => ipcRenderer.invoke(IpcChannels.settingsGetAltitudeUnit),

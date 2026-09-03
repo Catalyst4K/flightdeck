@@ -78,6 +78,8 @@ export function DispatchView(props: {
   // they fill in the rest of the form.
   const [departureUtc, setDepartureUtc] = useState<Date | null>(null)
   const [fetching, setFetching] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [generationAvailable, setGenerationAvailable] = useState(false)
   const [saving, setSaving] = useState(false)
   // Set only when Fly would abandon a flight Track already has in progress — see
   // handleFlyClick. Holds the warning text to show; null means no confirmation needed.
@@ -90,6 +92,7 @@ export function DispatchView(props: {
   useEffect(() => {
     window.flightdeck.aircraftList().then(setAircraft)
     window.flightdeck.logbookFleetStats().then(setFleetStats)
+    window.flightdeck.dispatchGenerationAvailable().then(setGenerationAvailable)
     // Source list for the advanced dialog's "Load settings from a previous flight" —
     // flightList already returns newest-first (docs/decisions.md).
     window.flightdeck.flightList().then(setPastFlights)
@@ -125,41 +128,73 @@ export function DispatchView(props: {
     })
   }
 
+  // Shared by handleFetch and handleGenerate — both end up with a DispatchOfp and need
+  // to run the same matched-aircraft / airframe-capture logic on it.
+  function applyFetchedOfp(fetched: DispatchOfp): void {
+    props.onOfpChange(fetched)
+    // A flight already chosen in the "Plan a flight" panel above takes priority over the
+    // registration-match heuristic — that heuristic stays as a fallback for anyone who
+    // fetches without going through that panel first.
+    const aircraftId = selectedAircraftId ?? fetched.matchedAircraftId
+    setSelectedAircraftId(aircraftId)
+
+    const matched = aircraftId != null ? aircraft.find((a) => a.id === aircraftId) : undefined
+    if (matched) {
+      if (fetched.simbriefIsCustom && fetched.simbriefInternalId) {
+        // simbriefInternalId is only a real airframe ID (not a bare type code) when
+        // simbriefIsCustom is true — see the field's doc comment in simbrief-client.ts.
+        if (matched.simbriefAirframeId !== fetched.simbriefInternalId) {
+          setAirframeCapture({ aircraftId: matched.id, airframeId: fetched.simbriefInternalId })
+        }
+      } else if (matched.simbriefAirframeId) {
+        // The aircraft has a saved profile, but this plan didn't use it — either the ID
+        // is wrong or the plan was generated without it. Surface it rather than staying
+        // silent (docs/decisions.md, fleet-simbrief-airframe entry, "make a wrong ID
+        // visible").
+        toast.warning(
+          `This plan used SimBrief's default airframe, not ${matched.registration}'s saved profile (${matched.simbriefAirframeId}) — the saved ID may be wrong.`
+        )
+      }
+    }
+  }
+
   async function handleFetch(): Promise<void> {
     setFetching(true)
     props.onOfpChange(null)
     setAirframeCapture(null)
     try {
-      const fetched = await window.flightdeck.dispatchFetchOfp()
-      props.onOfpChange(fetched)
-      // A flight already chosen in the "Plan a flight" panel above takes priority over the
-      // registration-match heuristic — that heuristic stays as a fallback for anyone who
-      // fetches without going through that panel first.
-      const aircraftId = selectedAircraftId ?? fetched.matchedAircraftId
-      setSelectedAircraftId(aircraftId)
-
-      const matched = aircraftId != null ? aircraft.find((a) => a.id === aircraftId) : undefined
-      if (matched) {
-        if (fetched.simbriefIsCustom && fetched.simbriefInternalId) {
-          // simbriefInternalId is only a real airframe ID (not a bare type code) when
-          // simbriefIsCustom is true — see the field's doc comment in simbrief-client.ts.
-          if (matched.simbriefAirframeId !== fetched.simbriefInternalId) {
-            setAirframeCapture({ aircraftId: matched.id, airframeId: fetched.simbriefInternalId })
-          }
-        } else if (matched.simbriefAirframeId) {
-          // The aircraft has a saved profile, but this plan didn't use it — either the ID
-          // is wrong or the plan was generated without it. Surface it rather than staying
-          // silent (docs/decisions.md, fleet-simbrief-airframe entry, "make a wrong ID
-          // visible").
-          toast.warning(
-            `This plan used SimBrief's default airframe, not ${matched.registration}'s saved profile (${matched.simbriefAirframeId}) — the saved ID may be wrong.`
-          )
-        }
-      }
+      applyFetchedOfp(await window.flightdeck.dispatchFetchOfp())
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setFetching(false)
+    }
+  }
+
+  async function handleGenerate(): Promise<void> {
+    const selected = aircraft.find((a) => a.id === planAircraftId)
+    if (!selected || !depIcao || !destIcao) return
+    setGenerating(true)
+    props.onOfpChange(null)
+    setAirframeCapture(null)
+    try {
+      const generated = await window.flightdeck.dispatchGenerateOfp({
+        origIcao: depIcao,
+        destIcao,
+        icaoType: selected.icaoType,
+        simbriefAirframeId: selected.simbriefAirframeId,
+        simbriefType: selected.simbriefType,
+        airlineIcao: airlineIcao || null,
+        flightNumber: flightNumber || null,
+        departure: departureUtc ? toSimBriefDeparture(departureUtc) : null,
+        extra: dispatchOptionsToUrlParams(dispatchOptions)
+      })
+      applyFetchedOfp(generated)
+      toast.success('Plan generated.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -323,14 +358,28 @@ export function DispatchView(props: {
                 />
               </Label>
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  className="flex-1"
-                  onClick={handleOpenSimBrief}
-                  disabled={planAircraftId == null || !depIcao || !destIcao}
-                >
-                  Plan on SimBrief…
-                </Button>
+                {generationAvailable ? (
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    onClick={handleGenerate}
+                    disabled={planAircraftId == null || !depIcao || !destIcao || generating}
+                  >
+                    {generating ? 'Generating…' : 'Generate…'}
+                  </Button>
+                ) : (
+                  // Fallback for a build with no SimBrief API key available at all (e.g.
+                  // built from source without .env set up) — Dispatch would otherwise have
+                  // no way to create a plan.
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    onClick={handleOpenSimBrief}
+                    disabled={planAircraftId == null || !depIcao || !destIcao}
+                  >
+                    Plan on SimBrief…
+                  </Button>
+                )}
                 <Button type="button" variant="outline" onClick={() => setAdvancedOpen(true)}>
                   Advanced{countSetOptions(dispatchOptions) > 0 ? ` (${countSetOptions(dispatchOptions)})` : ''}
                 </Button>
@@ -347,7 +396,7 @@ export function DispatchView(props: {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button type="button" variant="outline" size="sm" onClick={handleFetch} disabled={fetching}>
+              <Button type="button" variant="outline" size="sm" onClick={handleFetch} disabled={fetching || generating}>
                 {fetching ? 'Fetching…' : 'Fetch latest OFP'}
               </Button>
             </CardContent>

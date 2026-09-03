@@ -943,3 +943,49 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     research and the credential decision; the actual "Generate" button is a separate
     plan (`plan/simbrief-plan-generation`, design doc first per this file's own workflow),
     since the key didn't exist when the six other 2026-09-03 plans were scoped.
+- 2026-09-03: Built the real "Generate" feature from the plan above (`plan/simbrief-plan-
+  generation`) — Dispatch can now trigger a real SimBrief generation from a visible popup
+  window and auto-fetch the result, reusing the existing `fetchLatestOfp`/matched-aircraft
+  logic. **Superseded this same day's earlier credential-storage decision** (masked
+  Settings field, per-user key) with an application-level built-in key instead — recorded
+  here rather than silently editing the earlier entry, since both the reasoning and the
+  reversal are worth keeping visible.
+  - **Why the reversal**: re-reading the mechanism showed the API key doesn't identify
+    *who's* generating a plan — the pilot's own interactive SimBrief login in the popup
+    does that. The key only authorizes a request as coming from a registered application,
+    the same shape as the original VA-website use case the SimBrief package assumes: one
+    VA, one key, many pilots each logging into their own account. Flightdeck fits that
+    shape (one freely-distributed app, not a hosted multi-tenant service), and the email
+    that requested the key already disclosed the eventual public/free release and got the
+    key issued anyway — real, if not 100%-explicit, grounding. SimToolkitPro (an
+    established, comparable MSFS companion app) was also cited as a working precedent for
+    one key serving all of an app's users.
+  - **Encryption was considered and rejected as a false solution**: any secret shipped
+    inside a distributed binary is extractable regardless of encryption, since the
+    decryption logic has to ship in the same binary to be usable at runtime — true for any
+    client-side app on any platform, not an Electron-specific weakness. The real
+    alternative (a server Callum operates, holding the key server-side, brokering every
+    request) was explicitly rejected for now: that's a new "introduces a server" decision
+    in its own right (this file's own rule), turning a local-first feature into one
+    depending on infrastructure Callum would have to run and pay for indefinitely, for a
+    key that isn't actually protecting anyone's individual identity in the first place.
+  - **Mechanics**: `MAIN_VITE_SIMBRIEF_API_KEY` in `.env` (gitignored, `.env.example`
+    committed as the template) — loaded via electron-vite's `MAIN_VITE_` prefix, inlined
+    into the compiled main-process bundle at build time (confirmed by grepping the built
+    `out/main/index.js`: the source identifier is gone post-build, replaced by the literal
+    value). CI packaging (`.github/workflows/package.yml`) reads it from a `SIMBRIEF_API_KEY`
+    repo secret — safe because that workflow only runs on push-to-main or manual dispatch,
+    never on `pull_request`, so it never runs against a fork's code.
+  - **Removed, not left half-supported**: the per-user Settings API key field, its
+    `app_setting` row/getter/setter, and the three-file IPC lockstep behind it — all
+    deleted the same day, once the built-in key replaced them, rather than left as dead
+    code alongside the new path.
+  - **"Generate…" now replaces "Plan on SimBrief…"** as Dispatch's primary button
+    whenever a built-in key is present (i.e. any normal build) — the external-browser flow
+    only reappears automatically as a fallback for a build with no key baked in (e.g. built
+    from source with no `.env`), so Dispatch is never left with zero ways to create a plan.
+  - Live-verified end to end: Generate opens the popup, completes a real login+generation,
+    and the app auto-fetches the result with no extra clicks — see
+    `docs/plans/simbrief-plan-generation.md` for the earlier per-mechanism findings (date
+    format, identifier scheme, the `window-all-closed` non-issue in production) that this
+    was built against.
