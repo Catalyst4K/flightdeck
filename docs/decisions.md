@@ -786,3 +786,33 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     string][]` from the renderer rather than growing per-field parameters itself — the
     renderer (where `dispatchOptionsToUrlParams` is unit-tested) computes the final,
     already-filtered pair list, and the handler stays a dumb pass-through appender.
+- 2026-09-03: **Implemented half of `plan/sid-star-selection`** — the fourth of six
+  `plan/*` branches, and the first one that's genuinely split by the Navigraph blocker
+  rather than sidestepping it entirely. That plan has two asks: (1) show the SID and STAR
+  as distinct, labelled segments of the route, and (2) pick a different, real, currently
+  valid procedure from a dropdown. Only (1) is built here — (2) needs Flightdeck's own
+  procedure data (Navigraph Digital Flight Data), which needs Navigraph API credentials
+  that are still pending. **`plan/sid-star-selection` branch is deliberately left
+  unmerged** as the record of the navdata-sync half's design, to pick up once credentials
+  arrive — nothing about it is stale, it just couldn't be built without them.
+  - The unblocked half turned out to need no inference at all: a fetched OFP already
+    states its chosen procedures outright (`general.sid_ident`/`star_ident`), and every
+    navlog fix says whether it belongs to a procedure and which one (`via_airway`,
+    corroborated by `is_sid_star`). `route.ts` gained `segmentWaypoints` (labels every
+    parsed waypoint `'sid' | 'enroute' | 'star'`) and `parseRouteProcedures` (the two
+    stated names, `{}`-guarded).
+  - **Two edge cases the segmentation rule has to get right, both confirmed against real
+    OFPs** (docs/simbrief-notes.md): the fix a SID terminates at carries `is_sid_star:
+    "0"` despite still belonging to the procedure (segmenting on `via_airway` alone, not
+    the flag, avoids a one-waypoint gap); and a STAR's transition handoff fix carries
+    `via_airway` = the *inbound enroute airway*, not the STAR's own name — so STAR
+    segmentation starts from the fix whose `ident` matches `star_trans` when one exists,
+    falling back to the first `via_airway === star_ident` match only when it doesn't.
+  - Surfaced in two places: Dispatch's Route section now shows "SID ___" / "STAR ___"
+    badges above the route string when either is set, and `FlightMap`'s waypoint pins are
+    colour-coded by segment (amber SID, purple STAR, grey enroute) — both Track and
+    Logbook get this automatically since they already render through the same
+    `parseWaypointsFromOfpJson`.
+  - This labels whichever procedure SimBrief already chose. There is still no way to
+    swap one out for a different valid one — that's entirely what part (2) is, and it's
+    the part still blocked.
