@@ -39,12 +39,26 @@ gh api -X PUT "repos/$REPO/automated-security-fixes" --silent
 # Push protection is the valuable half: it rejects a push containing a recognised
 # credential before it ever reaches GitHub, rather than telling you afterwards. Both are
 # free for public repositories.
+# Note: these calls send their body via `--input -`. gh's `--raw-field` sends the value as
+# a plain string, which the API rejects for nested objects and for a literal null — the
+# first version of this script got a 422 that way.
+#
+# `secret_scanning` is already on by default for public repos; push protection is not, and
+# it's the half that matters. Not enabled here: `secret_scanning_non_provider_patterns`,
+# which catches generic high-entropy strings as well as recognised provider formats. It
+# would plausibly catch a SimBrief or Navigraph credential that no provider pattern knows
+# about, but it also false-positives on things this repo legitimately contains (base64
+# blobs, hex identifiers), and a false positive in *push protection* blocks a real push.
+# Worth revisiting if a credential ever does slip through.
 echo "· Secret scanning + push protection"
-gh api -X PATCH "repos/$REPO" --silent \
-  --raw-field 'security_and_analysis={
+gh api -X PATCH "repos/$REPO" --silent --input - <<'JSON'
+{
+  "security_and_analysis": {
     "secret_scanning": { "status": "enabled" },
     "secret_scanning_push_protection": { "status": "enabled" }
-  }'
+  }
+}
+JSON
 
 # --- Private vulnerability reporting ----------------------------------------------------
 # Gives people a private channel to report a vulnerability, instead of the only option
@@ -56,17 +70,22 @@ gh api -X PUT "repos/$REPO/private-vulnerability-reporting" --silent
 # No force pushes, no branch deletion. enforce_admins stays false so the owner keeps an
 # escape hatch; the point is to prevent an accident, not to lock anyone out.
 echo "· Branch protection on main (block force-push and deletion)"
-gh api -X PUT "repos/$REPO/branches/main/protection" --silent \
-  --raw-field 'required_status_checks=null' \
-  --raw-field 'enforce_admins=false' \
-  --raw-field 'required_pull_request_reviews=null' \
-  --raw-field 'restrictions=null' \
-  --raw-field 'allow_force_pushes=false' \
-  --raw-field 'allow_deletions=false'
+gh api -X PUT "repos/$REPO/branches/main/protection" --silent --input - <<'JSON'
+{
+  "required_status_checks": null,
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+JSON
 
 # --- Housekeeping -----------------------------------------------------------------------
 echo "· Delete head branches after merge"
-gh api -X PATCH "repos/$REPO" --silent --field 'delete_branch_on_merge=true'
+gh api -X PATCH "repos/$REPO" --silent --input - <<'JSON'
+{ "delete_branch_on_merge": true }
+JSON
 
 echo
 echo "Done. Current state:"
