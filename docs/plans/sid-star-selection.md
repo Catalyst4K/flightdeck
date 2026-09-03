@@ -236,6 +236,18 @@ Log findings in a new `docs/navdata-notes.md`, mirroring the other two notes fil
   runway dropdown filters (not clears) the SID/STAR options rather than silently
   invalidating a selection the pilot already made.
 
+**Layout shipped ahead of schedule, 2026-09-03** — the six dropdowns exist today, in their
+own "Procedures" card under the "Plan a flight" card (`DispatchView.tsx`), autofilled from
+`parseRouteProcedures` (extended to also read `sid_trans`/`star_trans` and
+`api_params.origrwy`/`destrwy`) each time a new OFP comes in. **Each is still a single,
+disabled-until-populated option** — there is no alternate-procedure data source yet, so
+"changing" one currently means nothing beyond what's already selected. This is the layout
+half of this section only; the navdata-backed real alternatives, the filter-by-runway
+behaviour, and routing the selection through `applyProcedureOverride` (§3) are still
+blocked on Navigraph credentials as below. The inline SID/STAR badges that used to sit in
+the OFP card's Route section were removed in the same change, now that this card is where
+they live.
+
 ### 5. Map rendering (all four/six segments, not just a route line)
 
 Currently `FlightMap.tsx` draws one undifferentiated route line (plus, since the
