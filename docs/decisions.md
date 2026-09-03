@@ -677,3 +677,40 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     Source with a binary distribution isn't live. When the first release happens, the
     public repository satisfies §6(d) — but the release needs to *point* at it. Worth a
     source link in the release notes and in the app itself.
+- 2026-09-03: **Implemented `plan/simbrief-generation`** (flight number, departure time,
+  cost index on Dispatch's "Plan a flight" card) — the first of six `plan/*` branches
+  worked through this session. None of it needed the SimBrief/Navigraph API keys, which
+  are still pending: it builds entirely on the keyless prefill-URL redirect the app
+  already used for orig/dest/airframe, per that plan's own spike finding that the form
+  honours `airline`/`fltnum`/`date`/`deph`/`depm` too.
+  - Added `aircraft.operator_icao` (migration `0006_last_sauron.sql`) alongside the
+    existing `operator_iata` — IATA drives the airline logo, ICAO is what SimBrief's
+    `airline` parameter and a real callsign want, and neither derives from the other.
+    `AircraftForm`'s airline picker now stores both from one selection. Backfilled the
+    existing fleet via `scripts/backfill-operator-icao.ts` (`npm run
+    db:backfill-operator-icao`), matching stored IATA codes against the vendored airline
+    list; anything with a free-typed operator (no code to recover) is reported and left
+    alone rather than guessed.
+  - `src/renderer/src/dispatch-time.ts` is a pure module (no React) for the two things
+    most likely to be subtly wrong: `defaultDepartureTime` (now + 45 min, rounded up to
+    the next 5 minutes) and `toSimBriefDeparture` (a `Date` → SimBrief's
+    `{date, deph, depm}` shape — midnight-UTC epoch seconds plus plain UTC hour/minute).
+    Unit-tested against the documented known-good conversion
+    (2026-09-02T18:25Z → `date=1788307200, deph=18, depm=25`) and a rollover case
+    (23:58 + 45 min crossing midnight in UTC). `toSimBriefDeparture` returns `null` for
+    anything more than a year from now rather than silently sending a malformed date —
+    SimBrief mis-reads a bad `date` as a 1970 departure instead of rejecting it, so the
+    guard lives on the Flightdeck side.
+  - The departure field is a plain `<input type="datetime-local">`, but its value is
+    **never** interpreted in the browser's local timezone — `dispatch-time.ts`'s
+    to/fromDatetimeLocalValue treat the string as UTC wall-clock time directly, and the
+    field is labelled "Departure (UTC/Z)" so that's honest to the user too.
+  - Cost index: `general.costindex` parsed via a new `optNum`/`optStr` pair in
+    `simbrief-client.ts` rather than the existing `num`/`str` — the trap documented at the
+    top of `docs/simbrief-notes.md` (an empty SimBrief field deserializes to `{}`, and
+    `Number({})` throws) applies to every new optional field from here on, not just this
+    one. Shown as a `DetailField` on Dispatch's fetched-OFP card; not stored on the
+    `flight` row since the raw OFP JSON already carries it and nothing queries by it yet.
+  - Deliberately not built: `static_id` (fetching back the exact plan generated rather
+    than "whatever's latest") — noted as a real correctness improvement in the plan doc,
+    out of scope for this branch.
