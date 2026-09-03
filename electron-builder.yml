@@ -18,6 +18,7 @@ asarUnpack:
 # Licence notices have to be readable in an installed copy, not sealed inside the asar.
 extraResources:
   - LICENSE
+  - COPYRIGHT
   - THIRD-PARTY-LICENSES.md
 
 # Windows is the primary target — MSFS (and therefore this app's real usage) is
