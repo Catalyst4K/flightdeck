@@ -166,9 +166,59 @@ export interface TrackPoint {
   phase: FlightPhase
   onGround: boolean
   fuelKg: number
+  gForce: number
+  windSpeedMs: number
+  windDirectionDeg: number
 }
 
 export type NewTrackPoint = Omit<TrackPoint, 'id'>
+
+/** One flight's touchdown record — see docs/decisions.md's landing-analysis entry.
+ *  `runwayIdent`/`distanceFromThresholdM`/`centrelineOffsetM`/`headwindMs`/`crosswindMs`
+ *  are null when no matching runway end was found (resources/runways.csv has no entry
+ *  for the airport, or none within a plausible heading tolerance of the touchdown). */
+export interface Landing {
+  id: number
+  flightId: number
+  touchdownTsUtc: string
+  verticalSpeedMs: number
+  gForce: number
+  pitchDeg: number
+  bankDeg: number
+  headingTrueDeg: number
+  indicatedAirspeedMs: number
+  groundSpeedMs: number
+  windSpeedMs: number
+  windDirectionDeg: number
+  headwindMs: number | null
+  crosswindMs: number | null
+  runwayIdent: string | null
+  distanceFromThresholdM: number | null
+  centrelineOffsetM: number | null
+  flapSetting: number | null
+  /** Always 'derived' for now — see the schema.ts column comment. */
+  touchdownSource: 'simvar' | 'derived'
+}
+
+/** One row per aircraft-with-a-landing-record, newest first — Fleet's per-aircraft
+ *  landing history. */
+export interface AircraftLanding extends Landing {
+  flightNumber: string | null
+  depIcao: string
+  arrIcao: string
+}
+
+export type LandingSeverity = 'none' | 'firm' | 'hard'
+
+/** Both in feet per minute (the unit pilots actually think in) — converted to/from the
+ *  SI-stored touchdown vertical_speed_ms only where a severity is computed
+ *  (src/renderer/src/landing-severity.ts), never stored in fpm anywhere else. Defaults
+ *  are general-aviation-leaning, not universally correct across a C172-to-A380 fleet —
+ *  adjustable in Settings rather than a hardcoded constant. */
+export interface LandingThresholds {
+  firmFpm: number
+  hardFpm: number
+}
 
 export interface ActiveTracking {
   flightId: number
@@ -455,6 +505,10 @@ export const IpcChannels = {
   gsxRescanFlight: 'gsx:rescan-flight',
   gsxAttachNotailReceipt: 'gsx:attach-notail-receipt',
   gsxOpenReceipt: 'gsx:open-receipt',
+  logbookGetLanding: 'logbook:get-landing',
+  fleetListLandings: 'fleet:list-landings',
+  settingsGetLandingThresholds: 'settings:get-landing-thresholds',
+  settingsSetLandingThresholds: 'settings:set-landing-thresholds',
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
   aircraftTypeSearch: 'aircraft:type-search',
   airportSearch: 'airport:search',
@@ -533,6 +587,14 @@ export interface FlightdeckApi {
   gsxAttachNotailReceipt: (flightId: number, jsonPath: string) => Promise<FlightInvoice[]>
   /** Opens the original styled .html receipt in the system's default viewer. */
   gsxOpenReceipt: (sourceHtmlPath: string) => Promise<void>
+  /** The flight's touchdown record, if one was captured — null for any flight tracked
+   *  before this feature existed, or one with no landing phase reached (e.g. cancelled
+   *  mid-air). */
+  logbookGetLanding: (flightId: number) => Promise<Landing | null>
+  /** An aircraft's full landing history, newest first — Fleet's per-tail detail page. */
+  fleetListLandings: (aircraftId: number) => Promise<AircraftLanding[]>
+  settingsGetLandingThresholds: () => Promise<LandingThresholds>
+  settingsSetLandingThresholds: (thresholds: LandingThresholds) => Promise<void>
   /** Looks up an aircraft by registration via adsbdb.com. Null if not found (not an error). */
   aircraftLookupByRegistration: (registration: string) => Promise<AircraftLookupResult | null>
   /** Searches the vendored ICAO Doc 8643 type-designator list. Empty for a query under 2 chars. */

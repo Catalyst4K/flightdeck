@@ -24,6 +24,12 @@ export function msToKt(ms: number): number {
   return ms / MS_PER_KT
 }
 
+/** Vertical speed in feet per minute — the unit pilots actually think and set landing
+ *  thresholds in, unlike the SI m/s stored everywhere else. */
+export function msToFpm(ms: number): number {
+  return (ms / M_PER_FT) * 60
+}
+
 /** Converts a stored kg value to the user's preferred display unit. */
 export function kgToUnit(kg: number, unit: WeightUnit): number {
   return unit === 'kg' ? kg : kgToLb(kg)

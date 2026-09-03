@@ -3,12 +3,14 @@ import type { ActiveTracking, TrackPoint } from '@shared/ipc'
 import type { FlightdeckDb } from '../db/client'
 import { addInvoicesForFlight } from '../db/flight-invoice-repo'
 import { abandonFlight, completeFlight, getFlight, recordOff, recordOn, startFlight } from '../db/flight-repo'
+import { createLanding } from '../db/landing-repo'
 import { getGsxSettings } from '../db/settings-repo'
 import { createTrackPoint } from '../db/track-point-repo'
 import { buildFlightMatchWindow } from '../gsx/flight-window'
 import { scanGsxFolder } from '../gsx/scan'
 import type { SimConnectService } from '../sim/SimConnectService'
 import { FlightRecorder } from './FlightRecorder'
+import { buildLandingRecord } from './landing-capture'
 
 interface TrackingControllerEvents {
   point: [TrackPoint]
@@ -41,7 +43,15 @@ export class TrackingController extends EventEmitter<TrackingControllerEvents> {
       }
       if (result.phase === 'landing' && !this.onRecorded) {
         this.onRecorded = true
-        recordOn(this.db, this.recorder.getFlightId())
+        const flightId = this.recorder.getFlightId()
+        recordOn(this.db, flightId)
+        // Same tick, same on-ground false->true transition M6's own touchdown detection
+        // targets (docs/decisions.md, landing-analysis entry) — the flight row is already
+        // loaded here for its arr_icao, which narrows the runway lookup to one airport.
+        const flight = getFlight(this.db, flightId)
+        if (flight) {
+          createLanding(this.db, buildLandingRecord(flightId, flight.arrIcao, telemetry, new Date().toISOString()))
+        }
       }
 
       if (result.point) {
