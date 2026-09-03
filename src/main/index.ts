@@ -7,6 +7,7 @@ import {
   type DispatchOfp,
   type DispatchOpenSimBriefParams,
   type GsxSettings,
+  type LandingThresholds,
   type NewFlight,
   type WeightUnit
 } from '@shared/ipc'
@@ -35,14 +36,17 @@ import {
   listCompletedFlights,
   listFlights
 } from './db/flight-repo'
+import { getLandingByFlight, listLandingsByAircraft } from './db/landing-repo'
 import { importLogbookCsv } from './db/logbook-import'
 import {
   getAltitudeUnit,
   getGsxSettings,
+  getLandingThresholds,
   getSimbriefUsername,
   getWeightUnit,
   setAltitudeUnit,
   setGsxSettings,
+  setLandingThresholds,
   setSimbriefUsername,
   setWeightUnit
 } from './db/settings-repo'
@@ -295,6 +299,13 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle(IpcChannels.gsxOpenReceipt, (_event, sourceHtmlPath: string) => shell.openPath(sourceHtmlPath))
+
+  ipcMain.handle(IpcChannels.logbookGetLanding, (_event, flightId: number) => getLandingByFlight(db, flightId) ?? null)
+  ipcMain.handle(IpcChannels.fleetListLandings, (_event, aircraftId: number) => listLandingsByAircraft(db, aircraftId))
+  ipcMain.handle(IpcChannels.settingsGetLandingThresholds, () => getLandingThresholds(db))
+  ipcMain.handle(IpcChannels.settingsSetLandingThresholds, (_event, thresholds: LandingThresholds) =>
+    setLandingThresholds(db, thresholds)
+  )
 
   ipcMain.handle(IpcChannels.aircraftLookupByRegistration, (_event, registration: string) =>
     fetchAircraftByRegistration(registration)

@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { AircraftImportSummary, AltitudeUnit, GsxSettings, LogbookImportSummary, WeightUnit } from '@shared/ipc'
+import type {
+  AircraftImportSummary,
+  AltitudeUnit,
+  GsxSettings,
+  LandingThresholds,
+  LogbookImportSummary,
+  WeightUnit
+} from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -33,11 +40,19 @@ export function SettingsView(props: {
   const [importingAircraft, setImportingAircraft] = useState(false)
   const [importingLogbook, setImportingLogbook] = useState(false)
   const [gsx, setGsx] = useState<GsxSettings>({ enabled: false, folderPath: null })
+  const [landingThresholds, setLandingThresholds] = useState<LandingThresholds>({ firmFpm: 480, hardFpm: 600 })
 
   useEffect(() => {
     window.flightdeck.settingsGetSimbriefUsername().then((u) => setSimbriefUsername(u ?? ''))
     window.flightdeck.settingsGetGsx().then(setGsx)
+    window.flightdeck.settingsGetLandingThresholds().then(setLandingThresholds)
   }, [])
+
+  async function handleSaveLandingThresholds(event: React.FormEvent): Promise<void> {
+    event.preventDefault()
+    await window.flightdeck.settingsSetLandingThresholds(landingThresholds)
+    toast.success('Landing thresholds saved.')
+  }
 
   async function handleGsxToggle(enabled: boolean): Promise<void> {
     const next = { ...gsx, enabled }
@@ -193,6 +208,45 @@ export function SettingsView(props: {
               {importingLogbook ? 'Importing…' : 'Import'}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-sm">
+        <CardHeader>
+          <CardTitle>Landing severity</CardTitle>
+          <CardDescription>
+            Touchdown rate thresholds for the firm/hard badges on Fleet and Logbook landing records. Real
+            guidance varies by aircraft category — these are general-aviation-leaning defaults, not universal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSaveLandingThresholds} className="flex flex-col gap-3">
+            <div className="flex gap-3">
+              <Label className="flex flex-1 flex-col items-start gap-1.5">
+                Firm (fpm)
+                <Input
+                  type="number"
+                  value={landingThresholds.firmFpm}
+                  onChange={(e) =>
+                    setLandingThresholds((current) => ({ ...current, firmFpm: Number(e.target.value) }))
+                  }
+                />
+              </Label>
+              <Label className="flex flex-1 flex-col items-start gap-1.5">
+                Hard (fpm)
+                <Input
+                  type="number"
+                  value={landingThresholds.hardFpm}
+                  onChange={(e) =>
+                    setLandingThresholds((current) => ({ ...current, hardFpm: Number(e.target.value) }))
+                  }
+                />
+              </Label>
+            </div>
+            <Button type="submit" variant="outline" size="sm" className="w-fit">
+              Save
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

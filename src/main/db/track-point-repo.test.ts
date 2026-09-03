@@ -23,6 +23,9 @@ function samplePoint(flightId: number, overrides: Partial<NewTrackPoint> = {}): 
     phase: 'cruise',
     onGround: false,
     fuelKg: 5000,
+    gForce: 1,
+    windSpeedMs: 0,
+    windDirectionDeg: 0,
     ...overrides
   }
 }
