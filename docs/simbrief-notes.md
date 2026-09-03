@@ -319,11 +319,13 @@ it either way.
 
 ## Generation
 
-Unchanged from the 2026-09-01 finding in `docs/decisions.md`: SimBrief's official API is
-a browser-popup widget for websites with a PHP backend (`simbrief.apiv1.js` / `.php`),
-authenticated with an emailed API key hashed as `md5(api_key . api_req)`, and the pilot
-must be logged in to SimBrief in that popup. It is not a REST call a desktop app can make
-on its own behalf, and the key request is a manual email to SimBrief support.
+SimBrief's official generation API requires the pilot to be logged in to SimBrief via a
+popup — it is not a plain server-to-server REST call, key or no key — and the key itself
+is a manual email request to SimBrief support, not self-service. Mechanism specifics
+(endpoint URLs, request signing, field-level protocol) are deliberately not documented in
+this public repository, per the terms attached to SimBrief's own developer materials —
+see the fuller note on `main`'s `docs/simbrief-notes.md` for what's safe to record instead
+and what still needs live verification before any of it is built.
 
 What works today with no key at all is the URL prefill the app already uses:
 `https://dispatch.simbrief.com/options/custom?orig=&dest=&airframe=`-or-`type=`,
