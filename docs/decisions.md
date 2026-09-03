@@ -855,3 +855,60 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     its own).
   - `PriceLists\` (a one-off, user-triggered per-airport rate card, no JSON companion) is
     deliberately never read — confirmed it's not an automatically-maintained pricing feed.
+- 2026-09-03: **Implemented the unblocked core of `plan/landing-analysis`** (PLAN.md's
+  original M6) — the last of six `plan/*` branches, and the one with a different kind of
+  roadblock than the rest: not a missing API key, but a genuine "spike first" requirement
+  (CLAUDE.md's M1/M6 rule) that needs a live MSFS 2024 flight to resolve, which wasn't
+  available this session. Handled the same way as everything else blocked this session —
+  built everything that doesn't depend on the unresolved question, defaulted conservatively
+  on the part that does, and left the exact spike ready to run.
+  - **The one genuinely open question: are MSFS 2024's dedicated touchdown SimVars
+    (`PLANE TOUCHDOWN NORMAL VELOCITY`/`PITCH DEGREES`/`BANK DEGREES`) trustworthy?**
+    Unverified, so `landing-capture.ts` always uses the already-flowing 1 Hz ingested-tick
+    values instead (`vertical_speed_ms`/`pitch_deg`/`bank_deg`, the same numbers Track's
+    telemetry overlay already shows) and stamps every row `touchdown_source: 'derived'`.
+    `scripts/spike-landing.ts` (new, mirrors `spike-simconnect.ts`) is ready to run on a
+    real landing and print both sets side by side — the schema's `touchdown_source` column
+    already supports a future `'simvar'` value once that's confirmed, so switching over
+    later needs no migration, just a code change guarded by the spike's answer. Per the
+    plan's own explicit caution, the high-rate (`SIM_FRAME`) trace was **not** built
+    pre-emptively — it's gated on the same spike showing 1 Hz isn't good enough, which
+    hasn't been checked either.
+  - **Vendored `resources/runways.csv`** (`scripts/vendor-runways.ts`, public domain
+    OurAirports data, same pattern as the other three vendored CSVs) — 23,413 usable
+    runway-end rows (heading + threshold position both present), trimmed to airports
+    already in the app's vendored `airports.csv`. This is the fuller cut
+    `airports.LICENSE.txt` already flagged M6 would need back when `airports.csv` was
+    first trimmed down.
+  - **`resolveRunwayEnd`** (`src/main/airports/runway-lookup.ts`) matches a touchdown's
+    ICAO + heading + rough position to the nearest runway end, scoring heading agreement
+    first and touchdown-position proximity second — the second term is specifically what
+    correctly picks between parallel runways (25L/25R) sharing the same published heading,
+    which a heading-only resolver would get silently wrong.
+  - **`track_point` gained `g_force`/`wind_speed_ms`/`wind_direction_deg`** (migration
+    `0009_youthful_reptil.sql`) — already computed and shown live every tick, just never
+    persisted before. Given schema-level defaults (gForce 1, wind 0) specifically so
+    SQLite's `ALTER TABLE ADD COLUMN NOT NULL` can backfill existing rows — **verified live
+    against a real pre-existing database** (seeded a `track_point` row on the prior schema,
+    applied this migration, confirmed the row backfilled cleanly with no error) rather than
+    assumed safe. Every new row still supplies real values explicitly; the defaults only
+    ever apply to history captured before this shipped.
+  - **New `landing` table**, one row per flight (unique `flight_id`), captured inside
+    `TrackingController`'s existing `onRecorded`-guarded branch — exactly the branch
+    PLAN.md's own touchdown detection already fires on, so no new transition-detection
+    mechanism was needed, just more work done inside the one that already exists.
+  - **Deliberately not built: `bounce_count`.** The plan flagged this as "arguably a
+    nice-to-have, not the core ask" in its own Open Questions, needing a dedicated
+    ground-contact-toggle counter with no other use — cut from v1 rather than added
+    speculatively; the column isn't in the schema at all, so nothing is silently unpopulated.
+  - **Fleet's per-aircraft landing history and Logbook's per-flight landing pane share one
+    `classifyLanding` function** (`src/renderer/src/landing-severity.ts`) and one
+    `LandingBadge` component against the same `useLandingThresholds` — by construction,
+    they can't disagree about what counts as a hard landing. Thresholds (`firmFpm`/
+    `hardFpm`) are a Settings value with general-aviation-leaning defaults (480/600 fpm),
+    not a hardcoded constant, since this app spans a C172 to an A380.
+  - Sanity-clamped G-force only (`landing-capture.ts`) — PLAN.md §7's open risk register
+    flagged a payware aircraft reporting an implausible reading as unmitigated; a hard
+    clamp on an obviously-impossible value (NaN, or wildly outside [-3g, 6g]) is cheap
+    insurance against a headline-wrong number without asserting anything about what a real
+    hard landing should read.

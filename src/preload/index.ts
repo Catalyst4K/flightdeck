@@ -6,6 +6,7 @@ import {
   type DispatchOpenSimBriefParams,
   type FlightdeckApi,
   type GsxSettings,
+  type LandingThresholds,
   type NewAircraft,
   type NewFlight,
   type SimConnectionStatus,
@@ -68,6 +69,11 @@ const api: FlightdeckApi = {
   gsxAttachNotailReceipt: (flightId: number, jsonPath: string) =>
     ipcRenderer.invoke(IpcChannels.gsxAttachNotailReceipt, flightId, jsonPath),
   gsxOpenReceipt: (sourceHtmlPath: string) => ipcRenderer.invoke(IpcChannels.gsxOpenReceipt, sourceHtmlPath),
+  logbookGetLanding: (flightId: number) => ipcRenderer.invoke(IpcChannels.logbookGetLanding, flightId),
+  fleetListLandings: (aircraftId: number) => ipcRenderer.invoke(IpcChannels.fleetListLandings, aircraftId),
+  settingsGetLandingThresholds: () => ipcRenderer.invoke(IpcChannels.settingsGetLandingThresholds),
+  settingsSetLandingThresholds: (thresholds: LandingThresholds) =>
+    ipcRenderer.invoke(IpcChannels.settingsSetLandingThresholds, thresholds),
   aircraftLookupByRegistration: (registration: string) =>
     ipcRenderer.invoke(IpcChannels.aircraftLookupByRegistration, registration),
   aircraftTypeSearch: (query: string) => ipcRenderer.invoke(IpcChannels.aircraftTypeSearch, query),
