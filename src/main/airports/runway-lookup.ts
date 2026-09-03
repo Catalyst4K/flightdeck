@@ -93,3 +93,25 @@ export function findRunwayEnd(
 ): RunwayEnd | null {
   return resolveRunwayEnd(ALL_RUNWAY_ENDS, icao, touchdownHeadingDeg, touchdownLat, touchdownLon)
 }
+
+/**
+ * A rough "somewhere at this airport" anchor point — the mean of all its runway ends'
+ * thresholds, not any specific runway. Good enough for a sanity check on whether a
+ * telemetry sample is plausibly at this airport at all (AutoStartDetector's departure-
+ * position guard); not precise enough for anything that needs a real position, which is
+ * what findRunwayEnd/resolveRunwayEnd are for. Null when the ICAO isn't in the vendored
+ * runway data at all (the check this feeds should then skip itself, not reject everything).
+ */
+export function resolveAirportPosition(ends: RunwayEnd[], icao: string): { lat: number; lon: number } | null {
+  const upperIcao = icao.toUpperCase()
+  const matches = ends.filter((end) => end.icao === upperIcao)
+  if (matches.length === 0) return null
+  return {
+    lat: matches.reduce((sum, end) => sum + end.lat, 0) / matches.length,
+    lon: matches.reduce((sum, end) => sum + end.lon, 0) / matches.length
+  }
+}
+
+export function airportPosition(icao: string): { lat: number; lon: number } | null {
+  return resolveAirportPosition(ALL_RUNWAY_ENDS, icao)
+}
