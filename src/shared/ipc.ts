@@ -363,6 +363,11 @@ export interface DispatchOpenSimBriefParams {
   airlineIcao?: string | null
   flightNumber?: string | null
   departure?: DispatchDeparture | null
+  /** Advanced options from src/renderer/src/dispatch-options.ts, already reduced to
+   *  `[paramName, value]` pairs with unset fields omitted — computed in the renderer
+   *  (where it's unit-tested) rather than re-derived here, so this handler stays a plain
+   *  pass-through. */
+  extra?: [string, string][]
 }
 
 export const IpcChannels = {
