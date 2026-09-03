@@ -10,8 +10,14 @@ function fixture(units: 'kgs' | 'lbs'): unknown {
     origin: { icao_code: 'EGLL' },
     destination: { icao_code: 'VHHH' },
     alternate: { icao_code: 'VMMC' },
-    general: { icao_airline: 'BAW', flight_number: '31', route: 'BPK7F BPK DCT', initial_altitude: '33000' },
-    aircraft: { icaocode: 'A35K', reg: 'G-XWBS' },
+    general: {
+      icao_airline: 'BAW',
+      flight_number: '31',
+      route: 'BPK7F BPK DCT',
+      initial_altitude: '33000',
+      costindex: '85'
+    },
+    aircraft: { icaocode: 'A35K', reg: 'G-XWBS', internal_id: 'A35K', is_custom: '0' },
     weights: { pax_count: '328', cargo: '8200', est_zfw: '189112', est_tow: '273642', est_ldw: '198861' },
     fuel: { plan_ramp: '85029' },
     times: { sched_out: '1787860800', sched_in: '1787898900' },
@@ -52,6 +58,9 @@ describe('fetchLatestOfp', () => {
     expect(ofp.zfwKg).toBe(189112)
     expect(ofp.towKg).toBe(273642)
     expect(ofp.ldwKg).toBe(198861)
+    expect(ofp.costIndex).toBe(85)
+    expect(ofp.simbriefIsCustom).toBe(false)
+    expect(ofp.simbriefInternalId).toBe('A35K')
     expect(ofp.waypoints).toEqual([
       { ident: 'BPK', altitudeFt: 4000, distanceNm: 5 },
       { ident: 'VHHH', altitudeFt: 0, distanceNm: 20 }
@@ -103,6 +112,32 @@ describe('fetchLatestOfp', () => {
     // 85029 lb -> kg
     expect(ofp.fuelPlannedKg).toBeCloseTo(85029 / 2.2046226218, 3)
     expect(ofp.zfwKg).toBeCloseTo(189112 / 2.2046226218, 3)
+  })
+
+  it('parses a missing cost index (empty SimBrief field, {}) as null rather than throwing', async () => {
+    const noCostIndex = fixture('kgs') as { general: Record<string, unknown> }
+    noCostIndex.general.costindex = {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => noCostIndex }))
+    )
+
+    const ofp = await fetchLatestOfp('LandingHangar711')
+    expect(ofp.costIndex).toBeNull()
+  })
+
+  it('reports a custom airframe with its full internal ID', async () => {
+    const custom = fixture('kgs') as { aircraft: Record<string, unknown> }
+    custom.aircraft.is_custom = '1'
+    custom.aircraft.internal_id = '1191852_1763945117512'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => custom }))
+    )
+
+    const ofp = await fetchLatestOfp('LandingHangar711')
+    expect(ofp.simbriefIsCustom).toBe(true)
+    expect(ofp.simbriefInternalId).toBe('1191852_1763945117512')
   })
 
   it('throws when SimBrief reports an error', async () => {

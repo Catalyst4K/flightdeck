@@ -677,3 +677,238 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     Source with a binary distribution isn't live. When the first release happens, the
     public repository satisfies §6(d) — but the release needs to *point* at it. Worth a
     source link in the release notes and in the app itself.
+- 2026-09-03: **Implemented `plan/simbrief-generation`** (flight number, departure time,
+  cost index on Dispatch's "Plan a flight" card) — the first of six `plan/*` branches
+  worked through this session. None of it needed the SimBrief/Navigraph API keys, which
+  are still pending: it builds entirely on the keyless prefill-URL redirect the app
+  already used for orig/dest/airframe, per that plan's own spike finding that the form
+  honours `airline`/`fltnum`/`date`/`deph`/`depm` too.
+  - Added `aircraft.operator_icao` (migration `0006_last_sauron.sql`) alongside the
+    existing `operator_iata` — IATA drives the airline logo, ICAO is what SimBrief's
+    `airline` parameter and a real callsign want, and neither derives from the other.
+    `AircraftForm`'s airline picker now stores both from one selection. Backfilled the
+    existing fleet via `scripts/backfill-operator-icao.ts` (`npm run
+    db:backfill-operator-icao`), matching stored IATA codes against the vendored airline
+    list; anything with a free-typed operator (no code to recover) is reported and left
+    alone rather than guessed.
+  - `src/renderer/src/dispatch-time.ts` is a pure module (no React) for the two things
+    most likely to be subtly wrong: `defaultDepartureTime` (now + 45 min, rounded up to
+    the next 5 minutes) and `toSimBriefDeparture` (a `Date` → SimBrief's
+    `{date, deph, depm}` shape — midnight-UTC epoch seconds plus plain UTC hour/minute).
+    Unit-tested against the documented known-good conversion
+    (2026-09-02T18:25Z → `date=1788307200, deph=18, depm=25`) and a rollover case
+    (23:58 + 45 min crossing midnight in UTC). `toSimBriefDeparture` returns `null` for
+    anything more than a year from now rather than silently sending a malformed date —
+    SimBrief mis-reads a bad `date` as a 1970 departure instead of rejecting it, so the
+    guard lives on the Flightdeck side.
+  - The departure field is a plain `<input type="datetime-local">`, but its value is
+    **never** interpreted in the browser's local timezone — `dispatch-time.ts`'s
+    to/fromDatetimeLocalValue treat the string as UTC wall-clock time directly, and the
+    field is labelled "Departure (UTC/Z)" so that's honest to the user too.
+  - Cost index: `general.costindex` parsed via a new `optNum`/`optStr` pair in
+    `simbrief-client.ts` rather than the existing `num`/`str` — the trap documented at the
+    top of `docs/simbrief-notes.md` (an empty SimBrief field deserializes to `{}`, and
+    `Number({})` throws) applies to every new optional field from here on, not just this
+    one. Shown as a `DetailField` on Dispatch's fetched-OFP card; not stored on the
+    `flight` row since the raw OFP JSON already carries it and nothing queries by it yet.
+  - Deliberately not built: `static_id` (fetching back the exact plan generated rather
+    than "whatever's latest") — noted as a real correctness improvement in the plan doc,
+    out of scope for this branch.
+- 2026-09-03: **Implemented `plan/fleet-simbrief-airframe`** — the second of six
+  `plan/*` branches. SimBrief has no API to create, edit or list a saved airframe (only
+  the web UI at dispatch.simbrief.com/airframes), so this doesn't reimplement that editor
+  in Electron — it makes the link between a fleet aircraft and its SimBrief profile
+  visible, verifiable, and one click to reach.
+  - `dispatchOpenSimBriefAirframes` (new IPC channel) derives a saved airframe's direct
+    editor URL from `aircraft.simbrief_airframe_id` — `.../airframes/saved/<suffix>`,
+    where `<suffix>` is everything after the `_` in the stored `<user id>_<airframe id>`
+    string. Confirmed live against a real airframe (docs/simbrief-notes.md). Falls back to
+    the plain airframes list page for a malformed/absent ID, or an ID predating this
+    format. The suffix is treated as an opaque string throughout, never parsed as a date —
+    it happens to look like a millisecond epoch in the current format but the older format
+    is 10-digit seconds, and "take it verbatim" is what makes that not matter.
+  - **No SimBrief default-airframe list is vendored.** Their aircraft list exists only as
+    an unlicensed HTML page — scraping it would be redistributing data with no permission,
+    which `CONTRIBUTING.md`'s licensing stance since the GPL relicense now explicitly rules
+    out. Went with the plan's cheapest alternative instead: a free-text
+    `aircraft.simbrief_type` column (migration `0007_cooing_tiger_shark.sql`), separate
+    from the custom `simbrief_airframe_id`. SimBrief validates the type itself and falls
+    back to its own default on anything it doesn't recognise — same behaviour `icaoType`
+    already relied on before this column existed, so a wrong pick degrades gracefully
+    rather than failing.
+  - Dispatch's airframe-or-type precedence (`main/index.ts`'s `dispatchOpenSimBrief`
+    handler) is now custom airframe ID → `simbrief_type` → `icaoType`, extending rather
+    than replacing the fallback chain the first SimBrief-generation branch already built.
+  - **Auto-capture, not copy-paste.** A fetched OFP states `aircraft.internal_id` and
+    `aircraft.is_custom` (docs/simbrief-notes.md) — confirmed live that a *custom*
+    airframe's `internal_id` is in the exact `<user id>_<airframe id>` form
+    `simbrief_airframe_id` already stores, while a *stock* airframe's `internal_id` is just
+    the bare type code and must never be offered for capture (guarded on `is_custom`, not
+    just presence of the field). When a fetch's custom airframe differs from what's saved
+    on the matched fleet aircraft, Dispatch offers (never auto-applies) "Save this
+    airframe" — same propose-don't-apply pattern as the existing registration-match
+    heuristic. When a plan used SimBrief's *default* despite the aircraft having a saved
+    profile, Dispatch now surfaces that as a warning toast too — previously a wrong or
+    stale ID failed completely silently.
+  - `AircraftForm`'s airframe-ID field gets a soft format warning (`digits_digits`) rather
+    than a hard rejection, since the format is observed from real IDs, not documented, and
+    a hard rule on an undocumented shape would eventually reject something valid.
+- 2026-09-03: **Implemented `plan/dispatch-advanced-tab`** — the third of six `plan/*`
+  branches, built on top of the SimBrief-generation branch's URL builder. Not blocked on
+  the API key either: every advanced field is another parameter on the same keyless
+  prefill redirect.
+  - `src/renderer/src/dispatch-options.ts` is a pure module (no React), because the real
+    risk here isn't the UI, it's silently sending the wrong thing to SimBrief. Every field
+    is typed `string | 'auto' | null` — three genuinely distinct states (unset/don't-send,
+    SimBrief's own literal `"auto"`, and a real value) that a plain `number` would collapse
+    into two.
+  - **`dispatchOptionsFromApiParams` is a translation, not a copy**, for the "load settings
+    from a previous flight" feature. A stored flight's raw OFP JSON already carries
+    `api_params` — the exact parameters that plan was generated with — so no new table or
+    saved-form-state was needed. But `api_params` echoes different names/units than the
+    real input parameters (`civalue`, the cost index the user actually sets, isn't echoed
+    at all — the number lives in `general.costindex` instead; the echo only says
+    `cruisemode`/`cruisesub`). Read `civalue` from `general.costindex` specifically, and
+    left `notams`/`units` (renamed to `notams_opt`/`pounds` in the echo, and encoded
+    differently) out of this branch's four field groups entirely rather than get either
+    subtly wrong.
+  - Deliberately **not** restored on "load settings from": departure date/time — always
+    reset to the now-+45-minutes default instead. It's Callum's own stated reason for
+    wanting this feature ("regenerate it with up to date departure times"), and reloading a
+    stale departure would be the one thing an obvious-looking reload feature got wrong by
+    default.
+  - Advanced options live behind an "Advanced (N)" button inside the existing "Plan a
+    flight" card, not a new top-level tab — the app's five tabs are areas of the app,
+    and generation parameters for one card don't rise to that. The count in the button
+    label exists specifically so a cost index set for a previous flight is never silently
+    still in effect with nothing on screen saying so.
+  - `main/index.ts`'s `dispatchOpenSimBrief` handler takes a generic `extra: [string,
+    string][]` from the renderer rather than growing per-field parameters itself — the
+    renderer (where `dispatchOptionsToUrlParams` is unit-tested) computes the final,
+    already-filtered pair list, and the handler stays a dumb pass-through appender.
+- 2026-09-03: **Implemented half of `plan/sid-star-selection`** — the fourth of six
+  `plan/*` branches, and the first one that's genuinely split by the Navigraph blocker
+  rather than sidestepping it entirely. That plan has two asks: (1) show the SID and STAR
+  as distinct, labelled segments of the route, and (2) pick a different, real, currently
+  valid procedure from a dropdown. Only (1) is built here — (2) needs Flightdeck's own
+  procedure data (Navigraph Digital Flight Data), which needs Navigraph API credentials
+  that are still pending. **`plan/sid-star-selection` branch is deliberately left
+  unmerged** as the record of the navdata-sync half's design, to pick up once credentials
+  arrive — nothing about it is stale, it just couldn't be built without them.
+  - The unblocked half turned out to need no inference at all: a fetched OFP already
+    states its chosen procedures outright (`general.sid_ident`/`star_ident`), and every
+    navlog fix says whether it belongs to a procedure and which one (`via_airway`,
+    corroborated by `is_sid_star`). `route.ts` gained `segmentWaypoints` (labels every
+    parsed waypoint `'sid' | 'enroute' | 'star'`) and `parseRouteProcedures` (the two
+    stated names, `{}`-guarded).
+  - **Two edge cases the segmentation rule has to get right, both confirmed against real
+    OFPs** (docs/simbrief-notes.md): the fix a SID terminates at carries `is_sid_star:
+    "0"` despite still belonging to the procedure (segmenting on `via_airway` alone, not
+    the flag, avoids a one-waypoint gap); and a STAR's transition handoff fix carries
+    `via_airway` = the *inbound enroute airway*, not the STAR's own name — so STAR
+    segmentation starts from the fix whose `ident` matches `star_trans` when one exists,
+    falling back to the first `via_airway === star_ident` match only when it doesn't.
+  - Surfaced in two places: Dispatch's Route section now shows "SID ___" / "STAR ___"
+    badges above the route string when either is set, and `FlightMap`'s waypoint pins are
+    colour-coded by segment (amber SID, purple STAR, grey enroute) — both Track and
+    Logbook get this automatically since they already render through the same
+    `parseWaypointsFromOfpJson`.
+  - This labels whichever procedure SimBrief already chose. There is still no way to
+    swap one out for a different valid one — that's entirely what part (2) is, and it's
+    the part still blocked.
+- 2026-09-03: **Implemented `plan/gsx-invoices`** — the fifth of six `plan/*` branches,
+  and unrelated to the SimBrief/Navigraph roadblock entirely (no external API — GSX Pro
+  writes local receipt files). Opt-in and off by default: a fresh install shows nothing
+  from this feature until Settings' GSX card is turned on, and every code path in
+  `src/main/gsx/` is a no-op when disabled or the configured folder doesn't exist.
+  - **Snapshot at flight completion, not a live folder read.** GSX's own admin UI can
+    bulk-delete old receipts, so a Logbook that re-scanned the folder on every page view
+    would silently lose historical costs the day someone tidies up. `TrackingController`
+    now fire-and-forgets a best-effort scan+store right after `completeFlight` (both the
+    automatic-shutdown and manual-finish paths) — errors are swallowed there deliberately,
+    since flight completion has already succeeded by the time it runs. A manual "Rescan"
+    button on the Logbook detail page covers flights completed before this feature existed,
+    and any receipt GSX writes slightly after the snapshot fires.
+  - **Matching is filename-only until a receipt actually matches.** `<timestamp>_<ICAO>_
+    <tail>.json` carries every key needed (docs/gsx-notes.md) — `src/main/gsx/filename.ts`
+    parses it with no file reads, and `matcher.ts` decides tail+ICAO+time-window-with-
+    tolerance matches as pure functions before anything gets opened. **Matches on tail,
+    never `aircraftType`** — confirmed the same tail reports two different types across
+    real receipts, since it just reflects whatever was loaded in the sim at the time.
+  - **A `NOTAIL` receipt (GSX had no tail assigned yet — a real, confirmed occurrence) is
+    offered, never auto-attached.** Time+airport alone isn't enough confidence to silently
+    add a charge to a flight, so these surface on the Logbook detail page with a manual
+    "Attach" action instead.
+  - **Money: arithmetic on the USD side only, local string always shown verbatim.** Every
+    amount is pre-formatted text like `"£1,359.71 ~$ 1,818.96"` — prefixes vary in kind,
+    decimals vary by currency, and no EUR sample exists to confirm the `.`/`,` convention
+    on a swapped locale. The USD half is consistently `$`-prefixed in every sample and GSX
+    has already done the conversion itself (with `fxDisclosure` recording the rate/date/
+    source), so summing there is the only honest way to total receipts that might be in
+    different currencies.
+  - **`logoDataUri` (16-30 KB of repeated base64 PNG) is stripped before storage** — kept
+    only in the original `.html`, which "Open receipt" opens via `shell.openPath` when the
+    user wants the real styled document.
+  - Storage is additive, not replace-wholesale: repeated rescans dedupe on `receiptId`
+    rather than deleting and re-inserting, specifically so a rescan can never wipe out a
+    NOTAIL receipt attached by hand (which the confident-match scan would never re-find on
+    its own).
+  - `PriceLists\` (a one-off, user-triggered per-airport rate card, no JSON companion) is
+    deliberately never read — confirmed it's not an automatically-maintained pricing feed.
+- 2026-09-03: **Implemented the unblocked core of `plan/landing-analysis`** (PLAN.md's
+  original M6) — the last of six `plan/*` branches, and the one with a different kind of
+  roadblock than the rest: not a missing API key, but a genuine "spike first" requirement
+  (CLAUDE.md's M1/M6 rule) that needs a live MSFS 2024 flight to resolve, which wasn't
+  available this session. Handled the same way as everything else blocked this session —
+  built everything that doesn't depend on the unresolved question, defaulted conservatively
+  on the part that does, and left the exact spike ready to run.
+  - **The one genuinely open question: are MSFS 2024's dedicated touchdown SimVars
+    (`PLANE TOUCHDOWN NORMAL VELOCITY`/`PITCH DEGREES`/`BANK DEGREES`) trustworthy?**
+    Unverified, so `landing-capture.ts` always uses the already-flowing 1 Hz ingested-tick
+    values instead (`vertical_speed_ms`/`pitch_deg`/`bank_deg`, the same numbers Track's
+    telemetry overlay already shows) and stamps every row `touchdown_source: 'derived'`.
+    `scripts/spike-landing.ts` (new, mirrors `spike-simconnect.ts`) is ready to run on a
+    real landing and print both sets side by side — the schema's `touchdown_source` column
+    already supports a future `'simvar'` value once that's confirmed, so switching over
+    later needs no migration, just a code change guarded by the spike's answer. Per the
+    plan's own explicit caution, the high-rate (`SIM_FRAME`) trace was **not** built
+    pre-emptively — it's gated on the same spike showing 1 Hz isn't good enough, which
+    hasn't been checked either.
+  - **Vendored `resources/runways.csv`** (`scripts/vendor-runways.ts`, public domain
+    OurAirports data, same pattern as the other three vendored CSVs) — 23,413 usable
+    runway-end rows (heading + threshold position both present), trimmed to airports
+    already in the app's vendored `airports.csv`. This is the fuller cut
+    `airports.LICENSE.txt` already flagged M6 would need back when `airports.csv` was
+    first trimmed down.
+  - **`resolveRunwayEnd`** (`src/main/airports/runway-lookup.ts`) matches a touchdown's
+    ICAO + heading + rough position to the nearest runway end, scoring heading agreement
+    first and touchdown-position proximity second — the second term is specifically what
+    correctly picks between parallel runways (25L/25R) sharing the same published heading,
+    which a heading-only resolver would get silently wrong.
+  - **`track_point` gained `g_force`/`wind_speed_ms`/`wind_direction_deg`** (migration
+    `0009_youthful_reptil.sql`) — already computed and shown live every tick, just never
+    persisted before. Given schema-level defaults (gForce 1, wind 0) specifically so
+    SQLite's `ALTER TABLE ADD COLUMN NOT NULL` can backfill existing rows — **verified live
+    against a real pre-existing database** (seeded a `track_point` row on the prior schema,
+    applied this migration, confirmed the row backfilled cleanly with no error) rather than
+    assumed safe. Every new row still supplies real values explicitly; the defaults only
+    ever apply to history captured before this shipped.
+  - **New `landing` table**, one row per flight (unique `flight_id`), captured inside
+    `TrackingController`'s existing `onRecorded`-guarded branch — exactly the branch
+    PLAN.md's own touchdown detection already fires on, so no new transition-detection
+    mechanism was needed, just more work done inside the one that already exists.
+  - **Deliberately not built: `bounce_count`.** The plan flagged this as "arguably a
+    nice-to-have, not the core ask" in its own Open Questions, needing a dedicated
+    ground-contact-toggle counter with no other use — cut from v1 rather than added
+    speculatively; the column isn't in the schema at all, so nothing is silently unpopulated.
+  - **Fleet's per-aircraft landing history and Logbook's per-flight landing pane share one
+    `classifyLanding` function** (`src/renderer/src/landing-severity.ts`) and one
+    `LandingBadge` component against the same `useLandingThresholds` — by construction,
+    they can't disagree about what counts as a hard landing. Thresholds (`firmFpm`/
+    `hardFpm`) are a Settings value with general-aviation-leaning defaults (480/600 fpm),
+    not a hardcoded constant, since this app spans a C172 to an A380.
+  - Sanity-clamped G-force only (`landing-capture.ts`) — PLAN.md §7's open risk register
+    flagged a payware aircraft reporting an implausible reading as unmitigated; a hard
+    clamp on an obviously-impossible value (NaN, or wildly outside [-3g, 6g]) is cheap
+    insurance against a headline-wrong number without asserting anything about what a real
+    hard landing should read.

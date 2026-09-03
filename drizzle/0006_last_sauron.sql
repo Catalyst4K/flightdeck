@@ -1,0 +1,1 @@
+ALTER TABLE `aircraft` ADD `operator_icao` text;

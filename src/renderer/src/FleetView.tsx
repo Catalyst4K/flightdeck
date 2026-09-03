@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Aircraft, FleetStats, NewAircraft } from '@shared/ipc'
+import type { Aircraft, AircraftLanding, FleetStats, NewAircraft } from '@shared/ipc'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +17,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AircraftForm } from './AircraftForm'
 import { AirlineLogo } from './AirlineLogo'
+import { LandingBadge } from './LandingBadge'
+import { classifyLanding } from './landing-severity'
+import { useLandingThresholds } from './useLandingThresholds'
+import { msToFpm, msToKt } from './units'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number } | { kind: 'new' } | { kind: 'edit'; id: number }
 
@@ -39,6 +43,106 @@ function DetailField(props: { label: string; value: React.ReactNode }): React.JS
       <dt className="text-muted-foreground">{props.label}</dt>
       <dd className="text-foreground">{props.value}</dd>
     </>
+  )
+}
+
+/**
+ * Three states, per docs/decisions.md's fleet-simbrief-airframe entry — this deliberately
+ * doesn't reimplement SimBrief's own airframe editor, just makes the link between a fleet
+ * aircraft and its SimBrief profile visible and one click to reach:
+ * - a custom profile is set: open *that* airframe's editor directly.
+ * - no custom profile, but a SimBrief default type is chosen: show it, offer to change it
+ *   or create a custom one instead.
+ * - nothing set at all: explain the (usually fine) fallback and offer to create a profile.
+ */
+function SimBriefProfileCard(props: { aircraft: Aircraft }): React.JSX.Element {
+  const a = props.aircraft
+
+  function openAirframes(): void {
+    void window.flightdeck.dispatchOpenSimBriefAirframes(a.simbriefAirframeId)
+  }
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-base">SimBrief profile</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 text-sm">
+        {a.simbriefAirframeId ? (
+          <>
+            <p className="text-foreground">
+              Custom profile: <span className="font-mono">{a.simbriefAirframeId}</span>
+            </p>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={openAirframes}>
+              Open in SimBrief
+            </Button>
+          </>
+        ) : a.simbriefType ? (
+          <>
+            <p className="text-foreground">
+              Using SimBrief default: <span className="font-mono">{a.simbriefType}</span>
+            </p>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={openAirframes}>
+              Create a custom airframe in SimBrief
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-muted-foreground">
+              No profile set — plans fall back to SimBrief's own default for {a.icaoType}, which is usually
+              fine and occasionally very wrong on weights (and therefore fuel).
+            </p>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={openAirframes}>
+              Create a custom airframe in SimBrief
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Fleet's per-aircraft landing history, per docs/decisions.md's landing-analysis entry —
+ *  not per-flight (Logbook's job), but how this specific tail has actually been landed
+ *  over its life in the fleet. Empty state is the common case for a while: only flights
+ *  tracked since this feature shipped have a landing record at all. */
+function LandingHistoryCard(props: { aircraftId: number }): React.JSX.Element {
+  const [landings, setLandings] = useState<AircraftLanding[]>([])
+  const thresholds = useLandingThresholds()
+
+  useEffect(() => {
+    window.flightdeck.fleetListLandings(props.aircraftId).then(setLandings)
+  }, [props.aircraftId])
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-base">Landing history</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {landings.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No landings recorded yet.</p>
+        ) : (
+          <div className="flex flex-col gap-1.5 text-sm">
+            {landings.map((l) => {
+              const fpm = Math.round(msToFpm(l.verticalSpeedMs))
+              const severity = classifyLanding(l.verticalSpeedMs, thresholds)
+              return (
+                <div key={l.id} className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">{new Date(l.touchdownTsUtc).toLocaleDateString()}</span>
+                  <span className="font-mono tabular-nums text-foreground">{fpm} fpm</span>
+                  <span className="text-foreground">{l.runwayIdent ?? '—'}</span>
+                  <span className="text-muted-foreground">
+                    {l.crosswindMs != null ? `${Math.round(msToKt(Math.abs(l.crosswindMs)))} kt xwind` : '—'}
+                  </span>
+                  <LandingBadge severity={severity} />
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -67,12 +171,13 @@ function AircraftDetail(props: {
         <CardContent className="flex flex-col gap-4">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
             <DetailField label="Airline" value={<AirlineLabel operator={a.operator} operatorIata={a.operatorIata} />} />
-            <DetailField label="SimBrief profile" value={a.simbriefAirframeId ?? '—'} />
             <DetailField label="Current airport" value={a.currentIcao ?? s?.lastArrIcao ?? '—'} />
             <DetailField label="Total hours" value={s ? s.totalHours.toFixed(1) : '0.0'} />
             <DetailField label="Flights" value={s?.totalCycles ?? 0} />
             <DetailField label="Last flight" value={formatDate(s?.lastFlightInUtc ?? null)} />
           </dl>
+          <SimBriefProfileCard aircraft={a} />
+          <LandingHistoryCard aircraftId={a.id} />
           <div className="flex gap-2">
             <Button type="button" variant="outline" size="sm" onClick={props.onEdit}>
               <Pencil />
