@@ -354,6 +354,19 @@ What's safe to record, because it doesn't require reproducing anything of theirs
   Practical result: generation can be built entirely on functions this codebase already
   has and already trusts — the existing `fetchLatestOfp` for retrieval, plus whatever
   triggers the actual generation. No new identifier scheme or retrieval path to design.
+- **A saved custom airframe needs a different field on this path than on the keyless
+  prefill URL — confirmed live 2026-09-03, after shipping and then catching a real bug.**
+  The keyless prefill URL takes `airframe=<internal_id>` alongside/instead of `type=`
+  (already verified, 2026-09-02 entry below). The keyed generation endpoint has no such
+  field: a first production build set both `type=` and an `airframe=` parameter, and a
+  real generation with a real saved profile came back using the bare type default
+  (`simbriefIsCustom: false`) — the extra field was silently ignored, not erroneous.
+  Fixed by passing the saved profile's internal_id **as** `type` directly, confirmed by
+  the next real generation coming back with `simbriefIsCustom: true` and the expected
+  `simbriefInternalId`. Same "ignores unrecognized fields rather than rejecting them"
+  behavior noted elsewhere in this file — a wrong field name here doesn't error, it just
+  silently produces a plausible-looking but wrong result, so this class of bug is easy to
+  ship and only shows up against a real saved profile, not a bare-type test case.
 
 Everything from before the key arrived (2026-09-01) still holds and isn't restated here:
 SimBrief's dispatch website has a keyless URL that already does everything

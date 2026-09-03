@@ -989,3 +989,10 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     `docs/plans/simbrief-plan-generation.md` for the earlier per-mechanism findings (date
     format, identifier scheme, the `window-all-closed` non-issue in production) that this
     was built against.
+  - **Bug found the same day, against a real saved custom airframe**: the initial build
+    sent the saved profile as a separate `airframe=` parameter (mirroring the keyless
+    prefill URL), which this endpoint silently ignores — no error, just a plan generated
+    against the bare type default instead. Diagnosed by inspecting the actual returned
+    OFP's `simbriefIsCustom`/`simbriefInternalId` fields rather than guessing from the
+    symptom, then confirmed the fix (internal_id passed as `type` itself) the same way
+    against a fresh real generation. Full write-up: `docs/simbrief-notes.md`.
