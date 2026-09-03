@@ -44,8 +44,11 @@ Flightdeck is free software, licensed under the **GNU General Public License v3.
 [`LICENSE`](./LICENSE). You may use, study, modify and redistribute it, including
 commercially; derivative works must also be GPL-3.0 and must make their source available.
 
-Copyright in the first-party code is held by Callum Jones, who retains the right to offer
-the software under other terms as well. If GPL-3.0 doesn't suit your use case, ask.
+Copyright (C) 2026 Callum Jones — see [`COPYRIGHT`](./COPYRIGHT) for the full notice.
+Copyright in the first-party code is held solely by the author, who retains the right to
+offer the software under other terms as well. If GPL-3.0 doesn't suit your use case, ask;
+see [`CONTRIBUTING.md`](./CONTRIBUTING.md) for how contributions are licensed so that
+stays possible.
 
 Third-party code and data distributed with the app — including
 [node-simconnect](https://github.com/EvenAR/node-simconnect) (LGPL-3.0-or-later) and three

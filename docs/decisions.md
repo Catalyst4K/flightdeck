@@ -608,3 +608,51 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   - Not legal advice, and recorded as such: if commercial licensing actually happens, the
     dual-licensing arrangement above is worth a lawyer's review, because that's where
     these setups usually go wrong.
+- 2026-09-03: **Enabled the GitHub repo's security settings**, recorded as a re-runnable
+  script (`scripts/github-repo-security.sh`) rather than as clicks in a browser. Applied
+  and verified live: Dependabot alerts and automated security fixes, secret scanning with
+  **push protection** (the half that matters — it rejects a recognised credential before
+  it leaves the machine), private vulnerability reporting (paired with a new
+  `SECURITY.md`), delete-branch-on-merge, and branch protection on `main`.
+  - **Branch protection deliberately blocks force-pushes and deletion only** — no required
+    PRs, no required status checks. Both of those block *direct pushes* to a protected
+    branch, and this project is developed solo across two machines that push straight to
+    `main`; required checks are worse still, since CI only runs after the push. This
+    corrects advice given earlier in the same session, which had suggested requiring a PR
+    without thinking through that it would break the actual workflow. Requiring a PR
+    becomes right the day outside contributions arrive — which is also when
+    `CONTRIBUTING.md`'s inbound-licence terms need somewhere to be agreed to.
+  - **`secret_scanning_non_provider_patterns` left off.** It would plausibly catch a
+    SimBrief or Navigraph credential that no provider pattern recognises, but it also
+    false-positives on base64 blobs and hex identifiers this repo legitimately contains,
+    and a false positive in push protection blocks a real push. Revisit if something ever
+    does slip through.
+  - Two `gh api` calls initially returned HTTP 422: `--raw-field` sends a value as a plain
+    string, so a nested object and a literal `null` were both rejected. Fixed by sending
+    the bodies via `--input -`. Noted in the script so it isn't rediscovered.
+  - Also added: `.github/dependabot.yml` (weekly, minor/patch grouped into one PR since a
+    daily drip on a solo project gets ignored; majors separate, because an Electron or
+    `better-sqlite3` bump needs a native rebuild and a real smoke test) and
+    `.github/workflows/codeql.yml` (`security-extended` queries, least-privilege
+    permissions, weekly cron as well as push/PR — most findings arrive when GitHub ships
+    new queries rather than when code changes).
+- 2026-09-03: **Pinned `esbuild` to `>=0.25.0` via an npm `overrides` entry.** Dependabot
+  flagged GHSA-67mh-4wv8-2f99 (esbuild's dev server lets any website read responses from
+  it) the moment alerts were switched on, via
+  `drizzle-kit → @esbuild-kit/esm-loader → @esbuild-kit/core-utils → esbuild@0.18.20`.
+  - **Not exploitable here**, and worth saying so rather than implying a fix was urgent:
+    it's a devDependency that never ships, the vulnerability requires running esbuild's
+    *dev server*, and drizzle-kit only uses esbuild to transpile `schema.ts` for
+    `db:generate`. There is also no upstream fix — 0.31.10 is the latest `drizzle-kit` and
+    it still depends on the deprecated `@esbuild-kit/*` packages.
+  - Overridden anyway, because an open alert that everyone learns to ignore defeats the
+    point of having alerts at all. The value is keeping the list empty so a *real* finding
+    is visible.
+  - The version range matters: `^0.25.12` left `tsx` and `vite` marked `invalid` (both
+    want 0.28.x, which `^0.25.12` excludes), and a nested override on
+    `@esbuild-kit/core-utils` alone didn't take effect at all. `>=0.25.0` satisfies every
+    consumer while excluding the vulnerable 0.18.
+  - Verified after the change, since forcing a major-ish jump on a package that pinned
+    0.18 could plausibly break the tool that uses it: `npm run db:generate` still runs and
+    correctly reports "no schema changes", plus typecheck, lint, 137/137 tests and a
+    production build. `npm audit` reports 0 vulnerabilities.
