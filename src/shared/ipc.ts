@@ -18,6 +18,10 @@ export interface Aircraft {
    *  logo (docs/decisions.md, 2026-09-01 airline-search entry). Null for an operator
    *  typed free-hand or filled in from a registration lookup, which has no code. */
   operatorIata: string | null
+  /** ICAO code of the operator — what SimBrief's `airline` generation parameter and a
+   *  real-world callsign use. Doesn't derive from operatorIata or vice versa, so both
+   *  are stored independently when picked from the airline search. */
+  operatorIcao: string | null
   /** SimBrief saved-airframe internal ID, shown as "SimBrief profile" in the UI. */
   simbriefAirframeId: string | null
   currentIcao: string | null
@@ -29,6 +33,7 @@ export interface NewAircraft {
   icaoType: string
   operator?: string | null
   operatorIata?: string | null
+  operatorIcao?: string | null
   simbriefAirframeId?: string | null
   currentIcao?: string | null
 }
@@ -278,6 +283,10 @@ export interface DispatchOfp {
   zfwKg: number
   towKg: number
   ldwKg: number
+  /** Plain cost index, no scaling — null if the OFP has none (e.g. a non-CI cruise mode
+   *  or a prop aircraft). See docs/simbrief-notes.md — `general.costindex` comes back as
+   *  `{}` rather than a string when absent, so this is parsed with a guard, not `num()`. */
+  costIndex: number | null
   waypoints: DispatchWaypoint[]
   stepClimbs: DispatchStepClimb[]
   ofpJson: string
@@ -308,16 +317,36 @@ export type AltitudeUnit = 'ft' | 'm' | 'hybrid'
 export type AppPage = 'fleet' | 'dispatch' | 'track' | 'logbook' | 'settings'
 
 /**
+ * A departure time to prefill on SimBrief's form, already split into the shape its input
+ * parameters want (docs/simbrief-notes.md, 2026-09-02 spike): `date` is midnight UTC of
+ * the departure day in epoch seconds, `hour`/`minute` are plain UTC integers.
+ * `src/renderer/src/dispatch-time.ts` computes this from a `Date` — a wrong-format date
+ * is silently misread by SimBrief (yields a 1970 departure) rather than rejected, so it's
+ * computed here, never passed through from free text.
+ */
+export interface DispatchDeparture {
+  dateEpochSeconds: number
+  hour: number
+  minute: number
+}
+
+/**
  * Opens SimBrief's dispatch form pre-filled with a route and airframe. `simbriefAirframeId`
  * takes priority over `icaoType` when set (SimBrief uses the saved custom profile);
  * otherwise SimBrief falls back to its own default airframe for that type — Flightdeck
- * doesn't need to implement that fallback itself.
+ * doesn't need to implement that fallback itself. `airlineIcao`/`flightNumber`/`departure`
+ * are optional prefills added on top of the original orig/dest/airframe set (docs/decisions.md,
+ * SimBrief-generation entry) — each is only appended to the URL when present, so leaving
+ * them unset reproduces the original URL exactly.
  */
 export interface DispatchOpenSimBriefParams {
   origIcao: string
   destIcao: string
   icaoType: string
   simbriefAirframeId: string | null
+  airlineIcao?: string | null
+  flightNumber?: string | null
+  departure?: DispatchDeparture | null
 }
 
 export const IpcChannels = {

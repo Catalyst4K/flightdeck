@@ -57,3 +57,13 @@ const ALL_AIRLINES = [...loadAirlines(airlinesRaw), ...loadAirlines(airlineAlias
 export function searchAirlines(query: string): AirlineOption[] {
   return searchAirlineList(ALL_AIRLINES, query)
 }
+
+/** Exact IATA-code lookup — used by scripts/backfill-operator-icao.ts to recover an
+ *  operator ICAO for an aircraft that only has an IATA code stored (docs/decisions.md,
+ *  SimBrief-generation entry). Not a substring search like searchAirlines above; an IATA
+ *  code is exact or it isn't a match at all. */
+export function findAirlineByIata(iata: string): AirlineOption | undefined {
+  const q = iata.trim().toLowerCase()
+  if (!q) return undefined
+  return ALL_AIRLINES.find((a) => a.iata.toLowerCase() === q)
+}

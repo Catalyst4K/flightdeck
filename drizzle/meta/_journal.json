@@ -43,6 +43,13 @@
       "when": 1788303219905,
       "tag": "0005_melted_katie_power",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788452504120,
+      "tag": "0006_last_sauron",
+      "breakpoints": true
     }
   ]
 }

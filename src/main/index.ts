@@ -116,7 +116,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, params: DispatchOpenSimBriefParams) => {
-    const { origIcao, destIcao, icaoType, simbriefAirframeId } = params
+    const { origIcao, destIcao, icaoType, simbriefAirframeId, airlineIcao, flightNumber, departure } = params
     if (!origIcao || !destIcao || (!icaoType && !simbriefAirframeId)) {
       return shell.openExternal('https://dispatch.simbrief.com/')
     }
@@ -126,9 +126,20 @@ app.whenReady().then(() => {
     const airframeParam = simbriefAirframeId
       ? `airframe=${encodeURIComponent(simbriefAirframeId)}`
       : `type=${encodeURIComponent(icaoType)}`
-    const url =
+    let url =
       `https://dispatch.simbrief.com/options/custom?orig=${encodeURIComponent(origIcao)}` +
       `&dest=${encodeURIComponent(destIcao)}&${airframeParam}`
+    // Optional generation prefills (docs/decisions.md, SimBrief-generation entry) — each
+    // only appended when present, so leaving them unset reproduces the URL above exactly.
+    // Verified live 2026-09-02 (docs/simbrief-notes.md) that the keyless prefill form
+    // honours all of these, including `date` taking epoch seconds rather than a date
+    // string — `departure` arrives pre-converted from src/renderer/src/dispatch-time.ts,
+    // never computed here from free text.
+    if (airlineIcao) url += `&airline=${encodeURIComponent(airlineIcao)}`
+    if (flightNumber) url += `&fltnum=${encodeURIComponent(flightNumber)}`
+    if (departure) {
+      url += `&date=${departure.dateEpochSeconds}&deph=${departure.hour}&depm=${departure.minute}`
+    }
     return shell.openExternal(url)
   })
 

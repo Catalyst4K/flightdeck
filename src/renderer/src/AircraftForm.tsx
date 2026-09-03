@@ -11,6 +11,7 @@ interface FormState {
   icaoType: string
   operator: string
   operatorIata: string
+  operatorIcao: string
   simbriefAirframeId: string
   currentIcao: string
 }
@@ -20,6 +21,7 @@ const EMPTY_FORM: FormState = {
   icaoType: '',
   operator: '',
   operatorIata: '',
+  operatorIcao: '',
   simbriefAirframeId: '',
   currentIcao: ''
 }
@@ -30,6 +32,7 @@ function toFormState(a: Aircraft): FormState {
     icaoType: a.icaoType,
     operator: a.operator ?? '',
     operatorIata: a.operatorIata ?? '',
+    operatorIcao: a.operatorIcao ?? '',
     simbriefAirframeId: a.simbriefAirframeId ?? '',
     currentIcao: a.currentIcao ?? ''
   }
@@ -43,6 +46,7 @@ function toNewAircraft(f: FormState): NewAircraft {
     icaoType: f.icaoType.trim(),
     operator: str(f.operator),
     operatorIata: str(f.operatorIata),
+    operatorIcao: str(f.operatorIcao),
     simbriefAirframeId: str(f.simbriefAirframeId),
     currentIcao: str(f.currentIcao)
   }
@@ -108,7 +112,8 @@ export function AircraftForm(props: {
           ...current,
           icaoType: current.icaoType || result.icaoType,
           operator: fillOperator ? (matchedAirline?.name ?? result.operator ?? current.operator) : current.operator,
-          operatorIata: fillOperator ? (matchedAirline?.iata ?? '') : current.operatorIata
+          operatorIata: fillOperator ? (matchedAirline?.iata ?? '') : current.operatorIata,
+          operatorIcao: fillOperator ? (matchedAirline?.icao ?? result.operatorIcao ?? '') : current.operatorIcao
         }
       })
       setLookupStatus(`Found: ${result.operator ?? 'unknown operator'}, ${result.icaoType}`)
@@ -177,8 +182,12 @@ export function AircraftForm(props: {
           onChange={(value) => {
             set('operator', value)
             set('operatorIata', '')
+            set('operatorIcao', '')
           }}
-          onSelectItem={(item: AirlineOption) => set('operatorIata', item.iata)}
+          onSelectItem={(item: AirlineOption) => {
+            set('operatorIata', item.iata)
+            set('operatorIcao', item.icao)
+          }}
           search={(query) => window.flightdeck.airlineSearch(query)}
           getOptionKey={(r: AirlineOption) => `${r.icao}-${r.name}`}
           getOptionValue={(r) => r.name}
