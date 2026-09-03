@@ -13,6 +13,7 @@ interface FormState {
   operatorIata: string
   operatorIcao: string
   simbriefAirframeId: string
+  simbriefType: string
   currentIcao: string
 }
 
@@ -23,6 +24,7 @@ const EMPTY_FORM: FormState = {
   operatorIata: '',
   operatorIcao: '',
   simbriefAirframeId: '',
+  simbriefType: '',
   currentIcao: ''
 }
 
@@ -34,6 +36,7 @@ function toFormState(a: Aircraft): FormState {
     operatorIata: a.operatorIata ?? '',
     operatorIcao: a.operatorIcao ?? '',
     simbriefAirframeId: a.simbriefAirframeId ?? '',
+    simbriefType: a.simbriefType ?? '',
     currentIcao: a.currentIcao ?? ''
   }
 }
@@ -48,6 +51,7 @@ function toNewAircraft(f: FormState): NewAircraft {
     operatorIata: str(f.operatorIata),
     operatorIcao: str(f.operatorIcao),
     simbriefAirframeId: str(f.simbriefAirframeId),
+    simbriefType: str(f.simbriefType),
     currentIcao: str(f.currentIcao)
   }
 }
@@ -195,10 +199,26 @@ export function AircraftForm(props: {
           placeholder="e.g. British Airways, BAW, or type a name"
         />
       </div>
+      <div className="flex flex-col gap-1.5">
+        <Field
+          label="SimBrief profile"
+          value={form.simbriefAirframeId}
+          onChange={(v) => set('simbriefAirframeId', v)}
+        />
+        {form.simbriefAirframeId.trim() !== '' && !/^\d+_\d+$/.test(form.simbriefAirframeId.trim()) && (
+          <p className="text-xs text-amber-600 dark:text-amber-500">
+            Saved airframe IDs normally look like "123456_1582090020" — double-check this against
+            SimBrief's airframe editor (see the Fleet detail page for a direct link).
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Leave blank to use SimBrief's own default airframe — optionally naming one below.
+        </p>
+      </div>
       <Field
-        label="SimBrief profile"
-        value={form.simbriefAirframeId}
-        onChange={(v) => set('simbriefAirframeId', v)}
+        label="SimBrief default type (if no custom profile)"
+        value={form.simbriefType}
+        onChange={(v) => set('simbriefType', v.toUpperCase())}
       />
 
       <div className="flex flex-col gap-1.5">

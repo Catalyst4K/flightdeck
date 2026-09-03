@@ -17,6 +17,13 @@ export const aircraft = sqliteTable('aircraft', {
   // so both are stored (docs/decisions.md, SimBrief-generation entry).
   operatorIcao: text('operator_icao'),
   simbriefAirframeId: text('simbrief_airframe_id'),
+  // A chosen SimBrief *default* type (e.g. this A320 flies as SimBrief's "A20N Neo"
+  // rather than its base A320 default) — separate from simbriefAirframeId, which is a
+  // saved custom profile. Dispatch's precedence: custom airframe ID if set, else
+  // simbrief_type ?? icaoType (docs/decisions.md, fleet-simbrief-airframe entry). Not a
+  // vendored/validated list — SimBrief validates the type itself and falls back to its
+  // own default on anything it doesn't recognise, same as icaoType already does.
+  simbriefType: text('simbrief_type'),
   currentIcao: text('current_icao'),
   createdAt: text('created_at')
     .notNull()

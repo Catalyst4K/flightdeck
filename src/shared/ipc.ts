@@ -24,6 +24,10 @@ export interface Aircraft {
   operatorIcao: string | null
   /** SimBrief saved-airframe internal ID, shown as "SimBrief profile" in the UI. */
   simbriefAirframeId: string | null
+  /** A chosen SimBrief *default* type, distinct from a saved custom profile — see
+   *  schema.ts. Null means "use icaoType as SimBrief's type parameter", same as before
+   *  this field existed. */
+  simbriefType: string | null
   currentIcao: string | null
   createdAt: string
 }
@@ -35,6 +39,7 @@ export interface NewAircraft {
   operatorIata?: string | null
   operatorIcao?: string | null
   simbriefAirframeId?: string | null
+  simbriefType?: string | null
   currentIcao?: string | null
 }
 
@@ -292,6 +297,13 @@ export interface DispatchOfp {
   ofpJson: string
   /** Fleet aircraft whose registration matches `aircraftRegistration`, if any. */
   matchedAircraftId: number | null
+  /** Which airframe actually generated this OFP (docs/simbrief-notes.md, "aircraft" —
+   *  which airframe profile was used). `simbriefInternalId` is only meaningful when
+   *  `simbriefIsCustom` is true — for a stock airframe it's just the bare type code,
+   *  which is not what `aircraft.simbrief_airframe_id` stores and must never be offered
+   *  for auto-capture (see DispatchView's capture-offer logic). */
+  simbriefIsCustom: boolean
+  simbriefInternalId: string | null
 }
 
 /**
@@ -344,6 +356,10 @@ export interface DispatchOpenSimBriefParams {
   destIcao: string
   icaoType: string
   simbriefAirframeId: string | null
+  /** A chosen SimBrief default type (aircraft.simbrief_type) — takes priority over
+   *  icaoType for the `type=` fallback when there's no simbriefAirframeId, per
+   *  docs/decisions.md's fleet-simbrief-airframe entry. */
+  simbriefType?: string | null
   airlineIcao?: string | null
   flightNumber?: string | null
   departure?: DispatchDeparture | null
@@ -363,6 +379,7 @@ export const IpcChannels = {
   flightCreate: 'flight:create',
   dispatchFetchOfp: 'dispatch:fetch-ofp',
   dispatchOpenSimBrief: 'dispatch:open-simbrief',
+  dispatchOpenSimBriefAirframes: 'dispatch:open-simbrief-airframes',
   settingsGetSimbriefUsername: 'settings:get-simbrief-username',
   settingsSetSimbriefUsername: 'settings:set-simbrief-username',
   settingsGetWeightUnit: 'settings:get-weight-unit',
@@ -416,6 +433,10 @@ export interface FlightdeckApi {
   dispatchFetchOfp: () => Promise<DispatchOfp>
   /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) => Promise<void>
+  /** Opens a saved airframe's editor on SimBrief (docs/decisions.md,
+   *  fleet-simbrief-airframe entry — `.../airframes/saved/<id-suffix>`), or the plain
+   *  saved-airframes list page when `airframeId` is null or has no recognisable suffix. */
+  dispatchOpenSimBriefAirframes: (airframeId: string | null) => Promise<void>
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>
