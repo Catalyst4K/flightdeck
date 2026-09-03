@@ -943,3 +943,15 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     research and the credential decision; the actual "Generate" button is a separate
     plan (`plan/simbrief-plan-generation`, design doc first per this file's own workflow),
     since the key didn't exist when the six other 2026-09-03 plans were scoped.
+- 2026-09-03: **Closed the one open question from the landing-analysis entry above** —
+  `scripts/spike-landing.ts` run against a real landing at VHHH (25C), confirming
+  `landing-capture.ts` should keep `touchdownSource: 'derived'` rather than switch to
+  MSFS 2024's dedicated `PLANE TOUCHDOWN *` SimVars. Those disagreed with the derived
+  values not just in magnitude but in trend — across the landing's two touchdowns (a real
+  bounce), the dedicated SimVar's reading *increased* on the softer second touchdown while
+  the derived value correctly decreased, which is enough on its own to distrust it without
+  a lot more investigation. No code change — this only confirms the existing default was
+  right. Also confirmed, on the same real flight: `TrackingController`'s `onRecorded`
+  guard captured only the bounce's first touchdown (matching the spike's harder-touchdown
+  numbers exactly) and produced exactly one `landing` row, not two. Full write-up:
+  `docs/simconnect-notes.md`.
