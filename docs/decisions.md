@@ -656,3 +656,20 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     0.18 could plausibly break the tool that uses it: `npm run db:generate` still runs and
     correctly reports "no schema changes", plus typecheck, lint, 137/137 tests and a
     production build. `npm audit` reports 0 vulnerabilities.
+- 2026-09-03: **Added a `COPYRIGHT` file**, fixing a gap created by the relicence itself.
+  Replacing the MIT `LICENSE` with the verbatim GPL v3.0 text removed the only copyright
+  notice in the repository root: the MIT file carried "Copyright (c) 2026 Callum Jones",
+  whereas the GPL text's only notice is the Free Software Foundation's, which covers the
+  *licence document*, not the program. For a project that intends to dual-license, having
+  nothing in the tree assert who owns the code is exactly the wrong gap to leave.
+  - `LICENSE` stays verbatim — annotating it is discouraged and makes the licence harder
+    to identify automatically. `COPYRIGHT` carries the notice in the form the GPL itself
+    recommends ("How to Apply These Terms to Your New Programs"), states that copyright is
+    held solely by the author, and reserves the right to license under other terms.
+  - Shipped in `extraResources` alongside `LICENSE` and `THIRD-PARTY-LICENSES.md`.
+  - This is the substitute for per-file copyright headers, which stay deliberately skipped
+    (same date, relicensing entry above).
+  - **No release binaries exist yet**, so GPL v3.0 §6's obligation to provide Corresponding
+    Source with a binary distribution isn't live. When the first release happens, the
+    public repository satisfies §6(d) — but the release needs to *point* at it. Worth a
+    source link in the release notes and in the app itself.
