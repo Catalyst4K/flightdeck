@@ -16,8 +16,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AirportSearch } from './AirportSearch'
+import { defaultDepartureTime, fromDatetimeLocalValue, toDatetimeLocalValue, toSimBriefDeparture } from './dispatch-time'
 import { MetarPanel } from './MetarPanel'
 import { formatAltitude, formatWeight, mToFt } from './units'
 
@@ -60,6 +62,15 @@ export function DispatchView(props: {
   const [planAircraftId, setPlanAircraftId] = useState<number | null>(null)
   const [depIcao, setDepIcao] = useState('')
   const [destIcao, setDestIcao] = useState('')
+  // Airline ICAO prefills from the selected aircraft's operatorIcao but stays editable —
+  // an aircraft with a free-typed operator (no code resolved) leaves this blank rather
+  // than blocking the flight-number field entirely.
+  const [airlineIcao, setAirlineIcao] = useState('')
+  const [flightNumber, setFlightNumber] = useState('')
+  // Defaulted once, on aircraft selection, per dispatch-time.ts's own doc comment — not
+  // re-derived on every render, or the value would silently drift under the user while
+  // they fill in the rest of the form.
+  const [departureUtc, setDepartureUtc] = useState<Date | null>(null)
   const [fetching, setFetching] = useState(false)
   const [saving, setSaving] = useState(false)
   // Set only when Fly would abandon a flight Track already has in progress — see
@@ -80,6 +91,8 @@ export function DispatchView(props: {
     // does have real flight history to derive a location from.
     const lastArrIcao = fleetStats.find((s) => s.aircraftId === id)?.lastArrIcao
     setDepIcao(selected?.currentIcao ?? lastArrIcao ?? '')
+    setAirlineIcao(selected?.operatorIcao ?? '')
+    setDepartureUtc(defaultDepartureTime(new Date()))
     setSelectedAircraftId(id)
   }
 
@@ -90,7 +103,10 @@ export function DispatchView(props: {
       origIcao: depIcao,
       destIcao,
       icaoType: selected.icaoType,
-      simbriefAirframeId: selected.simbriefAirframeId
+      simbriefAirframeId: selected.simbriefAirframeId,
+      airlineIcao: airlineIcao || null,
+      flightNumber: flightNumber || null,
+      departure: departureUtc ? toSimBriefDeparture(departureUtc) : null
     })
   }
 
@@ -174,6 +190,9 @@ export function DispatchView(props: {
       setPlanAircraftId(null)
       setDepIcao('')
       setDestIcao('')
+      setAirlineIcao('')
+      setFlightNumber('')
+      setDepartureUtc(null)
       props.onPlanned?.()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -224,6 +243,34 @@ export function DispatchView(props: {
                 <Label>Destination</Label>
                 <AirportSearch value={destIcao} onChange={setDestIcao} />
               </div>
+              <div className="flex gap-3">
+                <Label className="flex flex-1 flex-col items-start gap-1.5">
+                  Airline ICAO
+                  <Input
+                    type="text"
+                    value={airlineIcao}
+                    onChange={(e) => setAirlineIcao(e.target.value.toUpperCase())}
+                    placeholder="e.g. BAW"
+                  />
+                </Label>
+                <Label className="flex flex-1 flex-col items-start gap-1.5">
+                  Flight number
+                  <Input
+                    type="text"
+                    value={flightNumber}
+                    onChange={(e) => setFlightNumber(e.target.value)}
+                    placeholder="e.g. 02"
+                  />
+                </Label>
+              </div>
+              <Label className="flex flex-col items-start gap-1.5">
+                Departure (UTC/Z)
+                <Input
+                  type="datetime-local"
+                  value={departureUtc ? toDatetimeLocalValue(departureUtc) : ''}
+                  onChange={(e) => setDepartureUtc(fromDatetimeLocalValue(e.target.value))}
+                />
+              </Label>
               <Button
                 type="button"
                 onClick={handleOpenSimBrief}
@@ -296,6 +343,7 @@ export function DispatchView(props: {
                     label="ZFW / TOW / LDW"
                     value={`${formatWeight(ofp.zfwKg, props.weightUnit)} / ${formatWeight(ofp.towKg, props.weightUnit)} / ${formatWeight(ofp.ldwKg, props.weightUnit)}`}
                   />
+                  <DetailField label="Cost index" value={ofp.costIndex ?? '—'} />
                 </dl>
                 <div className="flex flex-col gap-1.5 text-sm">
                   <span className="text-muted-foreground">Steps</span>
