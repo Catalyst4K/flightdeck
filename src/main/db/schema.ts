@@ -12,6 +12,10 @@ export const aircraft = sqliteTable('aircraft', {
   icaoType: text('icao_type').notNull(),
   operator: text('operator'),
   operatorIata: text('operator_iata'),
+  // ICAO code of the operator — SimBrief's `airline` generation parameter wants this,
+  // not IATA (which drives the logo instead). Neither derives reliably from the other,
+  // so both are stored (docs/decisions.md, SimBrief-generation entry).
+  operatorIcao: text('operator_icao'),
   simbriefAirframeId: text('simbrief_airframe_id'),
   currentIcao: text('current_icao'),
   createdAt: text('created_at')
