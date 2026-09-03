@@ -51,22 +51,21 @@ local-only usage keeps working without it.
 
 ## 2. Reference points
 
-These are points of inspiration and comparison, not sources of code. Flightdeck is
-written independently from scratch — no code, assets, icons, copy, or branding are
-taken from any of them. "Reference" below means: install it, see how it handles a
-problem, form your own opinion, implement your own solution.
+Apps studied for ideas on scope, UX and feature handling — install it, see how it solves
+a problem, form your own opinion, implement your own solution.
 
-- **SimToolkitPro** (simtoolkitpro.co.uk) — free, Electron-based, cross-platform, closest
-  thing to prior art for this app's scope. Useful for UX and feature-scope comparison
-  only (what a screen shows, what a workflow feels like) — closed source, so there's
-  nothing to borrow from it beyond that observation. Don't reuse its name, icons, colour
-  scheme, or copy.
+- **SimToolkitPro** (simtoolkitpro.co.uk) — free, Electron-based, cross-platform, the
+  closest prior art for this app's scope. The main reference for what a screen should
+  show and what a workflow should feel like. Closed source, so it's a UX comparison
+  point, not a code source.
 - **Volanta** — the main competitor; better reliability reputation. Good for comparing how
   flight phase detection and logbook presentation are handled. Also closed source.
 - **Little Navmap** — open source (GPL), C++/Qt. Excellent reference for airport/navdata
-  handling and map rendering, and it's readable source. GPL is viral — do not copy or
-  adapt its code into this MIT-licensed project. Ideas and algorithms observed by reading
-  it are fine; lifted code is not.
+  handling and map rendering, and it's readable source. Its licence is GPL and this
+  project is also GPL now, but that doesn't make lifting its code free of attribution —
+  ideas and algorithms observed by reading it are fair game; if a chunk of its actual
+  code is ever wanted, bring it in properly (with attribution, respecting its licence)
+  rather than by copy-paste.
 
 ---
 
