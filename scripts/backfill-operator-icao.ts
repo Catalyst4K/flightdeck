@@ -12,9 +12,39 @@
 // Run via `npm run db:backfill-operator-icao` — same ELECTRON_RUN_AS_NODE mechanism as
 // db-migrate.ts, so better-sqlite3's native module matches the Electron ABI it was built
 // against (see CLAUDE.md's Testing section).
+//
+// Reads the vendored airline CSVs via fs and parses them with parseCsvRows/columnIndex
+// directly, rather than importing airline-search.ts — that module's top-level `?raw`
+// imports are a Vite-only loader syntax, and the whole module body (including those
+// imports) executes on import regardless of which export is used, so even importing just
+// loadAirlines from it still fails under tsx (used to run this script outside Vite).
+import fs from 'node:fs'
+import path from 'node:path'
 import { createDb } from '../src/main/db/client'
 import { listAircraft, updateAircraft } from '../src/main/db/aircraft-repo'
-import { findAirlineByIata } from '../src/main/airlines/airline-search'
+import { columnIndex, parseCsvRows } from '../src/main/db/csv'
+
+function loadAirlines(raw: string): { name: string; icao: string; iata: string }[] {
+  const [header, ...rows] = parseCsvRows(raw)
+  const nameIdx = columnIndex(header, 'name')
+  const icaoIdx = columnIndex(header, 'icao')
+  const iataIdx = columnIndex(header, 'iata')
+  return rows
+    .filter((row) => row[nameIdx] && row[icaoIdx])
+    .map((row) => ({ name: row[nameIdx], icao: row[icaoIdx], iata: row[iataIdx] || '' }))
+}
+
+const resourcesDir = path.join(__dirname, '../resources')
+const airlines = [
+  ...loadAirlines(fs.readFileSync(path.join(resourcesDir, 'airlines.csv'), 'utf-8')),
+  ...loadAirlines(fs.readFileSync(path.join(resourcesDir, 'airline-aliases.csv'), 'utf-8'))
+]
+
+function findAirlineByIata(iata: string) {
+  const q = iata.trim().toLowerCase()
+  if (!q) return undefined
+  return airlines.find((a) => a.iata.toLowerCase() === q)
+}
 
 const dbPath = process.env.FLIGHTDECK_DB_PATH ?? './flightdeck.db'
 const { db } = createDb(dbPath)
