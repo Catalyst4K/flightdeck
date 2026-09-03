@@ -753,3 +753,36 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   - `AircraftForm`'s airframe-ID field gets a soft format warning (`digits_digits`) rather
     than a hard rejection, since the format is observed from real IDs, not documented, and
     a hard rule on an undocumented shape would eventually reject something valid.
+- 2026-09-03: **Implemented `plan/dispatch-advanced-tab`** — the third of six `plan/*`
+  branches, built on top of the SimBrief-generation branch's URL builder. Not blocked on
+  the API key either: every advanced field is another parameter on the same keyless
+  prefill redirect.
+  - `src/renderer/src/dispatch-options.ts` is a pure module (no React), because the real
+    risk here isn't the UI, it's silently sending the wrong thing to SimBrief. Every field
+    is typed `string | 'auto' | null` — three genuinely distinct states (unset/don't-send,
+    SimBrief's own literal `"auto"`, and a real value) that a plain `number` would collapse
+    into two.
+  - **`dispatchOptionsFromApiParams` is a translation, not a copy**, for the "load settings
+    from a previous flight" feature. A stored flight's raw OFP JSON already carries
+    `api_params` — the exact parameters that plan was generated with — so no new table or
+    saved-form-state was needed. But `api_params` echoes different names/units than the
+    real input parameters (`civalue`, the cost index the user actually sets, isn't echoed
+    at all — the number lives in `general.costindex` instead; the echo only says
+    `cruisemode`/`cruisesub`). Read `civalue` from `general.costindex` specifically, and
+    left `notams`/`units` (renamed to `notams_opt`/`pounds` in the echo, and encoded
+    differently) out of this branch's four field groups entirely rather than get either
+    subtly wrong.
+  - Deliberately **not** restored on "load settings from": departure date/time — always
+    reset to the now-+45-minutes default instead. It's Callum's own stated reason for
+    wanting this feature ("regenerate it with up to date departure times"), and reloading a
+    stale departure would be the one thing an obvious-looking reload feature got wrong by
+    default.
+  - Advanced options live behind an "Advanced (N)" button inside the existing "Plan a
+    flight" card, not a new top-level tab — the app's five tabs are areas of the app,
+    and generation parameters for one card don't rise to that. The count in the button
+    label exists specifically so a cost index set for a previous flight is never silently
+    still in effect with nothing on screen saying so.
+  - `main/index.ts`'s `dispatchOpenSimBrief` handler takes a generic `extra: [string,
+    string][]` from the renderer rather than growing per-field parameters itself — the
+    renderer (where `dispatchOptionsToUrlParams` is unit-tested) computes the final,
+    already-filtered pair list, and the handler stays a dumb pass-through appender.

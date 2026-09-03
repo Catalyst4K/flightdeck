@@ -116,8 +116,17 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, params: DispatchOpenSimBriefParams) => {
-    const { origIcao, destIcao, icaoType, simbriefAirframeId, simbriefType, airlineIcao, flightNumber, departure } =
-      params
+    const {
+      origIcao,
+      destIcao,
+      icaoType,
+      simbriefAirframeId,
+      simbriefType,
+      airlineIcao,
+      flightNumber,
+      departure,
+      extra
+    } = params
     if (!origIcao || !destIcao || (!icaoType && !simbriefAirframeId)) {
       return shell.openExternal('https://dispatch.simbrief.com/')
     }
@@ -142,6 +151,12 @@ app.whenReady().then(() => {
     if (flightNumber) url += `&fltnum=${encodeURIComponent(flightNumber)}`
     if (departure) {
       url += `&date=${departure.dateEpochSeconds}&deph=${departure.hour}&depm=${departure.minute}`
+    }
+    // Advanced options (pax/fuel/cruise/route) from dispatch-options.ts — already reduced
+    // to only the fields the user actually set, so an untouched advanced dialog appends
+    // nothing here (docs/decisions.md, dispatch-advanced-tab entry).
+    for (const [key, value] of extra ?? []) {
+      url += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`
     }
     return shell.openExternal(url)
   })
