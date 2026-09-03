@@ -2,12 +2,9 @@
 
 A personal fleet-management, dispatch, live-tracking and logbook companion for
 Microsoft Flight Simulator — fleet → SimBrief dispatch → SimConnect tracking on a map →
-logbook with landing analysis. Local-first, no accounts, no server.
+logbook with landing analysis. Runs locally against a local SQLite database.
 
-Built independently, from scratch — no code, assets, or branding from any other app.
-[SimToolkitPro](https://simtoolkitpro.co.uk/) is a UX reference point (see `PLAN.md`
-§2), the way any two apps in the same space end up studying each other; see `PLAN.md`
-for why this exists as its own project rather than just using that.
+See `PLAN.md` §2 for prior art in this space and why this exists as its own project.
 
 **Status:** in active development. Fleet, SimBrief dispatch, live SimConnect tracking and
 the logbook all work; see `PLAN.md` for the milestone breakdown and `docs/decisions.md`
