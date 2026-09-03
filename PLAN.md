@@ -1,8 +1,8 @@
 # Flight Companion — Project Plan
 
-> Status: in active development. M0–M5 done, M7 partially done; M6 was never built and is
-> redesigned as an ongoing plan rather than a milestone — see §6 and §10. This document is
-> the original plan, kept as the north star for scope and architecture; `docs/decisions.md`
+> Status: in active development. M0–M5 done, M7 partially done; M6's core shipped as an
+> ongoing plan rather than a milestone, gated on one spike — see §6 and §10. This document
+> is the original plan, kept as the north star for scope and architecture; `docs/decisions.md`
 > is the running record of what actually happened and where it diverged.
 > Target sim: Microsoft Flight Simulator 2024 (2020 as a bonus if free).
 
@@ -202,7 +202,12 @@ track_point                    -- keep sparse; this table gets big
   indicated_airspeed_ms, ground_speed_ms, vertical_speed_ms, heading_true_deg,
   pitch_deg, bank_deg, phase, on_ground, fuel_kg
 
-landing                        -- not built. See docs/plans/landing-analysis.md.
+landing                        -- shipped 2026-09-03 (§10). One row per flight.
+  id, flight_id (unique) → flight, touchdown_ts_utc,
+  vertical_speed_ms, g_force, pitch_deg, bank_deg, heading_true_deg,
+  indicated_airspeed_ms, ground_speed_ms, wind_speed_ms, wind_direction_deg,
+  headwind_ms?, crosswind_ms?, runway_ident?, distance_from_threshold_m?,
+  centreline_offset_m?, flap_setting?, touchdown_source ('simvar'|'derived')
 ```
 
 What changed, and why it matters if you're reading this sketch as a guide to the real
@@ -217,10 +222,10 @@ schema rather than the schema itself:
   were never built at all.
 - **Everything is SI** (`_m`, `_ms`, `_kg`), per decision §9.5 below, converted only at the
   IPC boundary — not the sim-native units this sketch used (`alt_ft`, `ias_kt`, `vs_fpm`).
-- **`landing` does not exist.** M6 was never built. The design for it now lives in
-  `docs/plans/landing-analysis.md` rather than here, informed by what the phase machine
-  and SimConnect layer actually do today (both already exist and already detect the
-  touchdown transition — see that plan for specifics).
+- **`landing` didn't exist when this section was first written; it does now** — see the
+  table above, shipped 2026-09-03 as the core of `docs/plans/landing-analysis.md`,
+  informed by what the phase machine and SimConnect layer already did by that point (both
+  already detected the touchdown transition, at no extra cost to this milestone).
 
 **Storage note** (still holds): at 1 Hz a ten-hour flight is 36,000 rows. Fine for SQLite.
 `FlightRecorder` downsamples cruise to ~15 s intervals and writes every other phase at the
@@ -233,10 +238,10 @@ sim feed's 1 Hz rate, so a short flight is a few hundred rows in practice
 
 Each milestone ends with something that runs. Don't move on until "Done when" is true.
 
-**M0–M5 are done.** M6 was never built and is redesigned as an ongoing plan rather than a
-milestone (see below). M7 is partially done. Status is noted under each; the original
-milestone text is kept because it's still an accurate description of what was built, not
-rewritten as if this had been known from the start.
+**M0–M5 are done.** M6's core shipped 2026-09-03 as an ongoing plan rather than a
+milestone, gated on one spike (see below and §10). M7 is partially done. Status is noted
+under each; the original milestone text is kept because it's still an accurate description
+of what was built, not rewritten as if this had been known from the start.
 
 ### M0 — Skeleton (½ day) — ✅ done
 Electron + Vite + React + TS boots to a window. SQLite opens, Drizzle migration runs,
@@ -299,12 +304,12 @@ fetch has no such issue and should stay the default regardless.
 **Done when:** you can plan a flight on SimBrief and pull it into the app in one click.
 
 Built without the API key, which wasn't obtained until 2026-09-03 — see §4 for what having
-one now actually changes. Beyond the original scope: `docs/plans/simbrief-generation.md` and
-`docs/plans/dispatch-advanced-tab.md` extend Dispatch further (flight number and
-departure-time prefill, an advanced-options dialog, reloading a past plan's settings), and
-`docs/plans/sid-star-selection.md` covers labelling and swapping SID/STAR procedures.
-`docs/plans/fleet-simbrief-airframe.md` closes the loop back to Fleet for managing the
-airframe link this milestone introduced.
+one now actually changes. Beyond the original scope, all shipped 2026-09-03 (§10): flight
+number and departure-time prefill and cost index (`plan/simbrief-generation`), an
+advanced-options dialog and reloading a past plan's settings (`plan/dispatch-advanced-tab`),
+SID/STAR route labelling (half of `plan/sid-star-selection` — swapping in a different
+procedure is the half still blocked on Navigraph credentials), and managing the Fleet↔
+SimBrief airframe link this milestone introduced (`plan/fleet-simbrief-airframe`).
 
 ### M4 — Live map + tracking — ✅ done
 MapLibre with the planned route drawn, the aircraft as a rotating marker, and a breadcrumb
@@ -328,11 +333,11 @@ charts, block vs air time, fuel planned vs actual. Fleet stats roll up (hours, c
 last location per tail).
 **Done when:** the M4 flight appears with correct times and fuel burn.
 
-Built as described. `docs/plans/gsx-invoices.md` extends the flight-detail summary with
-per-flight ground-service costs, which this milestone didn't anticipate — GSX's invoice
-feature didn't exist yet when this plan was written.
+Built as described. `plan/gsx-invoices` (shipped 2026-09-03, §10) extends the flight-detail
+summary with per-flight ground-service costs, which this milestone didn't anticipate —
+GSX's invoice feature didn't exist yet when this plan was written.
 
-### M6 — Landing analysis — not built; redesigned as `docs/plans/landing-analysis.md`
+### M6 — Landing analysis — core shipped 2026-09-03, gated on a spike (§10)
 Ring-buffer high-rate samples (`SIM_FRAME` period) whenever below ~500 ft AGL. On the
 `SIM ON GROUND` false→true transition, capture the touchdown record and freeze ±30 s of
 trace. Compute crosswind from wind vs runway heading, nearest runway and distance from
@@ -346,13 +351,16 @@ values as a fallback.
 
 **Done when:** you can grease one on and see a plausible fpm figure with a trace chart.
 
-**This idea is not dropped.** It's carried forward as `plan/landing-analysis`, in the same
-one-plan-per-branch shape as the SimBrief/GSX/SID-STAR work started 2026-09-02 — a design
-doc that gets built when picked up, rather than a numbered milestone blocking everything
-after it. It's grounded in more than this sketch had: the phase machine already has a
-`landing` phase and already detects the `SIM ON GROUND` false→true transition (the exact
-touchdown moment this milestone describes), and wind/pitch/bank/G-force already flow at
-1 Hz — see that plan for what's actually still missing (runway geometry data, chiefly).
+**This idea was not dropped, and its core is now built** (`docs/decisions.md`, 2026-09-03):
+runway data vendored, touchdown captured into a new `landing` table, and both UI surfaces
+(Fleet's per-aircraft history, Logbook's per-flight pane, sharing one severity component)
+shipped. What this milestone couldn't have known going in — the phase machine already had
+a `landing` phase and already detected the `SIM ON GROUND` false→true transition described
+above, so the capture point cost nothing new to add — turned out to make most of this
+milestone cheaper than it looked. The one thing still gated: whether MSFS 2024's dedicated
+touchdown SimVars this milestone asks about are actually trustworthy is unconfirmed, so
+every row is stamped `touchdown_source: 'derived'` and `scripts/spike-landing.ts` is
+sitting ready for the next real landing to answer it. See §10 for the full breakdown.
 
 ### M7 — Package and live with it — partially done
 `electron-builder` NSIS installer, auto-update deferred. Crash/error logging to a rotating
@@ -395,7 +403,7 @@ public release, not just this section, since they're the ones that actually gove
 | Payware aircraft reporting odd values (fuel in wrong units, gear vars unused on gliders) | Per-aircraft-type overrides table; sanity-clamp obviously wrong values rather than trusting them. | **Not built.** No per-aircraft-type overrides table exists in `simvars.ts` or the schema. Revisit if a real payware aircraft is found reporting bad values — no evidence of one yet, so this hasn't been prioritised. |
 | Which flight is active? | Explicit "start flight" button in v1. Auto-detection by matching dep/arr is a v2 nicety and a bug factory. | **In progress**, sooner than "v2 nicety" suggested — `AutoStartDetector.ts` exists and watches for a settled sim state, but the manual "Start tracking" button hasn't been removed yet (both coexist in `TrackView.tsx`). The bug-factory risk this row warned about is exactly why: see `docs/decisions.md`'s stale-telemetry findings, which is what the detector's "settled state" logic exists to guard against. |
 | MSFS 2024 SimVar differences vs 2020 | Detect sim version on connect; keep a per-version SimVar map behind one interface. | **Not built, and not needed** — MSFS 2020 support was never pursued (§1 non-goals), so there's only ever been one SimVar map. The `flight.sim_version` column exists but nothing populates or branches on it yet. |
-| Landing detection false positives (hard bumps, bounces, touch-and-go) | Require sustained ground contact (>2 s) before finalising; count bounces separately. | **Not built** — no `landing` table or bounce-count logic exists. Design moved to `docs/plans/landing-analysis.md`, which inherits this exact risk. |
+| Landing detection false positives (hard bumps, bounces, touch-and-go) | Require sustained ground contact (>2 s) before finalising; count bounces separately. | **Partially built** (2026-09-03) — the `landing` table and capture logic exist and are guarded to fire once per flight, but `bounce_count` was deliberately cut from v1 (`docs/decisions.md`) rather than built speculatively with no other use yet. A genuine touch-and-go could still misfire the one-time capture; not yet tested against one. |
 | Scope creep toward charts/VATSIM/overlays | §1 non-goals list. Re-read it monthly. | Holding — no VATSIM/IVAO overlay or chart browser has been built or proposed. §1 was revised 2026-09-03 to stop ruling out accounts/sync/a backend, but the feature-scope non-goals in that list are untouched. |
 
 ---
@@ -449,18 +457,31 @@ what changed as a result).
 
 ## 10. Ongoing plans
 
-Feature work beyond M0–M7 lives as a design doc on its own branch, per §8's workflow —
-not merged to `main` until picked up and built, so `git branch -a` after fetching is the
-authoritative list if this drifts. As of 2026-09-03:
+Feature work beyond M0–M7 starts as a design doc on its own `plan/<name>` branch, per
+§8's workflow, then ships on a matching `feat/<name>` branch once built. `git branch -a`
+after fetching is the authoritative list if this table drifts.
 
-| Plan | Branch | Depends on |
+**Five of the six branches below were built in one session on 2026-09-03**, the day after
+they were planned — a much faster turnaround than the table implies by listing them
+individually. Each has its own dated `docs/decisions.md` entry with what shipped and what
+was deliberately deferred; read those rather than re-deriving it from a diff.
+
+| Plan | Status | Notes |
 |---|---|---|
-| SimBrief plan generation (flight number, departure time, cost index) | `plan/simbrief-generation` | — |
-| Dispatch advanced options (loads, fuel, cost index, reload a past plan) | `plan/dispatch-advanced-tab` | `plan/simbrief-generation` |
-| Fleet ↔ SimBrief airframe management | `plan/fleet-simbrief-airframe` | — |
-| GSX ground-service invoices in the Logbook | `plan/gsx-invoices` | — |
-| Alternate SID/STAR selection | `plan/sid-star-selection` | Navigraph API credentials (applied for, pending) |
-| Landing analysis (M6, redesigned) | `plan/landing-analysis` | Runway geometry data (not yet vendored) |
+| SimBrief plan generation (flight number, departure time, cost index) | ✅ Shipped | `docs/decisions.md`, 2026-09-03. Built entirely on the keyless prefill redirect — see the note below on what a real API key (obtained the same day, after this shipped) changes. |
+| Fleet ↔ SimBrief airframe management | ✅ Shipped | `docs/decisions.md`, 2026-09-03. No default-airframe picker (that idea needed scraping an unlicensed page — ruled out post-GPL); a free-text `simbrief_type` column instead. |
+| Dispatch advanced options (loads, fuel, cost index, reload a past plan) | ✅ Shipped | `docs/decisions.md`, 2026-09-03. Lives behind an "Advanced (N)" button in the existing card, not a new tab. |
+| GSX ground-service invoices in the Logbook | ✅ Shipped | `docs/decisions.md`, 2026-09-03. Opt-in, off by default; snapshots at flight completion rather than reading the folder live. |
+| Landing analysis (M6, redesigned) | ✅ Core shipped, gated on a spike | `docs/decisions.md`, 2026-09-03. Capture, storage, and both UI surfaces (Fleet history, Logbook pane, shared severity component) are live — `touchdown_source` is stamped `'derived'` throughout because whether MSFS 2024's dedicated touchdown SimVars are trustworthy is still unconfirmed. `scripts/spike-landing.ts` is ready to run against a real landing; that answer also decides whether the high-rate trace is worth building at all. |
+| Alternate SID/STAR selection | 🔶 Half shipped | `docs/decisions.md`, 2026-09-03. The unblocked half — labelling the SID/STAR segments SimBrief already chose, on the route text and as coloured waypoint pins — is live. Picking a *different* real procedure still needs Flightdeck's own navdata (Navigraph DFD), which needs Navigraph API credentials, applied for and still pending. `plan/sid-star-selection` stays unmerged as the design for that remaining half — not stale, just blocked. |
+
+**New, not yet written as a plan:** a real SimBrief API key arrived 2026-09-03, after the
+generation branch above shipped. It doesn't turn generation into a server call (the pilot
+still logs in via a popup), but it would let Flightdeck know the *exact* identifier of the
+plan it just asked for, rather than fetching "whatever's latest" — a real upgrade over
+what shipped. Findings so far, including one live contradiction still needing a spike
+(the API's own `date` format vs. the web form's), are in `docs/simbrief-notes.md`'s
+Generation section. Not designed further until that's resolved.
 
 None of these are scoped to a deadline. Pick one, read its plan doc in full, verify
 anything it flags as unconfirmed against real data before writing code, and follow the
