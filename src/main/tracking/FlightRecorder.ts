@@ -160,7 +160,10 @@ export class FlightRecorder {
       bankDeg: t.bankDeg,
       phase: this.phase,
       onGround: t.onGround,
-      fuelKg: t.fuelTotalKg
+      fuelKg: t.fuelTotalKg,
+      gForce: t.gForce,
+      windSpeedMs: t.windSpeedMs,
+      windDirectionDeg: t.windDirectionDeg
     }
   }
 }

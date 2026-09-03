@@ -1,11 +1,13 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
   type AltitudeUnit,
   type DispatchOfp,
   type DispatchOpenSimBriefParams,
+  type GsxSettings,
+  type LandingThresholds,
   type NewFlight,
   type WeightUnit
 } from '@shared/ipc'
@@ -25,6 +27,7 @@ import {
 } from './db/aircraft-repo'
 import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
+import { addInvoicesForFlight, listInvoicesForFlight } from './db/flight-invoice-repo'
 import {
   abandonAllPlanned,
   abandonFlight,
@@ -33,16 +36,24 @@ import {
   listCompletedFlights,
   listFlights
 } from './db/flight-repo'
+import { getLandingByFlight, listLandingsByAircraft } from './db/landing-repo'
 import { importLogbookCsv } from './db/logbook-import'
 import {
   getAltitudeUnit,
+  getGsxSettings,
+  getLandingThresholds,
   getSimbriefUsername,
   getWeightUnit,
   setAltitudeUnit,
+  setGsxSettings,
+  setLandingThresholds,
   setSimbriefUsername,
   setWeightUnit
 } from './db/settings-repo'
 import { listTrackPoints } from './db/track-point-repo'
+import { defaultGsxReceiptsPath } from './gsx/default-path'
+import { buildFlightMatchWindow } from './gsx/flight-window'
+import { readReceipt, receiptFileFromPath, scanGsxFolder } from './gsx/scan'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
 import { SimConnectService } from './sim/SimConnectService'
 import { TrackingController } from './tracking/TrackingController'
@@ -116,19 +127,63 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, params: DispatchOpenSimBriefParams) => {
-    const { origIcao, destIcao, icaoType, simbriefAirframeId } = params
+    const {
+      origIcao,
+      destIcao,
+      icaoType,
+      simbriefAirframeId,
+      simbriefType,
+      airlineIcao,
+      flightNumber,
+      departure,
+      extra
+    } = params
     if (!origIcao || !destIcao || (!icaoType && !simbriefAirframeId)) {
       return shell.openExternal('https://dispatch.simbrief.com/')
     }
     // `airframe=` takes priority when a saved SimBrief profile exists; otherwise `type=`
     // lets SimBrief fall back to its own default airframe for that type ICAO — SimBrief's
-    // own behavior, nothing Flightdeck implements itself (docs/decisions.md).
+    // own behavior, nothing Flightdeck implements itself (docs/decisions.md). A chosen
+    // simbriefType (a specific SimBrief default, e.g. "A20N" rather than the bare
+    // icaoType "A320") takes priority over icaoType within that fallback.
     const airframeParam = simbriefAirframeId
       ? `airframe=${encodeURIComponent(simbriefAirframeId)}`
-      : `type=${encodeURIComponent(icaoType)}`
-    const url =
+      : `type=${encodeURIComponent(simbriefType || icaoType)}`
+    let url =
       `https://dispatch.simbrief.com/options/custom?orig=${encodeURIComponent(origIcao)}` +
       `&dest=${encodeURIComponent(destIcao)}&${airframeParam}`
+    // Optional generation prefills (docs/decisions.md, SimBrief-generation entry) — each
+    // only appended when present, so leaving them unset reproduces the URL above exactly.
+    // Verified live 2026-09-02 (docs/simbrief-notes.md) that the keyless prefill form
+    // honours all of these, including `date` taking epoch seconds rather than a date
+    // string — `departure` arrives pre-converted from src/renderer/src/dispatch-time.ts,
+    // never computed here from free text.
+    if (airlineIcao) url += `&airline=${encodeURIComponent(airlineIcao)}`
+    if (flightNumber) url += `&fltnum=${encodeURIComponent(flightNumber)}`
+    if (departure) {
+      url += `&date=${departure.dateEpochSeconds}&deph=${departure.hour}&depm=${departure.minute}`
+    }
+    // Advanced options (pax/fuel/cruise/route) from dispatch-options.ts — already reduced
+    // to only the fields the user actually set, so an untouched advanced dialog appends
+    // nothing here (docs/decisions.md, dispatch-advanced-tab entry).
+    for (const [key, value] of extra ?? []) {
+      url += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+    }
+    return shell.openExternal(url)
+  })
+
+  ipcMain.handle(IpcChannels.dispatchOpenSimBriefAirframes, (_event, airframeId: string | null) => {
+    // The internal ID is `<simbrief user id>_<airframe id>`, and the per-airframe editor
+    // takes just the suffix (docs/simbrief-notes.md, "Saved airframes" — confirmed live
+    // against a real airframe). Treated as an opaque string, never parsed as a date, even
+    // though it happens to look like a millisecond epoch — an older ID format uses a
+    // 10-digit seconds value instead, and the rule is "take the suffix verbatim" either
+    // way. Falls back to the plain list page for a malformed/absent ID, or one from
+    // before this format existed.
+    const suffix = airframeId?.split('_')[1]
+    const url = suffix
+      ? `https://dispatch.simbrief.com/airframes/saved/${encodeURIComponent(suffix)}`
+      : 'https://dispatch.simbrief.com/airframes'
     return shell.openExternal(url)
   })
 
@@ -198,6 +253,59 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))
   ipcMain.handle(IpcChannels.logbookFleetStats, () => getFleetStats(db))
   ipcMain.handle(IpcChannels.logbookImportCsv, () => importLogbookCsv(db, window))
+  ipcMain.handle(IpcChannels.logbookListInvoices, (_event, flightId: number) => listInvoicesForFlight(db, flightId))
+
+  // GSX ground-service invoices (docs/decisions.md, gsx-invoices entry) — opt-in, off by
+  // default, and a no-op everywhere below when disabled or unconfigured. Windows-only in
+  // practice (GSX itself is Windows-only), but nothing here assumes that beyond
+  // defaultGsxReceiptsPath returning null elsewhere.
+  ipcMain.handle(IpcChannels.settingsGetGsx, () => getGsxSettings(db))
+  ipcMain.handle(IpcChannels.settingsSetGsx, (_event, settings: GsxSettings) => setGsxSettings(db, settings))
+
+  ipcMain.handle(IpcChannels.gsxBrowseFolder, async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+      title: 'GSX receipts folder',
+      defaultPath: defaultGsxReceiptsPath() ?? undefined,
+      properties: ['openDirectory']
+    })
+    return canceled || filePaths.length === 0 ? null : filePaths[0]
+  })
+
+  ipcMain.handle(IpcChannels.gsxRescanFlight, async (_event, flightId: number) => {
+    const settings = getGsxSettings(db)
+    if (!settings.enabled || !settings.folderPath) return { invoices: listInvoicesForFlight(db, flightId), notailCandidates: [] }
+    const matchWindow = buildFlightMatchWindow(db, flightId)
+    if (!matchWindow) return { invoices: listInvoicesForFlight(db, flightId), notailCandidates: [] }
+
+    const result = await scanGsxFolder(settings.folderPath, matchWindow)
+    const invoices = addInvoicesForFlight(db, flightId, result.matched)
+    return {
+      invoices,
+      notailCandidates: result.notailCandidates.map((f) => ({
+        serviceGroup: f.serviceGroup,
+        jsonPath: f.jsonPath,
+        issuedUtc: f.parsed.timestampUtc,
+        icao: f.parsed.icao
+      }))
+    }
+  })
+
+  ipcMain.handle(IpcChannels.gsxAttachNotailReceipt, async (_event, flightId: number, jsonPath: string) => {
+    const file = receiptFileFromPath(jsonPath)
+    if (!file) return listInvoicesForFlight(db, flightId)
+    const invoice = await readReceipt(file)
+    if (!invoice) return listInvoicesForFlight(db, flightId)
+    return addInvoicesForFlight(db, flightId, [invoice])
+  })
+
+  ipcMain.handle(IpcChannels.gsxOpenReceipt, (_event, sourceHtmlPath: string) => shell.openPath(sourceHtmlPath))
+
+  ipcMain.handle(IpcChannels.logbookGetLanding, (_event, flightId: number) => getLandingByFlight(db, flightId) ?? null)
+  ipcMain.handle(IpcChannels.fleetListLandings, (_event, aircraftId: number) => listLandingsByAircraft(db, aircraftId))
+  ipcMain.handle(IpcChannels.settingsGetLandingThresholds, () => getLandingThresholds(db))
+  ipcMain.handle(IpcChannels.settingsSetLandingThresholds, (_event, thresholds: LandingThresholds) =>
+    setLandingThresholds(db, thresholds)
+  )
 
   ipcMain.handle(IpcChannels.aircraftLookupByRegistration, (_event, registration: string) =>
     fetchAircraftByRegistration(registration)

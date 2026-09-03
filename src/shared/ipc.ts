@@ -18,8 +18,16 @@ export interface Aircraft {
    *  logo (docs/decisions.md, 2026-09-01 airline-search entry). Null for an operator
    *  typed free-hand or filled in from a registration lookup, which has no code. */
   operatorIata: string | null
+  /** ICAO code of the operator — what SimBrief's `airline` generation parameter and a
+   *  real-world callsign use. Doesn't derive from operatorIata or vice versa, so both
+   *  are stored independently when picked from the airline search. */
+  operatorIcao: string | null
   /** SimBrief saved-airframe internal ID, shown as "SimBrief profile" in the UI. */
   simbriefAirframeId: string | null
+  /** A chosen SimBrief *default* type, distinct from a saved custom profile — see
+   *  schema.ts. Null means "use icaoType as SimBrief's type parameter", same as before
+   *  this field existed. */
+  simbriefType: string | null
   currentIcao: string | null
   createdAt: string
 }
@@ -29,7 +37,9 @@ export interface NewAircraft {
   icaoType: string
   operator?: string | null
   operatorIata?: string | null
+  operatorIcao?: string | null
   simbriefAirframeId?: string | null
+  simbriefType?: string | null
   currentIcao?: string | null
 }
 
@@ -156,9 +166,59 @@ export interface TrackPoint {
   phase: FlightPhase
   onGround: boolean
   fuelKg: number
+  gForce: number
+  windSpeedMs: number
+  windDirectionDeg: number
 }
 
 export type NewTrackPoint = Omit<TrackPoint, 'id'>
+
+/** One flight's touchdown record — see docs/decisions.md's landing-analysis entry.
+ *  `runwayIdent`/`distanceFromThresholdM`/`centrelineOffsetM`/`headwindMs`/`crosswindMs`
+ *  are null when no matching runway end was found (resources/runways.csv has no entry
+ *  for the airport, or none within a plausible heading tolerance of the touchdown). */
+export interface Landing {
+  id: number
+  flightId: number
+  touchdownTsUtc: string
+  verticalSpeedMs: number
+  gForce: number
+  pitchDeg: number
+  bankDeg: number
+  headingTrueDeg: number
+  indicatedAirspeedMs: number
+  groundSpeedMs: number
+  windSpeedMs: number
+  windDirectionDeg: number
+  headwindMs: number | null
+  crosswindMs: number | null
+  runwayIdent: string | null
+  distanceFromThresholdM: number | null
+  centrelineOffsetM: number | null
+  flapSetting: number | null
+  /** Always 'derived' for now — see the schema.ts column comment. */
+  touchdownSource: 'simvar' | 'derived'
+}
+
+/** One row per aircraft-with-a-landing-record, newest first — Fleet's per-aircraft
+ *  landing history. */
+export interface AircraftLanding extends Landing {
+  flightNumber: string | null
+  depIcao: string
+  arrIcao: string
+}
+
+export type LandingSeverity = 'none' | 'firm' | 'hard'
+
+/** Both in feet per minute (the unit pilots actually think in) — converted to/from the
+ *  SI-stored touchdown vertical_speed_ms only where a severity is computed
+ *  (src/renderer/src/landing-severity.ts), never stored in fpm anywhere else. Defaults
+ *  are general-aviation-leaning, not universally correct across a C172-to-A380 fleet —
+ *  adjustable in Settings rather than a hardcoded constant. */
+export interface LandingThresholds {
+  firmFpm: number
+  hardFpm: number
+}
 
 export interface ActiveTracking {
   flightId: number
@@ -208,6 +268,53 @@ export interface FleetStats {
   totalCycles: number
   lastArrIcao: string
   lastFlightInUtc: string | null
+}
+
+export type GsxServiceGroup = 'catering' | 'fuel' | 'handling' | 'passengerBus'
+
+/** A matched GSX ground-service receipt, snapshotted at flight completion rather than
+ *  read live — see docs/decisions.md's gsx-invoices entry for why. */
+export interface FlightInvoice {
+  id: number
+  flightId: number
+  serviceGroup: GsxServiceGroup
+  receiptId: string
+  issuedUtc: string
+  icao: string
+  tail: string
+  operator: string | null
+  /** USD equivalent GSX computed itself — the only side safe to sum across receipts that
+   *  may be in different currencies (docs/gsx-notes.md). Null if the receipt's total
+   *  couldn't be parsed. */
+  totalUsd: number | null
+  /** The original local-currency string, shown verbatim — never reformatted or re-derived. */
+  totalText: string | null
+  /** Path to the original styled .html receipt — "Open receipt" opens this directly.
+   *  May no longer exist if GSX's own admin UI bulk-deleted it; the stored data above
+   *  still renders regardless. */
+  sourceHtmlPath: string
+  /** The full receipt JSON (logoDataUri stripped before storage) — service info rows,
+   *  line items, taxes, fx disclosure. Parsed client-side for display. */
+  receiptJson: string
+}
+
+/** A NOTAIL receipt near a flight's window/airport — not confidently matched (no tail to
+ *  compare), so offered for manual attach rather than auto-stored. */
+export interface GsxNotailCandidate {
+  serviceGroup: GsxServiceGroup
+  jsonPath: string
+  issuedUtc: string
+  icao: string
+}
+
+export interface GsxRescanResult {
+  invoices: FlightInvoice[]
+  notailCandidates: GsxNotailCandidate[]
+}
+
+export interface GsxSettings {
+  enabled: boolean
+  folderPath: string | null
 }
 
 export interface LogbookImportSkip {
@@ -278,11 +385,22 @@ export interface DispatchOfp {
   zfwKg: number
   towKg: number
   ldwKg: number
+  /** Plain cost index, no scaling — null if the OFP has none (e.g. a non-CI cruise mode
+   *  or a prop aircraft). See docs/simbrief-notes.md — `general.costindex` comes back as
+   *  `{}` rather than a string when absent, so this is parsed with a guard, not `num()`. */
+  costIndex: number | null
   waypoints: DispatchWaypoint[]
   stepClimbs: DispatchStepClimb[]
   ofpJson: string
   /** Fleet aircraft whose registration matches `aircraftRegistration`, if any. */
   matchedAircraftId: number | null
+  /** Which airframe actually generated this OFP (docs/simbrief-notes.md, "aircraft" —
+   *  which airframe profile was used). `simbriefInternalId` is only meaningful when
+   *  `simbriefIsCustom` is true — for a stock airframe it's just the bare type code,
+   *  which is not what `aircraft.simbrief_airframe_id` stores and must never be offered
+   *  for auto-capture (see DispatchView's capture-offer logic). */
+  simbriefIsCustom: boolean
+  simbriefInternalId: string | null
 }
 
 /**
@@ -308,16 +426,45 @@ export type AltitudeUnit = 'ft' | 'm' | 'hybrid'
 export type AppPage = 'fleet' | 'dispatch' | 'track' | 'logbook' | 'settings'
 
 /**
+ * A departure time to prefill on SimBrief's form, already split into the shape its input
+ * parameters want (docs/simbrief-notes.md, 2026-09-02 spike): `date` is midnight UTC of
+ * the departure day in epoch seconds, `hour`/`minute` are plain UTC integers.
+ * `src/renderer/src/dispatch-time.ts` computes this from a `Date` — a wrong-format date
+ * is silently misread by SimBrief (yields a 1970 departure) rather than rejected, so it's
+ * computed here, never passed through from free text.
+ */
+export interface DispatchDeparture {
+  dateEpochSeconds: number
+  hour: number
+  minute: number
+}
+
+/**
  * Opens SimBrief's dispatch form pre-filled with a route and airframe. `simbriefAirframeId`
  * takes priority over `icaoType` when set (SimBrief uses the saved custom profile);
  * otherwise SimBrief falls back to its own default airframe for that type — Flightdeck
- * doesn't need to implement that fallback itself.
+ * doesn't need to implement that fallback itself. `airlineIcao`/`flightNumber`/`departure`
+ * are optional prefills added on top of the original orig/dest/airframe set (docs/decisions.md,
+ * SimBrief-generation entry) — each is only appended to the URL when present, so leaving
+ * them unset reproduces the original URL exactly.
  */
 export interface DispatchOpenSimBriefParams {
   origIcao: string
   destIcao: string
   icaoType: string
   simbriefAirframeId: string | null
+  /** A chosen SimBrief default type (aircraft.simbrief_type) — takes priority over
+   *  icaoType for the `type=` fallback when there's no simbriefAirframeId, per
+   *  docs/decisions.md's fleet-simbrief-airframe entry. */
+  simbriefType?: string | null
+  airlineIcao?: string | null
+  flightNumber?: string | null
+  departure?: DispatchDeparture | null
+  /** Advanced options from src/renderer/src/dispatch-options.ts, already reduced to
+   *  `[paramName, value]` pairs with unset fields omitted — computed in the renderer
+   *  (where it's unit-tested) rather than re-derived here, so this handler stays a plain
+   *  pass-through. */
+  extra?: [string, string][]
 }
 
 export const IpcChannels = {
@@ -334,6 +481,7 @@ export const IpcChannels = {
   flightCreate: 'flight:create',
   dispatchFetchOfp: 'dispatch:fetch-ofp',
   dispatchOpenSimBrief: 'dispatch:open-simbrief',
+  dispatchOpenSimBriefAirframes: 'dispatch:open-simbrief-airframes',
   settingsGetSimbriefUsername: 'settings:get-simbrief-username',
   settingsSetSimbriefUsername: 'settings:set-simbrief-username',
   settingsGetWeightUnit: 'settings:get-weight-unit',
@@ -350,6 +498,17 @@ export const IpcChannels = {
   logbookListCompletedFlights: 'logbook:list-completed-flights',
   logbookFleetStats: 'logbook:fleet-stats',
   logbookImportCsv: 'logbook:import-csv',
+  logbookListInvoices: 'logbook:list-invoices',
+  settingsGetGsx: 'settings:get-gsx',
+  settingsSetGsx: 'settings:set-gsx',
+  gsxBrowseFolder: 'gsx:browse-folder',
+  gsxRescanFlight: 'gsx:rescan-flight',
+  gsxAttachNotailReceipt: 'gsx:attach-notail-receipt',
+  gsxOpenReceipt: 'gsx:open-receipt',
+  logbookGetLanding: 'logbook:get-landing',
+  fleetListLandings: 'fleet:list-landings',
+  settingsGetLandingThresholds: 'settings:get-landing-thresholds',
+  settingsSetLandingThresholds: 'settings:set-landing-thresholds',
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
   aircraftTypeSearch: 'aircraft:type-search',
   airportSearch: 'airport:search',
@@ -387,6 +546,10 @@ export interface FlightdeckApi {
   dispatchFetchOfp: () => Promise<DispatchOfp>
   /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) => Promise<void>
+  /** Opens a saved airframe's editor on SimBrief (docs/decisions.md,
+   *  fleet-simbrief-airframe entry — `.../airframes/saved/<id-suffix>`), or the plain
+   *  saved-airframes list page when `airframeId` is null or has no recognisable suffix. */
+  dispatchOpenSimBriefAirframes: (airframeId: string | null) => Promise<void>
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>
@@ -406,6 +569,32 @@ export interface FlightdeckApi {
   logbookFleetStats: () => Promise<FleetStats[]>
   /** Opens a native file-open dialog in the main process; null if the user cancels. */
   logbookImportCsv: () => Promise<LogbookImportSummary | null>
+  /** Ground-service invoices already stored for a flight (docs/decisions.md,
+   *  gsx-invoices entry) — snapshotted at completion, not read live from disk. Empty for
+   *  any flight with no matched receipts, which is the normal case. */
+  logbookListInvoices: (flightId: number) => Promise<FlightInvoice[]>
+  settingsGetGsx: () => Promise<GsxSettings>
+  settingsSetGsx: (settings: GsxSettings) => Promise<void>
+  /** Opens a native folder-picker dialog; null if the user cancels. */
+  gsxBrowseFolder: () => Promise<string | null>
+  /** Re-scans the configured GSX folder for this flight's receipts and re-stores whatever
+   *  matches (replacing any previously stored rows for it) — a no-op returning empty
+   *  results when GSX integration is disabled or no folder is set. Needed both for
+   *  flights completed before this feature existed and for receipts GSX writes after
+   *  block-in. */
+  gsxRescanFlight: (flightId: number) => Promise<GsxRescanResult>
+  /** Manually attaches one NOTAIL candidate (offered, not auto-matched) to a flight. */
+  gsxAttachNotailReceipt: (flightId: number, jsonPath: string) => Promise<FlightInvoice[]>
+  /** Opens the original styled .html receipt in the system's default viewer. */
+  gsxOpenReceipt: (sourceHtmlPath: string) => Promise<void>
+  /** The flight's touchdown record, if one was captured — null for any flight tracked
+   *  before this feature existed, or one with no landing phase reached (e.g. cancelled
+   *  mid-air). */
+  logbookGetLanding: (flightId: number) => Promise<Landing | null>
+  /** An aircraft's full landing history, newest first — Fleet's per-tail detail page. */
+  fleetListLandings: (aircraftId: number) => Promise<AircraftLanding[]>
+  settingsGetLandingThresholds: () => Promise<LandingThresholds>
+  settingsSetLandingThresholds: (thresholds: LandingThresholds) => Promise<void>
   /** Looks up an aircraft by registration via adsbdb.com. Null if not found (not an error). */
   aircraftLookupByRegistration: (registration: string) => Promise<AircraftLookupResult | null>
   /** Searches the vendored ICAO Doc 8643 type-designator list. Empty for a query under 2 chars. */

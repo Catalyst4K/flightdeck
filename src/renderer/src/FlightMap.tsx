@@ -39,7 +39,7 @@ interface WaypointFeatureCollection {
   type: 'FeatureCollection'
   features: {
     type: 'Feature'
-    properties: { ident: string }
+    properties: { ident: string; segment: string }
     geometry: { type: 'Point'; coordinates: [number, number] }
   }[]
 }
@@ -49,7 +49,7 @@ function waypointFeatures(waypoints: Waypoint[]): WaypointFeatureCollection {
     type: 'FeatureCollection',
     features: waypoints.map((w) => ({
       type: 'Feature',
-      properties: { ident: w.ident },
+      properties: { ident: w.ident, segment: w.segment },
       geometry: { type: 'Point', coordinates: [w.lon, w.lat] }
     }))
   }
@@ -144,7 +144,23 @@ export function FlightMap({
         id: `${WAYPOINT_SOURCE_ID}-circle`,
         type: 'circle',
         source: WAYPOINT_SOURCE_ID,
-        paint: { 'circle-radius': 3, 'circle-color': '#888', 'circle-stroke-width': 1, 'circle-stroke-color': '#fff' }
+        paint: {
+          'circle-radius': 3,
+          // SID/STAR fixes stand out from plain enroute waypoints — same route.ts
+          // segmentation SimBrief itself reports (docs/decisions.md, sid-star-selection
+          // entry), not yet swappable for an alternate procedure (blocked on Navigraph).
+          'circle-color': [
+            'match',
+            ['get', 'segment'],
+            'sid',
+            '#e67700',
+            'star',
+            '#7048e8',
+            /* enroute */ '#888'
+          ],
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#fff'
+        }
       })
       map.addLayer({
         id: `${WAYPOINT_SOURCE_ID}-label`,

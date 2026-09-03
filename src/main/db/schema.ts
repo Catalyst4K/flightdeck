@@ -12,7 +12,18 @@ export const aircraft = sqliteTable('aircraft', {
   icaoType: text('icao_type').notNull(),
   operator: text('operator'),
   operatorIata: text('operator_iata'),
+  // ICAO code of the operator — SimBrief's `airline` generation parameter wants this,
+  // not IATA (which drives the logo instead). Neither derives reliably from the other,
+  // so both are stored (docs/decisions.md, SimBrief-generation entry).
+  operatorIcao: text('operator_icao'),
   simbriefAirframeId: text('simbrief_airframe_id'),
+  // A chosen SimBrief *default* type (e.g. this A320 flies as SimBrief's "A20N Neo"
+  // rather than its base A320 default) — separate from simbriefAirframeId, which is a
+  // saved custom profile. Dispatch's precedence: custom airframe ID if set, else
+  // simbrief_type ?? icaoType (docs/decisions.md, fleet-simbrief-airframe entry). Not a
+  // vendored/validated list — SimBrief validates the type itself and falls back to its
+  // own default on anything it doesn't recognise, same as icaoType already does.
+  simbriefType: text('simbrief_type'),
   currentIcao: text('current_icao'),
   createdAt: text('created_at')
     .notNull()
@@ -71,6 +82,30 @@ export const appSetting = sqliteTable('app_setting', {
   value: text('value').notNull()
 })
 
+// A snapshot of a matched GSX ground-service receipt, taken at flight completion rather
+// than read live from the folder — GSX's own admin UI can bulk-delete old receipts, so a
+// Logbook that only ever reads the live folder would silently lose historical costs the
+// day someone tidies up (docs/decisions.md, gsx-invoices entry). logoDataUri is stripped
+// from receiptJson before storage — 16-30 KB of repeated base64 PNG nothing here renders.
+export const flightInvoice = sqliteTable('flight_invoice', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  flightId: integer('flight_id')
+    .notNull()
+    .references(() => flight.id),
+  serviceGroup: text('service_group', { enum: ['catering', 'fuel', 'handling', 'passengerBus'] }).notNull(),
+  receiptId: text('receipt_id').notNull(),
+  issuedUtc: text('issued_utc').notNull(),
+  icao: text('icao').notNull(),
+  tail: text('tail').notNull(),
+  operator: text('operator'),
+  // USD equivalent GSX itself computed, for cross-currency totals — never re-derived from
+  // the local-currency text, which isn't safely parseable (docs/gsx-notes.md).
+  totalUsd: real('total_usd'),
+  totalText: text('total_text'),
+  sourceHtmlPath: text('source_html_path').notNull(),
+  receiptJson: text('receipt_json').notNull()
+})
+
 // track_point per PLAN.md §5 — "keep sparse; this table gets big". FlightRecorder
 // (src/main/tracking) downsamples cruise to ~15s intervals and writes every other phase
 // at the sim feed's own 1 Hz, so a short flight is a few hundred rows, not tens of
@@ -95,5 +130,50 @@ export const trackPoint = sqliteTable('track_point', {
     enum: ['preflight', 'pushback', 'taxi', 'takeoff', 'climb', 'cruise', 'descent', 'landing', 'shutdown']
   }).notNull(),
   onGround: integer('on_ground', { mode: 'boolean' }).notNull(),
-  fuelKg: real('fuel_kg').notNull()
+  fuelKg: real('fuel_kg').notNull(),
+  // Added for landing analysis (PLAN.md M6, docs/decisions.md) — already computed and
+  // shown live (Track's telemetry overlay) from every tick, but discarded before this;
+  // a landing record needs at least G-force and wind at the touchdown moment, and having
+  // them on every point (not just the touchdown one) also lets a future wind/G trace be
+  // plotted alongside the existing altitude/speed charts. Defaults exist only so SQLite's
+  // ALTER TABLE ADD COLUMN can backfill pre-existing rows (a NOT NULL column added via
+  // ALTER TABLE must have one) — every new row from FlightRecorder.toTrackPoint always
+  // supplies real values explicitly, so these are never actually relied on going forward.
+  gForce: real('g_force').notNull().default(1),
+  windSpeedMs: real('wind_speed_ms').notNull().default(0),
+  windDirectionDeg: real('wind_direction_deg').notNull().default(0)
+})
+
+// One row per flight's touchdown, captured where the phase machine already detects it
+// (descent -> landing, the on-ground false->true transition — TrackingController's
+// existing onRecorded-guarded branch). SI throughout per docs/decisions.md §5. Runway
+// fields are null when no matching runway end was found in resources/runways.csv (an
+// unlisted airstrip, or a match outside the plausible heading tolerance) — a landing
+// record without runway context is still worth having (touchdown rate, G, wind alone).
+export const landing = sqliteTable('landing', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  flightId: integer('flight_id')
+    .notNull()
+    .unique()
+    .references(() => flight.id),
+  touchdownTsUtc: text('touchdown_ts_utc').notNull(),
+  verticalSpeedMs: real('vertical_speed_ms').notNull(),
+  gForce: real('g_force').notNull(),
+  pitchDeg: real('pitch_deg').notNull(),
+  bankDeg: real('bank_deg').notNull(),
+  headingTrueDeg: real('heading_true_deg').notNull(),
+  indicatedAirspeedMs: real('indicated_airspeed_ms').notNull(),
+  groundSpeedMs: real('ground_speed_ms').notNull(),
+  windSpeedMs: real('wind_speed_ms').notNull(),
+  windDirectionDeg: real('wind_direction_deg').notNull(),
+  headwindMs: real('headwind_ms'),
+  crosswindMs: real('crosswind_ms'),
+  runwayIdent: text('runway_ident'),
+  distanceFromThresholdM: real('distance_from_threshold_m'),
+  centrelineOffsetM: real('centreline_offset_m'),
+  flapSetting: integer('flap_setting'),
+  // Always 'derived' until a live spike confirms MSFS 2024's dedicated touchdown SimVars
+  // are trustworthy (docs/decisions.md, landing-analysis entry) — scripts/spike-landing.ts
+  // is ready to run that check; nothing currently writes 'simvar'.
+  touchdownSource: text('touchdown_source', { enum: ['simvar', 'derived'] }).notNull().default('derived')
 })

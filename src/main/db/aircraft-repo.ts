@@ -10,7 +10,9 @@ function toAircraft(row: typeof aircraft.$inferSelect): Aircraft {
     icaoType: row.icaoType,
     operator: row.operator,
     operatorIata: row.operatorIata,
+    operatorIcao: row.operatorIcao,
     simbriefAirframeId: row.simbriefAirframeId,
+    simbriefType: row.simbriefType,
     currentIcao: row.currentIcao,
     createdAt: row.createdAt
   }
@@ -22,6 +24,11 @@ export function listAircraft(db: FlightdeckDb): Aircraft[] {
 
 export function getAircraftByRegistration(db: FlightdeckDb, registration: string): Aircraft | undefined {
   const row = db.select().from(aircraft).where(eq(aircraft.registration, registration)).get()
+  return row ? toAircraft(row) : undefined
+}
+
+export function getAircraftById(db: FlightdeckDb, id: number): Aircraft | undefined {
+  const row = db.select().from(aircraft).where(eq(aircraft.id, id)).get()
   return row ? toAircraft(row) : undefined
 }
 

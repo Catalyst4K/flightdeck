@@ -20,7 +20,10 @@ function toTrackPoint(row: typeof trackPoint.$inferSelect): TrackPoint {
     bankDeg: row.bankDeg,
     phase: row.phase,
     onGround: row.onGround,
-    fuelKg: row.fuelKg
+    fuelKg: row.fuelKg,
+    gForce: row.gForce,
+    windSpeedMs: row.windSpeedMs,
+    windDirectionDeg: row.windDirectionDeg
   }
 }
 

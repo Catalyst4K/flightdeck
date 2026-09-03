@@ -43,6 +43,34 @@
       "when": 1788303219905,
       "tag": "0005_melted_katie_power",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788452504120,
+      "tag": "0006_last_sauron",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788452835185,
+      "tag": "0007_cooing_tiger_shark",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788453739539,
+      "tag": "0008_motionless_shiva",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788454359709,
+      "tag": "0009_youthful_reptil",
+      "breakpoints": true
     }
   ]
 }

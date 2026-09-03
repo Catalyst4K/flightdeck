@@ -47,6 +47,18 @@ export interface SimBriefOfp {
   zfwKg: number
   towKg: number
   ldwKg: number
+  /** Plain cost index, no scaling — null if the field is absent (see optNum). */
+  costIndex: number | null
+  /** Whether this OFP was generated against a saved custom airframe (`aircraft.is_custom`)
+   *  rather than SimBrief's own default for the type. See simbriefInternalId. */
+  simbriefIsCustom: boolean
+  /** `aircraft.internal_id` — for a stock airframe this is just the bare type code
+   *  ("A388"), NOT comparable to aircraft.simbrief_airframe_id. Only meaningful (and only
+   *  in the `<user id>_<airframe id>` form that simbrief_airframe_id stores) when
+   *  simbriefIsCustom is true — docs/simbrief-notes.md, "aircraft — which airframe
+   *  profile was used". Callers must check simbriefIsCustom before treating this as an
+   *  airframe ID. */
+  simbriefInternalId: string | null
   waypoints: { ident: string; altitudeFt: number; distanceNm: number }[]
   /** Planned mid-cruise altitude increases — see parseStepClimbs. */
   stepClimbs: SimBriefStepClimb[]
@@ -64,6 +76,23 @@ function num(value: unknown): number {
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : String(value ?? '')
+}
+
+/**
+ * Guarded counterparts of num()/str() for genuinely optional fields (docs/simbrief-notes.md
+ * — "empty values come back as {}, not "" or null"). `num()`/`str()` stay as they are for
+ * fields already verified to always be populated in practice; any *new* optional field
+ * should use these instead, since Number({}) throws and String({}) yields
+ * "[object Object]".
+ */
+export function optNum(value: unknown): number | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+export function optStr(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null
 }
 
 function epochSecondsToIso(value: unknown): string {
@@ -175,6 +204,9 @@ export async function fetchLatestOfp(username: string): Promise<SimBriefOfp> {
     zfwKg: toKg(weights.est_zfw),
     towKg: toKg(weights.est_tow),
     ldwKg: toKg(weights.est_ldw),
+    costIndex: optNum(general.costindex),
+    simbriefIsCustom: str(aircraft.is_custom) === '1',
+    simbriefInternalId: optStr(aircraft.internal_id),
     waypoints: fixes.map((fix) => ({
       ident: str(fix.ident),
       altitudeFt: num(fix.altitude_feet ?? 0),

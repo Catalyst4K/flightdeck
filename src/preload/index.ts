@@ -5,6 +5,8 @@ import {
   type AltitudeUnit,
   type DispatchOpenSimBriefParams,
   type FlightdeckApi,
+  type GsxSettings,
+  type LandingThresholds,
   type NewAircraft,
   type NewFlight,
   type SimConnectionStatus,
@@ -37,6 +39,8 @@ const api: FlightdeckApi = {
   dispatchFetchOfp: () => ipcRenderer.invoke(IpcChannels.dispatchFetchOfp),
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) =>
     ipcRenderer.invoke(IpcChannels.dispatchOpenSimBrief, params),
+  dispatchOpenSimBriefAirframes: (airframeId: string | null) =>
+    ipcRenderer.invoke(IpcChannels.dispatchOpenSimBriefAirframes, airframeId),
   settingsGetSimbriefUsername: () => ipcRenderer.invoke(IpcChannels.settingsGetSimbriefUsername),
   settingsSetSimbriefUsername: (username: string) =>
     ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username),
@@ -57,6 +61,19 @@ const api: FlightdeckApi = {
   logbookListCompletedFlights: () => ipcRenderer.invoke(IpcChannels.logbookListCompletedFlights),
   logbookFleetStats: () => ipcRenderer.invoke(IpcChannels.logbookFleetStats),
   logbookImportCsv: () => ipcRenderer.invoke(IpcChannels.logbookImportCsv),
+  logbookListInvoices: (flightId: number) => ipcRenderer.invoke(IpcChannels.logbookListInvoices, flightId),
+  settingsGetGsx: () => ipcRenderer.invoke(IpcChannels.settingsGetGsx),
+  settingsSetGsx: (settings: GsxSettings) => ipcRenderer.invoke(IpcChannels.settingsSetGsx, settings),
+  gsxBrowseFolder: () => ipcRenderer.invoke(IpcChannels.gsxBrowseFolder),
+  gsxRescanFlight: (flightId: number) => ipcRenderer.invoke(IpcChannels.gsxRescanFlight, flightId),
+  gsxAttachNotailReceipt: (flightId: number, jsonPath: string) =>
+    ipcRenderer.invoke(IpcChannels.gsxAttachNotailReceipt, flightId, jsonPath),
+  gsxOpenReceipt: (sourceHtmlPath: string) => ipcRenderer.invoke(IpcChannels.gsxOpenReceipt, sourceHtmlPath),
+  logbookGetLanding: (flightId: number) => ipcRenderer.invoke(IpcChannels.logbookGetLanding, flightId),
+  fleetListLandings: (aircraftId: number) => ipcRenderer.invoke(IpcChannels.fleetListLandings, aircraftId),
+  settingsGetLandingThresholds: () => ipcRenderer.invoke(IpcChannels.settingsGetLandingThresholds),
+  settingsSetLandingThresholds: (thresholds: LandingThresholds) =>
+    ipcRenderer.invoke(IpcChannels.settingsSetLandingThresholds, thresholds),
   aircraftLookupByRegistration: (registration: string) =>
     ipcRenderer.invoke(IpcChannels.aircraftLookupByRegistration, registration),
   aircraftTypeSearch: (query: string) => ipcRenderer.invoke(IpcChannels.aircraftTypeSearch, query),
