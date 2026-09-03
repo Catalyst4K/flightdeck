@@ -140,12 +140,15 @@ sections now assume.
       to accept far more than "just fetch the latest": the same prefill mechanism generates
       plans too, verified live (`docs/simbrief-notes.md`). No API key needed for anything
       built so far.
-- [ ] **SimBrief API key** — still not obtained, and turned out not to matter. SimBrief's
-      real generation API is a browser-popup widget for websites with a server backend, not
-      a REST call a desktop app can make regardless of a key
-      (`docs/decisions.md`, 2026-09-01; `docs/simbrief-notes.md`). The keyless prefill URL
-      does everything planned in `docs/plans/simbrief-plan-generation.md`. Leave this
-      unchecked — there's no longer a reason to request one.
+- [x] **SimBrief API key.** Obtained 2026-09-03, along with SimBrief's own integration
+      package. **Corrects the 2026-09-01 assumption**, not just updates it: the key still
+      doesn't turn generation into a plain server-to-server REST call (the pilot still has
+      to log in inside a popup), but the package clarifies exactly what a key *does* buy —
+      a per-request authorization hash and, more usefully, the exact identifier of the plan
+      just generated, rather than "fetch whatever's newest and hope." The keyless prefill
+      URL still covers everything already built; the key is what a proper in-app "Generate"
+      button (rather than a browser hand-off) would need. See `docs/simbrief-notes.md`'s
+      Generation section and `docs/plans/simbrief-plan-generation.md`.
 - [x] **Custom airframes.** Resolved — fleet entries own a SimBrief airframe ID
       (`aircraft.simbrief_airframe_id`, see §5 and `docs/decisions.md` §4). Confirmed live
       that the internal ID's format is `<simbrief user id>_<airframe id>` and that the
@@ -295,8 +298,8 @@ build without that (see `docs/decisions.md`). The free, keyless `xml.fetcher.php
 fetch has no such issue and should stay the default regardless.
 **Done when:** you can plan a flight on SimBrief and pull it into the app in one click.
 
-Built without the API key, and it turned out that path was never needed — see §4. Beyond
-the original scope: `docs/plans/simbrief-generation.md` and
+Built without the API key, which wasn't obtained until 2026-09-03 — see §4 for what having
+one now actually changes. Beyond the original scope: `docs/plans/simbrief-generation.md` and
 `docs/plans/dispatch-advanced-tab.md` extend Dispatch further (flight number and
 departure-time prefill, an advanced-options dialog, reloading a past plan's settings), and
 `docs/plans/sid-star-selection.md` covers labelling and swapping SID/STAR procedures.
