@@ -68,7 +68,7 @@ jobs:
           wait $PID
           echo "Exited with code $?"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: flightdeck-${{ matrix.os }}
           path: |
