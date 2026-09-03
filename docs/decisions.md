@@ -33,8 +33,12 @@ let them live only in chat history.
 
 ## 6. Licence and repo visibility
 
-- **Status:** Decided — **public repo, MIT licence**. OurAirports data (public domain)
-  is fine to vendor; don't copy GPL reference code (e.g. Little Navmap) beyond ideas.
+- **Status:** Decided — **public repo**. OurAirports data (public domain) is fine to
+  vendor; don't copy GPL reference code (e.g. Little Navmap) beyond ideas.
+- **Superseded, licence only:** originally MIT. Relicensed to **GPL-3.0-only** on
+  2026-09-03, with dual licensing kept open as a future option — see that dated entry
+  below for the full reasoning, the LGPL compliance work it required, and
+  `CONTRIBUTING.md`/`THIRD-PARTY-LICENSES.md`, which now govern this in practice.
 
 ---
 
