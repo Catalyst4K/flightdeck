@@ -220,6 +220,53 @@ export interface FleetStats {
   lastFlightInUtc: string | null
 }
 
+export type GsxServiceGroup = 'catering' | 'fuel' | 'handling' | 'passengerBus'
+
+/** A matched GSX ground-service receipt, snapshotted at flight completion rather than
+ *  read live — see docs/decisions.md's gsx-invoices entry for why. */
+export interface FlightInvoice {
+  id: number
+  flightId: number
+  serviceGroup: GsxServiceGroup
+  receiptId: string
+  issuedUtc: string
+  icao: string
+  tail: string
+  operator: string | null
+  /** USD equivalent GSX computed itself — the only side safe to sum across receipts that
+   *  may be in different currencies (docs/gsx-notes.md). Null if the receipt's total
+   *  couldn't be parsed. */
+  totalUsd: number | null
+  /** The original local-currency string, shown verbatim — never reformatted or re-derived. */
+  totalText: string | null
+  /** Path to the original styled .html receipt — "Open receipt" opens this directly.
+   *  May no longer exist if GSX's own admin UI bulk-deleted it; the stored data above
+   *  still renders regardless. */
+  sourceHtmlPath: string
+  /** The full receipt JSON (logoDataUri stripped before storage) — service info rows,
+   *  line items, taxes, fx disclosure. Parsed client-side for display. */
+  receiptJson: string
+}
+
+/** A NOTAIL receipt near a flight's window/airport — not confidently matched (no tail to
+ *  compare), so offered for manual attach rather than auto-stored. */
+export interface GsxNotailCandidate {
+  serviceGroup: GsxServiceGroup
+  jsonPath: string
+  issuedUtc: string
+  icao: string
+}
+
+export interface GsxRescanResult {
+  invoices: FlightInvoice[]
+  notailCandidates: GsxNotailCandidate[]
+}
+
+export interface GsxSettings {
+  enabled: boolean
+  folderPath: string | null
+}
+
 export interface LogbookImportSkip {
   label: string
   reason: string
@@ -401,6 +448,13 @@ export const IpcChannels = {
   logbookListCompletedFlights: 'logbook:list-completed-flights',
   logbookFleetStats: 'logbook:fleet-stats',
   logbookImportCsv: 'logbook:import-csv',
+  logbookListInvoices: 'logbook:list-invoices',
+  settingsGetGsx: 'settings:get-gsx',
+  settingsSetGsx: 'settings:set-gsx',
+  gsxBrowseFolder: 'gsx:browse-folder',
+  gsxRescanFlight: 'gsx:rescan-flight',
+  gsxAttachNotailReceipt: 'gsx:attach-notail-receipt',
+  gsxOpenReceipt: 'gsx:open-receipt',
   aircraftLookupByRegistration: 'aircraft:lookup-by-registration',
   aircraftTypeSearch: 'aircraft:type-search',
   airportSearch: 'airport:search',
@@ -461,6 +515,24 @@ export interface FlightdeckApi {
   logbookFleetStats: () => Promise<FleetStats[]>
   /** Opens a native file-open dialog in the main process; null if the user cancels. */
   logbookImportCsv: () => Promise<LogbookImportSummary | null>
+  /** Ground-service invoices already stored for a flight (docs/decisions.md,
+   *  gsx-invoices entry) — snapshotted at completion, not read live from disk. Empty for
+   *  any flight with no matched receipts, which is the normal case. */
+  logbookListInvoices: (flightId: number) => Promise<FlightInvoice[]>
+  settingsGetGsx: () => Promise<GsxSettings>
+  settingsSetGsx: (settings: GsxSettings) => Promise<void>
+  /** Opens a native folder-picker dialog; null if the user cancels. */
+  gsxBrowseFolder: () => Promise<string | null>
+  /** Re-scans the configured GSX folder for this flight's receipts and re-stores whatever
+   *  matches (replacing any previously stored rows for it) — a no-op returning empty
+   *  results when GSX integration is disabled or no folder is set. Needed both for
+   *  flights completed before this feature existed and for receipts GSX writes after
+   *  block-in. */
+  gsxRescanFlight: (flightId: number) => Promise<GsxRescanResult>
+  /** Manually attaches one NOTAIL candidate (offered, not auto-matched) to a flight. */
+  gsxAttachNotailReceipt: (flightId: number, jsonPath: string) => Promise<FlightInvoice[]>
+  /** Opens the original styled .html receipt in the system's default viewer. */
+  gsxOpenReceipt: (sourceHtmlPath: string) => Promise<void>
   /** Looks up an aircraft by registration via adsbdb.com. Null if not found (not an error). */
   aircraftLookupByRegistration: (registration: string) => Promise<AircraftLookupResult | null>
   /** Searches the vendored ICAO Doc 8643 type-designator list. Empty for a query under 2 chars. */

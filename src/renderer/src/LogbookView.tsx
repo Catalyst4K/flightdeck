@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { FlightMap } from './FlightMap'
+import { GsxInvoicesCard } from './GsxInvoicesCard'
 import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
 import { formatWeight, mToFt, msToKt } from './units'
 
@@ -186,6 +187,8 @@ function FlightDetail(props: {
           </CardContent>
         </Card>
       )}
+
+      <GsxInvoicesCard flightId={flight.id} />
     </div>
   )
 }
