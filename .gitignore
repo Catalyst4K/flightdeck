@@ -23,6 +23,7 @@ release/
 .env
 .env.local
 *.local
+*.local.md
 
 # Logs
 *.log
