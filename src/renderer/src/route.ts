@@ -9,6 +9,26 @@ function navlogFixes(ofpJson: string | null): Record<string, unknown>[] {
   }
 }
 
+/** Empty SimBrief fields deserialize to `{}`, not `""` or missing (docs/simbrief-notes.md)
+ *  — guard every optional string read from a navlog/general field the same way
+ *  simbrief-client.ts's own optStr does, so an absent value never becomes the literal
+ *  string "[object Object]". */
+function optStr(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null
+}
+
+function generalSection(ofpJson: string | null): Record<string, unknown> {
+  if (!ofpJson) return {}
+  try {
+    const parsed = JSON.parse(ofpJson) as { general?: unknown }
+    return typeof parsed.general === 'object' && parsed.general !== null
+      ? (parsed.general as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
 /**
  * Extracts the planned route as [lon, lat] pairs (GeoJSON order) from a flight's raw
  * SimBrief OFP JSON — specifically `navlog.fix[].pos_lat`/`pos_long`, sim-confirmed real
@@ -26,28 +46,97 @@ export function parseRouteFromOfpJson(ofpJson: string | null): [number, number][
   return points
 }
 
+export type RouteSegment = 'sid' | 'enroute' | 'star'
+
 export interface Waypoint {
   ident: string
   lon: number
   lat: number
   altitudeFt: number
+  /** Which part of the route this fix belongs to — see segmentWaypoints below. Always
+   *  'enroute' when the OFP names no SID/STAR at all. */
+  segment: RouteSegment
+}
+
+/** SimBrief's stated procedure names for a route (`general.sid_ident`/`star_ident`),
+ *  guarded against the `{}`-when-absent trap — null means no SID/STAR was flown. Exposed
+ *  separately from the waypoint list so a UI can label "Route: BPK7F.BPK → ... → SIER7B"
+ *  without re-deriving it from the segmented fixes. */
+export interface RouteProcedures {
+  sidIdent: string | null
+  starIdent: string | null
+}
+
+export function parseRouteProcedures(ofpJson: string | null): RouteProcedures {
+  const general = generalSection(ofpJson)
+  return { sidIdent: optStr(general.sid_ident), starIdent: optStr(general.star_ident) }
 }
 
 /**
- * Extracts per-fix waypoint markers (ident + altitude, alongside the same pos_lat/
- * pos_long used above) — `fix.ident`/`fix.altitude_feet` are the same verified fields
- * `simbrief-client.ts`'s own `waypoints` mapping already relies on. Same "empty rather
- * than throw" behavior as parseRouteFromOfpJson.
+ * Splits a navlog into SID / enroute / STAR segments — verified against real SimBrief
+ * responses with and without transitions (docs/simbrief-notes.md, 2026-09-02/03
+ * sid-star-selection entries). This only labels SimBrief's own chosen procedure; swapping
+ * in an alternate one needs real navdata (Navigraph) and is blocked on API credentials —
+ * see docs/decisions.md's sid-star-selection entry for why this half ships alone.
+ *
+ * The rule, confirmed against three real shapes (full SID+transition/STAR+transition, SID
+ * /STAR without transitions, and SID-only with no STAR):
+ * - SID = the leading run of fixes, from the start, while `via_airway === sid_ident`.
+ *   Correctly includes a SID's transition handoff fix (its via_airway is still the SID
+ *   name, never the transition's own name — transitions have no via_airway of their own).
+ * - STAR = from the fix whose `ident === star_trans` when a transition is set (the STAR's
+ *   handoff fix carries via_airway = the *inbound enroute airway*, not the STAR itself, so
+ *   via_airway alone can't find it), else from the first fix with `via_airway ===
+ *   star_ident`; runs to the very last fix, which is the destination airport itself.
+ * - Enroute = everything between.
+ */
+export function segmentWaypoints(ofpJson: string | null): Waypoint[] {
+  const general = generalSection(ofpJson)
+  const sidIdent = optStr(general.sid_ident)
+  const starIdent = optStr(general.star_ident)
+  const starTrans = optStr(general.star_trans)
+
+  const raw = navlogFixes(ofpJson)
+    .map((fix) => ({
+      ident: typeof fix.ident === 'string' ? fix.ident : '',
+      lon: Number(fix.pos_long),
+      lat: Number(fix.pos_lat),
+      altitudeFt: Number(fix.altitude_feet ?? 0),
+      viaAirway: optStr(fix.via_airway)
+    }))
+    .filter((fix) => fix.ident && Number.isFinite(fix.lon) && Number.isFinite(fix.lat))
+
+  let sidEnd = 0
+  if (sidIdent) {
+    while (sidEnd < raw.length && raw[sidEnd].viaAirway === sidIdent) sidEnd++
+  }
+
+  let starStart = raw.length
+  if (starTrans) {
+    const idx = raw.findIndex((fix) => fix.ident === starTrans)
+    if (idx !== -1) starStart = idx
+  } else if (starIdent) {
+    const idx = raw.findIndex((fix) => fix.viaAirway === starIdent)
+    if (idx !== -1) starStart = idx
+  }
+  // A STAR can never start before the SID ends — guards a pathological OFP where a
+  // coincidental ident/via_airway match would otherwise overlap or invert the segments.
+  starStart = Math.max(starStart, sidEnd)
+
+  return raw.map((fix, i) => ({
+    ident: fix.ident,
+    lon: fix.lon,
+    lat: fix.lat,
+    altitudeFt: fix.altitudeFt,
+    segment: i < sidEnd ? 'sid' : i >= starStart ? 'star' : 'enroute'
+  }))
+}
+
+/**
+ * Extracts per-fix waypoint markers (ident + altitude + segment), same source as
+ * parseRouteFromOfpJson. Same "empty rather than throw" behavior as that function —
+ * segmentWaypoints already guards every field it reads.
  */
 export function parseWaypointsFromOfpJson(ofpJson: string | null): Waypoint[] {
-  const waypoints: Waypoint[] = []
-  for (const fix of navlogFixes(ofpJson)) {
-    const lon = Number(fix.pos_long)
-    const lat = Number(fix.pos_lat)
-    const ident = typeof fix.ident === 'string' ? fix.ident : ''
-    if (Number.isFinite(lon) && Number.isFinite(lat) && ident) {
-      waypoints.push({ ident, lon, lat, altitudeFt: Number(fix.altitude_feet ?? 0) })
-    }
-  }
-  return waypoints
+  return segmentWaypoints(ofpJson)
 }
