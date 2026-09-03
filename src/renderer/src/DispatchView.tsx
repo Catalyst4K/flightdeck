@@ -76,6 +76,10 @@ export function DispatchView(props: {
   // Set only when Fly would abandon a flight Track already has in progress — see
   // handleFlyClick. Holds the warning text to show; null means no confirmation needed.
   const [flyWarning, setFlyWarning] = useState<string | null>(null)
+  // Set after a fetch whose OFP was generated against a custom airframe that differs from
+  // (or is missing on) the matched fleet aircraft — offered, not applied silently, same
+  // as the registration-match heuristic (docs/decisions.md, fleet-simbrief-airframe entry).
+  const [airframeCapture, setAirframeCapture] = useState<{ aircraftId: number; airframeId: string } | null>(null)
 
   useEffect(() => {
     window.flightdeck.aircraftList().then(setAircraft)
@@ -104,6 +108,7 @@ export function DispatchView(props: {
       destIcao,
       icaoType: selected.icaoType,
       simbriefAirframeId: selected.simbriefAirframeId,
+      simbriefType: selected.simbriefType,
       airlineIcao: airlineIcao || null,
       flightNumber: flightNumber || null,
       departure: departureUtc ? toSimBriefDeparture(departureUtc) : null
@@ -113,17 +118,52 @@ export function DispatchView(props: {
   async function handleFetch(): Promise<void> {
     setFetching(true)
     props.onOfpChange(null)
+    setAirframeCapture(null)
     try {
       const fetched = await window.flightdeck.dispatchFetchOfp()
       props.onOfpChange(fetched)
       // A flight already chosen in the "Plan a flight" panel above takes priority over the
       // registration-match heuristic — that heuristic stays as a fallback for anyone who
       // fetches without going through that panel first.
-      setSelectedAircraftId(selectedAircraftId ?? fetched.matchedAircraftId)
+      const aircraftId = selectedAircraftId ?? fetched.matchedAircraftId
+      setSelectedAircraftId(aircraftId)
+
+      const matched = aircraftId != null ? aircraft.find((a) => a.id === aircraftId) : undefined
+      if (matched) {
+        if (fetched.simbriefIsCustom && fetched.simbriefInternalId) {
+          // simbriefInternalId is only a real airframe ID (not a bare type code) when
+          // simbriefIsCustom is true — see the field's doc comment in simbrief-client.ts.
+          if (matched.simbriefAirframeId !== fetched.simbriefInternalId) {
+            setAirframeCapture({ aircraftId: matched.id, airframeId: fetched.simbriefInternalId })
+          }
+        } else if (matched.simbriefAirframeId) {
+          // The aircraft has a saved profile, but this plan didn't use it — either the ID
+          // is wrong or the plan was generated without it. Surface it rather than staying
+          // silent (docs/decisions.md, fleet-simbrief-airframe entry, "make a wrong ID
+          // visible").
+          toast.warning(
+            `This plan used SimBrief's default airframe, not ${matched.registration}'s saved profile (${matched.simbriefAirframeId}) — the saved ID may be wrong.`
+          )
+        }
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
     } finally {
       setFetching(false)
+    }
+  }
+
+  async function handleSaveAirframe(): Promise<void> {
+    if (!airframeCapture) return
+    const target = aircraft.find((a) => a.id === airframeCapture.aircraftId)
+    if (!target) return
+    try {
+      const updated = await window.flightdeck.aircraftUpdate({ ...target, simbriefAirframeId: airframeCapture.airframeId })
+      setAircraft((current) => current.map((a) => (a.id === updated.id ? updated : a)))
+      setAirframeCapture(null)
+      toast.success(`Saved this airframe to ${updated.registration}.`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -321,6 +361,17 @@ export function DispatchView(props: {
                 </CardAction>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
+                {airframeCapture && (
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/50 p-3 text-sm">
+                    <span className="text-foreground">
+                      This plan used a custom SimBrief airframe not saved to{' '}
+                      {aircraft.find((a) => a.id === airframeCapture.aircraftId)?.registration}.
+                    </span>
+                    <Button type="button" size="sm" variant="outline" onClick={handleSaveAirframe}>
+                      Save this airframe
+                    </Button>
+                  </div>
+                )}
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                   <DetailField
                     label="Aircraft (OFP)"

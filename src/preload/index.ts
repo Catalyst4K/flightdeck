@@ -37,6 +37,8 @@ const api: FlightdeckApi = {
   dispatchFetchOfp: () => ipcRenderer.invoke(IpcChannels.dispatchFetchOfp),
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) =>
     ipcRenderer.invoke(IpcChannels.dispatchOpenSimBrief, params),
+  dispatchOpenSimBriefAirframes: (airframeId: string | null) =>
+    ipcRenderer.invoke(IpcChannels.dispatchOpenSimBriefAirframes, airframeId),
   settingsGetSimbriefUsername: () => ipcRenderer.invoke(IpcChannels.settingsGetSimbriefUsername),
   settingsSetSimbriefUsername: (username: string) =>
     ipcRenderer.invoke(IpcChannels.settingsSetSimbriefUsername, username),
