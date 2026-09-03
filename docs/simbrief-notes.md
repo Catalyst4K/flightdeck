@@ -319,11 +319,39 @@ it either way.
 
 ## Generation
 
-Unchanged from the 2026-09-01 finding in `docs/decisions.md`: SimBrief's official API is
-a browser-popup widget for websites with a PHP backend (`simbrief.apiv1.js` / `.php`),
-authenticated with an emailed API key hashed as `md5(api_key . api_req)`, and the pilot
-must be logged in to SimBrief in that popup. It is not a REST call a desktop app can make
-on its own behalf, and the key request is a manual email to SimBrief support.
+**Callum obtained a real SimBrief API key on 2026-09-03**, along with SimBrief's own
+developer integration materials. Per the terms attached to those materials — and to stay
+safely clear of them rather than relying on a fine judgment call about paraphrasing —
+**the specific mechanism they describe (endpoint URLs, request signing, field-level
+protocol) is deliberately not documented in this public repository.** If those specifics
+are needed again, they belong in a private, uncommitted note, not here — this file is
+published on GitHub.
+
+What's safe to record, because it doesn't require reproducing anything of theirs:
+
+- **A real key does not turn generation into a plain server-to-server call.** The pilot
+  still has to be logged in to SimBrief for a plan to actually generate — confirmed
+  directly, not assumed. So a key doesn't remove the "someone has to be signed in" step
+  the 2026-09-01 finding already established; don't design around the assumption that it
+  does.
+- **It likely enables fetching back the *exact* plan just generated**, rather than
+  "whatever's newest" — a real improvement on the `static_id` open question in
+  `docs/plans/simbrief-plan-generation.md`. Not designed further until the items below are
+  confirmed, and not by reference to the restricted materials even then — by testing the
+  live API directly.
+- **Two things need live verification before anything is built on this**, same
+  "don't guess, test the real thing" discipline as everywhere else in this file:
+  1. Whether a departure date on this path is a formatted date string or a Unix epoch —
+     the keyless prefill URL (below) wants an epoch, and there's a specific, concrete
+     reason to think the keyed path might not follow the same convention. Don't assume
+     either without testing the real endpoint.
+  2. Whether the OFP identifier this path hands back matches the `xml_file` naming already
+     seen in a normal fetched OFP (above in this file), or is a separate, parallel scheme.
+
+Everything from before the key arrived (2026-09-01) still holds and isn't restated here:
+SimBrief's dispatch website has a keyless URL that already does everything
+`docs/plans/simbrief-plan-generation.md` needs, confirmed live below — no key required for
+any of it.
 
 What works today with no key at all is the URL prefill the app already uses:
 `https://dispatch.simbrief.com/options/custom?orig=&dest=&airframe=`-or-`type=`,

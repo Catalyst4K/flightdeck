@@ -224,13 +224,14 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     rendered on first load, no "Start tracking" click needed; test flight and a
     test-only `currentIcao` edit were both cleaned up from the dev DB afterward.
   - **SimBrief's real generation API is not a simple REST call.** Confirmed via research
-    (Navigraph forum/dev portal): it's a browser-popup widget
-    (`simbrief.apiv1.js`/`.php`) meant for websites with a server backend, and the key
-    itself is still a manual email request to SimBrief support — not self-service, and
-    the signing scheme isn't published. Per Callum's decision: sent the key request (see
-    conversation for the drafted email) and shipped this round against the keyless
-    `dispatch.simbrief.com` redirect; real in-app generation is a follow-up once a key
-    and SimBrief's integration files are actually in hand.
+    (Navigraph forum/dev portal): it requires the pilot to be logged in via a popup rather
+    than being a plain server call, and the key itself is a manual email request to
+    SimBrief support — not self-service. (Mechanism specifics from SimBrief's own
+    developer materials, obtained 2026-09-03, are deliberately kept out of this public
+    repo — see `docs/simbrief-notes.md`'s Generation section.) Per Callum's decision: sent
+    the key request (see conversation for the drafted email) and shipped this round
+    against the keyless `dispatch.simbrief.com` redirect; real in-app generation is a
+    follow-up once specifics are confirmed against the live API.
 - 2026-09-01: Started a design-system/UI-redesign initiative — M0–M6 shipped fully
   working but with zero visual design investment (no CSS files, no shared components,
   every view hand-rolling its own inline styles; only in-app navigation was the native
