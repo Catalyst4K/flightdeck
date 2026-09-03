@@ -1,8 +1,12 @@
 import { EventEmitter } from 'node:events'
 import type { ActiveTracking, TrackPoint } from '@shared/ipc'
 import type { FlightdeckDb } from '../db/client'
+import { addInvoicesForFlight } from '../db/flight-invoice-repo'
 import { abandonFlight, completeFlight, getFlight, recordOff, recordOn, startFlight } from '../db/flight-repo'
+import { getGsxSettings } from '../db/settings-repo'
 import { createTrackPoint } from '../db/track-point-repo'
+import { buildFlightMatchWindow } from '../gsx/flight-window'
+import { scanGsxFolder } from '../gsx/scan'
 import type { SimConnectService } from '../sim/SimConnectService'
 import { FlightRecorder } from './FlightRecorder'
 
@@ -47,6 +51,7 @@ export class TrackingController extends EventEmitter<TrackingControllerEvents> {
 
       if (result.phase === 'shutdown') {
         completeFlight(this.db, this.recorder.getFlightId(), telemetry.fuelTotalKg)
+        this.snapshotGsxInvoices(this.recorder.getFlightId())
         this.recorder = undefined
       }
     })
@@ -90,6 +95,26 @@ export class TrackingController extends EventEmitter<TrackingControllerEvents> {
     if (!this.recorder) return
     const telemetry = this.simConnectService.getLastTelemetry()
     completeFlight(this.db, this.recorder.getFlightId(), telemetry?.fuelTotalKg ?? 0)
+    this.snapshotGsxInvoices(this.recorder.getFlightId())
     this.recorder = undefined
+  }
+
+  /**
+   * Best-effort GSX receipt snapshot at flight completion (docs/decisions.md,
+   * gsx-invoices entry) — a no-op when the integration is disabled/unconfigured, which is
+   * the default and the common case on non-Windows machines. Fire-and-forget: a missing
+   * folder, a renamed one, or a malformed receipt file must never take down flight
+   * completion, which has already succeeded by the time this runs. The Logbook detail
+   * page's manual "rescan" action covers anything this misses (e.g. a receipt GSX writes
+   * slightly after this fires).
+   */
+  private snapshotGsxInvoices(flightId: number): void {
+    const settings = getGsxSettings(this.db)
+    if (!settings.enabled || !settings.folderPath) return
+    const window = buildFlightMatchWindow(this.db, flightId)
+    if (!window) return
+    scanGsxFolder(settings.folderPath, window)
+      .then((result) => addInvoicesForFlight(this.db, flightId, result.matched))
+      .catch(() => {})
   }
 }
