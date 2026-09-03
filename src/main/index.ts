@@ -1,11 +1,12 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import {
   IpcChannels,
   type AircraftUpdate,
   type AltitudeUnit,
   type DispatchOfp,
   type DispatchOpenSimBriefParams,
+  type GsxSettings,
   type NewFlight,
   type WeightUnit
 } from '@shared/ipc'
@@ -25,6 +26,7 @@ import {
 } from './db/aircraft-repo'
 import { parseAircraftInput } from './db/aircraft-validation'
 import { exportAircraft, importAircraft } from './db/aircraft-import-export'
+import { addInvoicesForFlight, listInvoicesForFlight } from './db/flight-invoice-repo'
 import {
   abandonAllPlanned,
   abandonFlight,
@@ -36,13 +38,18 @@ import {
 import { importLogbookCsv } from './db/logbook-import'
 import {
   getAltitudeUnit,
+  getGsxSettings,
   getSimbriefUsername,
   getWeightUnit,
   setAltitudeUnit,
+  setGsxSettings,
   setSimbriefUsername,
   setWeightUnit
 } from './db/settings-repo'
 import { listTrackPoints } from './db/track-point-repo'
+import { defaultGsxReceiptsPath } from './gsx/default-path'
+import { buildFlightMatchWindow } from './gsx/flight-window'
+import { readReceipt, receiptFileFromPath, scanGsxFolder } from './gsx/scan'
 import { fetchLatestOfp } from './simbrief/simbrief-client'
 import { SimConnectService } from './sim/SimConnectService'
 import { TrackingController } from './tracking/TrackingController'
@@ -242,6 +249,52 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))
   ipcMain.handle(IpcChannels.logbookFleetStats, () => getFleetStats(db))
   ipcMain.handle(IpcChannels.logbookImportCsv, () => importLogbookCsv(db, window))
+  ipcMain.handle(IpcChannels.logbookListInvoices, (_event, flightId: number) => listInvoicesForFlight(db, flightId))
+
+  // GSX ground-service invoices (docs/decisions.md, gsx-invoices entry) — opt-in, off by
+  // default, and a no-op everywhere below when disabled or unconfigured. Windows-only in
+  // practice (GSX itself is Windows-only), but nothing here assumes that beyond
+  // defaultGsxReceiptsPath returning null elsewhere.
+  ipcMain.handle(IpcChannels.settingsGetGsx, () => getGsxSettings(db))
+  ipcMain.handle(IpcChannels.settingsSetGsx, (_event, settings: GsxSettings) => setGsxSettings(db, settings))
+
+  ipcMain.handle(IpcChannels.gsxBrowseFolder, async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+      title: 'GSX receipts folder',
+      defaultPath: defaultGsxReceiptsPath() ?? undefined,
+      properties: ['openDirectory']
+    })
+    return canceled || filePaths.length === 0 ? null : filePaths[0]
+  })
+
+  ipcMain.handle(IpcChannels.gsxRescanFlight, async (_event, flightId: number) => {
+    const settings = getGsxSettings(db)
+    if (!settings.enabled || !settings.folderPath) return { invoices: listInvoicesForFlight(db, flightId), notailCandidates: [] }
+    const matchWindow = buildFlightMatchWindow(db, flightId)
+    if (!matchWindow) return { invoices: listInvoicesForFlight(db, flightId), notailCandidates: [] }
+
+    const result = await scanGsxFolder(settings.folderPath, matchWindow)
+    const invoices = addInvoicesForFlight(db, flightId, result.matched)
+    return {
+      invoices,
+      notailCandidates: result.notailCandidates.map((f) => ({
+        serviceGroup: f.serviceGroup,
+        jsonPath: f.jsonPath,
+        issuedUtc: f.parsed.timestampUtc,
+        icao: f.parsed.icao
+      }))
+    }
+  })
+
+  ipcMain.handle(IpcChannels.gsxAttachNotailReceipt, async (_event, flightId: number, jsonPath: string) => {
+    const file = receiptFileFromPath(jsonPath)
+    if (!file) return listInvoicesForFlight(db, flightId)
+    const invoice = await readReceipt(file)
+    if (!invoice) return listInvoicesForFlight(db, flightId)
+    return addInvoicesForFlight(db, flightId, [invoice])
+  })
+
+  ipcMain.handle(IpcChannels.gsxOpenReceipt, (_event, sourceHtmlPath: string) => shell.openPath(sourceHtmlPath))
 
   ipcMain.handle(IpcChannels.aircraftLookupByRegistration, (_event, registration: string) =>
     fetchAircraftByRegistration(registration)
