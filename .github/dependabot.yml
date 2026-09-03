@@ -1,0 +1,24 @@
+# Dependency update PRs. Weekly rather than daily: this is a solo project, and a daily
+# drip of PRs gets ignored, which is worse than a weekly batch that gets read.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine patch/minor bumps; majors stay separate so they get read
+      # properly. Electron and better-sqlite3 majors in particular need a native-module
+      # rebuild and a real smoke test (see CLAUDE.md), not a rubber stamp.
+      minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: 'deps'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci'

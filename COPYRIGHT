@@ -1,0 +1,45 @@
+Flightdeck — fleet management, SimBrief dispatch, live SimConnect tracking and a
+logbook for Microsoft Flight Simulator.
+
+Copyright (C) 2026 Callum Jones
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, version 3.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this
+program. If not, see <https://www.gnu.org/licenses/>.
+
+The full licence text is in LICENSE.
+
+-------------------------------------------------------------------------------
+
+Why this file exists
+--------------------
+
+LICENSE holds the GNU GPL v3.0 verbatim, and the only copyright notice in that
+document is the Free Software Foundation's, which covers the licence text itself —
+not this program. This file carries the notice for the program, in the form the GPL
+itself recommends ("How to Apply These Terms to Your New Programs").
+
+Per-file copyright headers are deliberately not used in this repository; see
+docs/decisions.md (2026-09-03). This file, and the LICENSE alongside it, are the
+authoritative statement instead.
+
+Other terms
+-----------
+
+Copyright in the first-party code is held solely by Callum Jones, who reserves the
+right to license this software under terms other than the GPL, including
+commercially. If GPL v3.0 does not suit your use case, ask.
+
+Contributions from others are accepted under the MIT licence so that this remains
+possible — see CONTRIBUTING.md.
+
+Third-party code and data distributed with this program are covered by their own
+licences, reproduced in THIRD-PARTY-LICENSES.md. Those licences are unaffected by
+the terms above.

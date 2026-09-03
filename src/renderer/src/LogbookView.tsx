@@ -11,15 +11,19 @@ import {
   YAxis
 } from 'recharts'
 import { ArrowLeft } from 'lucide-react'
-import type { Aircraft, Flight, TrackPoint, WeightUnit } from '@shared/ipc'
+import type { Aircraft, Flight, Landing, TrackPoint, WeightUnit } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { FlightMap } from './FlightMap'
+import { GsxInvoicesCard } from './GsxInvoicesCard'
+import { LandingBadge } from './LandingBadge'
+import { classifyLanding } from './landing-severity'
 import { parseRouteFromOfpJson, parseWaypointsFromOfpJson } from './route'
-import { formatWeight, mToFt, msToKt } from './units'
+import { formatWeight, mToFt, msToFpm, msToKt } from './units'
+import { useLandingThresholds } from './useLandingThresholds'
 
 type View = { kind: 'list' } | { kind: 'detail'; id: number }
 
@@ -54,6 +58,69 @@ function DetailField(props: { label: string; value: React.ReactNode }): React.JS
       <dt className="text-muted-foreground">{props.label}</dt>
       <dd className="text-foreground">{props.value}</dd>
     </>
+  )
+}
+
+/** The fuller companion to Fleet's per-aircraft history (docs/decisions.md,
+ *  landing-analysis entry) — a Logbook entry is already the place for full flight detail,
+ *  so this shows more of the record than Fleet's compact row does. Same conditional-
+ *  rendering pattern the fuel chart above already uses: render nothing when there's no
+ *  landing to show (the common case for any flight tracked before this feature existed),
+ *  not an empty card. */
+function LandingCard(props: { flightId: number }): React.JSX.Element | null {
+  const [landing, setLanding] = useState<Landing | null | undefined>(undefined)
+  const thresholds = useLandingThresholds()
+
+  useEffect(() => {
+    window.flightdeck.logbookGetLanding(props.flightId).then(setLanding)
+  }, [props.flightId])
+
+  if (!landing) return null
+
+  const severity = classifyLanding(landing.verticalSpeedMs, thresholds)
+
+  return (
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle className="text-sm">Landing</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+          <DetailField
+            label="Touchdown rate"
+            value={
+              <span className="flex items-center gap-2">
+                {Math.round(msToFpm(landing.verticalSpeedMs))} fpm
+                <LandingBadge severity={severity} />
+              </span>
+            }
+          />
+          <DetailField label="G-force" value={landing.gForce.toFixed(2)} />
+          <DetailField label="Pitch / bank" value={`${landing.pitchDeg.toFixed(1)}° / ${landing.bankDeg.toFixed(1)}°`} />
+          <DetailField
+            label="Airspeed / ground speed"
+            value={`${Math.round(msToKt(landing.indicatedAirspeedMs))} / ${Math.round(msToKt(landing.groundSpeedMs))} kt`}
+          />
+          <DetailField
+            label="Headwind / crosswind"
+            value={
+              landing.headwindMs != null && landing.crosswindMs != null
+                ? `${Math.round(msToKt(landing.headwindMs))} / ${Math.round(msToKt(landing.crosswindMs))} kt`
+                : '—'
+            }
+          />
+          <DetailField label="Runway" value={landing.runwayIdent ?? '—'} />
+          <DetailField
+            label="Distance from threshold"
+            value={landing.distanceFromThresholdM != null ? `${Math.round(landing.distanceFromThresholdM)} m` : '—'}
+          />
+          <DetailField
+            label="Centreline offset"
+            value={landing.centrelineOffsetM != null ? `${Math.round(landing.centrelineOffsetM)} m` : '—'}
+          />
+        </dl>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -186,6 +253,9 @@ function FlightDetail(props: {
           </CardContent>
         </Card>
       )}
+
+      <LandingCard flightId={flight.id} />
+      <GsxInvoicesCard flightId={flight.id} />
     </div>
   )
 }

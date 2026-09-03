@@ -319,13 +319,59 @@ it either way.
 
 ## Generation
 
-SimBrief's official generation API requires the pilot to be logged in to SimBrief via a
-popup — it is not a plain server-to-server REST call, key or no key — and the key itself
-is a manual email request to SimBrief support, not self-service. Mechanism specifics
-(endpoint URLs, request signing, field-level protocol) are deliberately not documented in
-this public repository, per the terms attached to SimBrief's own developer materials —
-see the fuller note on `main`'s `docs/simbrief-notes.md` for what's safe to record instead
-and what still needs live verification before any of it is built.
+**Callum obtained a real SimBrief API key on 2026-09-03**, along with SimBrief's own
+developer integration materials. Per the terms attached to those materials — and to stay
+safely clear of them rather than relying on a fine judgment call about paraphrasing —
+**the specific mechanism they describe (endpoint URLs, request signing, field-level
+protocol) is deliberately not documented in this public repository.** If those specifics
+are needed again, they belong in a private, uncommitted note, not here — this file is
+published on GitHub.
+
+What's safe to record, because it doesn't require reproducing anything of theirs:
+
+- **A real key does not turn generation into a plain server-to-server call.** The pilot
+  still has to be logged in to SimBrief for a plan to actually generate — confirmed
+  directly, not assumed. So a key doesn't remove the "someone has to be signed in" step
+  the 2026-09-01 finding already established; don't design around the assumption that it
+  does.
+- **It likely enables fetching back the *exact* plan just generated**, rather than
+  "whatever's newest" — a real improvement on the `static_id` open question in
+  `docs/plans/simbrief-plan-generation.md`. Not designed further until the items below are
+  confirmed, and not by reference to the restricted materials even then — by testing the
+  live API directly.
+- **Two open questions, both resolved by a live test on 2026-09-03** (`scripts/spike-
+  simbrief-generation.ts`, throwaway per CLAUDE.md's spike-first rule — not committed as
+  a description of the restricted mechanism, just working code that exercises it):
+  1. The departure date on this path is **not** a Unix epoch — it's a different
+     convention from the keyless prefill URL (below). Confirmed by round-tripping a
+     specific test departure time through a real generation and checking it came back
+     unchanged in the fetched plan.
+  2. The OFP identifier this path hands back **matches `params.request_id`** — the same
+     field a normal fetch already returns (see the top of this file) — not a separate
+     scheme. A real generation was confirmed live: `request_id` changed from a known
+     baseline to a new value once the plan finished, and that new plan was fetchable the
+     normal way, via `fetchLatestOfp`, no new fetch path needed.
+  Practical result: generation can be built entirely on functions this codebase already
+  has and already trusts — the existing `fetchLatestOfp` for retrieval, plus whatever
+  triggers the actual generation. No new identifier scheme or retrieval path to design.
+- **A saved custom airframe needs a different field on this path than on the keyless
+  prefill URL — confirmed live 2026-09-03, after shipping and then catching a real bug.**
+  The keyless prefill URL takes `airframe=<internal_id>` alongside/instead of `type=`
+  (already verified, 2026-09-02 entry below). The keyed generation endpoint has no such
+  field: a first production build set both `type=` and an `airframe=` parameter, and a
+  real generation with a real saved profile came back using the bare type default
+  (`simbriefIsCustom: false`) — the extra field was silently ignored, not erroneous.
+  Fixed by passing the saved profile's internal_id **as** `type` directly, confirmed by
+  the next real generation coming back with `simbriefIsCustom: true` and the expected
+  `simbriefInternalId`. Same "ignores unrecognized fields rather than rejecting them"
+  behavior noted elsewhere in this file — a wrong field name here doesn't error, it just
+  silently produces a plausible-looking but wrong result, so this class of bug is easy to
+  ship and only shows up against a real saved profile, not a bare-type test case.
+
+Everything from before the key arrived (2026-09-01) still holds and isn't restated here:
+SimBrief's dispatch website has a keyless URL that already does everything
+`docs/plans/simbrief-plan-generation.md` needs, confirmed live below — no key required for
+any of it.
 
 What works today with no key at all is the URL prefill the app already uses:
 `https://dispatch.simbrief.com/options/custom?orig=&dest=&airframe=`-or-`type=`,

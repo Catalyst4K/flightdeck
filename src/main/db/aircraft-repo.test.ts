@@ -37,11 +37,13 @@ describe('aircraft repo', () => {
       registration: 'G-ABCD',
       icaoType: 'A320',
       operator: 'Test Air',
+      operatorIcao: 'TST',
       simbriefAirframeId: '123456_1582090020',
       currentIcao: 'EGLL'
     })
 
     expect(created.operator).toBe('Test Air')
+    expect(created.operatorIcao).toBe('TST')
     expect(created.simbriefAirframeId).toBe('123456_1582090020')
     expect(created.currentIcao).toBe('EGLL')
   })

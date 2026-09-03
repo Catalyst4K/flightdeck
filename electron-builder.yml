@@ -8,6 +8,18 @@ files:
   - package.json
 asarUnpack:
   - '**/*.node'
+  # node-simconnect is LGPL-3.0-or-later. Keeping it outside the asar archive leaves it as
+  # ordinary files under resources/app.asar.unpacked/, so a user can replace the library
+  # with their own build and run the result — the replaceability the LGPL requires. It's
+  # already dynamically required rather than bundled (externalizeDepsPlugin in
+  # electron.vite.config.ts). See THIRD-PARTY-LICENSES.md.
+  - node_modules/node-simconnect/**/*
+
+# Licence notices have to be readable in an installed copy, not sealed inside the asar.
+extraResources:
+  - LICENSE
+  - COPYRIGHT
+  - THIRD-PARTY-LICENSES.md
 
 # Windows is the primary target — MSFS (and therefore this app's real usage) is
 # Windows-only. macOS is built for development convenience; there is no plan to

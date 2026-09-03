@@ -33,8 +33,12 @@ let them live only in chat history.
 
 ## 6. Licence and repo visibility
 
-- **Status:** Decided — **public repo, MIT licence**. OurAirports data (public domain)
-  is fine to vendor; don't copy GPL reference code (e.g. Little Navmap) beyond ideas.
+- **Status:** Decided — **public repo**. OurAirports data (public domain) is fine to
+  vendor; don't copy GPL reference code (e.g. Little Navmap) beyond ideas.
+- **Superseded, licence only:** originally MIT. Relicensed to **GPL-3.0-only** on
+  2026-09-03, with dual licensing kept open as a future option — see that dated entry
+  below for the full reasoning, the LGPL compliance work it required, and
+  `CONTRIBUTING.md`/`THIRD-PARTY-LICENSES.md`, which now govern this in practice.
 
 ---
 
@@ -545,3 +549,450 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   and also resets `hasCenteredRef` so the *next* flight's first point does a clean
   `jumpTo` again instead of animating an `easeTo` across the map from the stale leftover
   position — directly relevant to the turnaround workflow this was found while testing.
+- 2026-09-03: **Relicensed from MIT to GPL-3.0-only**, with the deliberate aim of keeping
+  dual licensing possible later. Callum confirmed there are no existing forks, so the
+  switch binds every copy in circulation rather than only future versions.
+  - **The stated goal needed correcting first.** GPL does not mean someone must pay to
+    monetize the project — it explicitly permits commercial use and selling copies. What
+    it prevents is *closed-source* redistribution. "They'd have to pay me" is the **dual
+    licensing** model: retain copyright, publish under GPL, and sell a separate commercial
+    licence to anyone who wants out of the GPL obligations. GPL is a necessary part of
+    that, not the whole of it. GPL-3.0 rather than AGPL-3.0 because this is a local-first
+    desktop app with no server side; `GPL-3.0-only` rather than `-or-later` to keep
+    control of which terms apply. Apache-2.0 dependencies (drizzle-orm,
+    class-variance-authority) are compatible with GPLv3 but *not* GPLv2, which settles
+    the version question independently.
+  - **`node-simconnect` is LGPL-3.0-or-later** — the only non-permissive dependency, and
+    it ships in the app. Good news for this move (LGPLv3 explicitly permits conveying
+    under GPLv3, so it's *more* compatible than it was with MIT) and it doesn't block
+    dual licensing either, since LGPL allows proprietary applications that merely *use*
+    the library. But it carries obligations that were **not previously being met**: no
+    notice, no licence text, no source pointer shipped to users. That was a pre-existing
+    gap under MIT, not something this change created — it just stops being academic once
+    money is involved. Now addressed three ways: a compliance statement and the full LGPL
+    text in `THIRD-PARTY-LICENSES.md`; confirmation that the library is dynamically
+    required rather than bundled (`externalizeDepsPlugin` already externalizes it, so the
+    built main process does a plain `require("node-simconnect")`); and
+    `node_modules/node-simconnect/**/*` added to `asarUnpack` so it exists as replaceable
+    files on disk in an installed copy, which is the substantive LGPL requirement rather
+    than a paperwork one.
+  - **`THIRD-PARTY-LICENSES.md` is generated, not hand-written**
+    (`scripts/generate-third-party-licenses.ts`, `npm run licenses:generate`). MIT,
+    BSD-3-Clause, ISC and Apache-2.0 all require their text to be *reproduced* by
+    redistributors, and a hand-maintained list goes stale the first time a dependency is
+    bumped — with a licence violation as the failure mode rather than a broken build. The
+    script walks production dependencies only (devDependencies don't ship), embeds each
+    bundled licence file, and warns when a package declares a text-required licence but
+    ships no file. It flagged exactly one on first run: **drizzle-orm declares Apache-2.0
+    but ships no licence file**, so it's listed with a pointer to upstream instead.
+  - Both notices go in `extraResources` so they land as readable files in an installed
+    copy rather than sealed inside `app.asar`.
+  - **`resources/airlines.csv` (OpenFlights) is ODbL 1.0 and cannot be relicensed.** The
+    trimmed slice is a derivative database, so share-alike applies to *it* — not to the
+    app's code, which is why this was already fine and stays fine. The consequence for
+    the future aim: a commercial licensee inherits ODbL on that one file. Kept and
+    disclosed rather than replaced; replace OpenFlights if that ever becomes
+    unacceptable. `airports.csv` is public domain and `icao-aircraft-types.csv` is MIT,
+    both unencumbered.
+  - **`CONTRIBUTING.md` added, and it's the load-bearing piece for dual licensing.** A
+    single outside contribution licensed inbound under GPL-3.0 alone would permanently
+    end the option, since no commercial licence covering the whole work could then be
+    granted without that contributor's agreement. So inbound contributions are accepted
+    under **MIT** while the project is distributed under GPL-3.0 — one-way compatible,
+    keeps the public project fully GPL, and avoids the paperwork of a signed CLA. The
+    file also states what can't be added as a dependency: copyleft libraries, unlicensed
+    or scraped datasets, and share-alike data licences without a documented consequence.
+  - **Deliberately skipped: per-file SPDX/copyright headers.** GPL's own recommended
+    practice, and genuinely useful for a dual-licensed codebase, but it's 40+ files of
+    churn for a solo project where `LICENSE` plus a single copyright holder is
+    unambiguous. Worth revisiting if outside contributors ever appear.
+  - **Flagged for `plan/fleet-simbrief-airframe`:** that plan proposes scraping SimBrief's
+    ~200-row supported-aircraft page into `resources/simbrief-aircraft.csv`. Redistributing
+    unlicensed third-party data is tolerable in a hobby project and a different question
+    entirely once licences are being sold. Revisit that approach before implementing it.
+  - Not legal advice, and recorded as such: if commercial licensing actually happens, the
+    dual-licensing arrangement above is worth a lawyer's review, because that's where
+    these setups usually go wrong.
+- 2026-09-03: **Enabled the GitHub repo's security settings**, recorded as a re-runnable
+  script (`scripts/github-repo-security.sh`) rather than as clicks in a browser. Applied
+  and verified live: Dependabot alerts and automated security fixes, secret scanning with
+  **push protection** (the half that matters — it rejects a recognised credential before
+  it leaves the machine), private vulnerability reporting (paired with a new
+  `SECURITY.md`), delete-branch-on-merge, and branch protection on `main`.
+  - **Branch protection deliberately blocks force-pushes and deletion only** — no required
+    PRs, no required status checks. Both of those block *direct pushes* to a protected
+    branch, and this project is developed solo across two machines that push straight to
+    `main`; required checks are worse still, since CI only runs after the push. This
+    corrects advice given earlier in the same session, which had suggested requiring a PR
+    without thinking through that it would break the actual workflow. Requiring a PR
+    becomes right the day outside contributions arrive — which is also when
+    `CONTRIBUTING.md`'s inbound-licence terms need somewhere to be agreed to.
+  - **`secret_scanning_non_provider_patterns` left off.** It would plausibly catch a
+    SimBrief or Navigraph credential that no provider pattern recognises, but it also
+    false-positives on base64 blobs and hex identifiers this repo legitimately contains,
+    and a false positive in push protection blocks a real push. Revisit if something ever
+    does slip through.
+  - Two `gh api` calls initially returned HTTP 422: `--raw-field` sends a value as a plain
+    string, so a nested object and a literal `null` were both rejected. Fixed by sending
+    the bodies via `--input -`. Noted in the script so it isn't rediscovered.
+  - Also added: `.github/dependabot.yml` (weekly, minor/patch grouped into one PR since a
+    daily drip on a solo project gets ignored; majors separate, because an Electron or
+    `better-sqlite3` bump needs a native rebuild and a real smoke test) and
+    `.github/workflows/codeql.yml` (`security-extended` queries, least-privilege
+    permissions, weekly cron as well as push/PR — most findings arrive when GitHub ships
+    new queries rather than when code changes).
+- 2026-09-03: **Pinned `esbuild` to `>=0.25.0` via an npm `overrides` entry.** Dependabot
+  flagged GHSA-67mh-4wv8-2f99 (esbuild's dev server lets any website read responses from
+  it) the moment alerts were switched on, via
+  `drizzle-kit → @esbuild-kit/esm-loader → @esbuild-kit/core-utils → esbuild@0.18.20`.
+  - **Not exploitable here**, and worth saying so rather than implying a fix was urgent:
+    it's a devDependency that never ships, the vulnerability requires running esbuild's
+    *dev server*, and drizzle-kit only uses esbuild to transpile `schema.ts` for
+    `db:generate`. There is also no upstream fix — 0.31.10 is the latest `drizzle-kit` and
+    it still depends on the deprecated `@esbuild-kit/*` packages.
+  - Overridden anyway, because an open alert that everyone learns to ignore defeats the
+    point of having alerts at all. The value is keeping the list empty so a *real* finding
+    is visible.
+  - The version range matters: `^0.25.12` left `tsx` and `vite` marked `invalid` (both
+    want 0.28.x, which `^0.25.12` excludes), and a nested override on
+    `@esbuild-kit/core-utils` alone didn't take effect at all. `>=0.25.0` satisfies every
+    consumer while excluding the vulnerable 0.18.
+  - Verified after the change, since forcing a major-ish jump on a package that pinned
+    0.18 could plausibly break the tool that uses it: `npm run db:generate` still runs and
+    correctly reports "no schema changes", plus typecheck, lint, 137/137 tests and a
+    production build. `npm audit` reports 0 vulnerabilities.
+- 2026-09-03: **Added a `COPYRIGHT` file**, fixing a gap created by the relicence itself.
+  Replacing the MIT `LICENSE` with the verbatim GPL v3.0 text removed the only copyright
+  notice in the repository root: the MIT file carried "Copyright (c) 2026 Callum Jones",
+  whereas the GPL text's only notice is the Free Software Foundation's, which covers the
+  *licence document*, not the program. For a project that intends to dual-license, having
+  nothing in the tree assert who owns the code is exactly the wrong gap to leave.
+  - `LICENSE` stays verbatim — annotating it is discouraged and makes the licence harder
+    to identify automatically. `COPYRIGHT` carries the notice in the form the GPL itself
+    recommends ("How to Apply These Terms to Your New Programs"), states that copyright is
+    held solely by the author, and reserves the right to license under other terms.
+  - Shipped in `extraResources` alongside `LICENSE` and `THIRD-PARTY-LICENSES.md`.
+  - This is the substitute for per-file copyright headers, which stay deliberately skipped
+    (same date, relicensing entry above).
+  - **No release binaries exist yet**, so GPL v3.0 §6's obligation to provide Corresponding
+    Source with a binary distribution isn't live. When the first release happens, the
+    public repository satisfies §6(d) — but the release needs to *point* at it. Worth a
+    source link in the release notes and in the app itself.
+- 2026-09-03: **Implemented `plan/simbrief-generation`** (flight number, departure time,
+  cost index on Dispatch's "Plan a flight" card) — the first of six `plan/*` branches
+  worked through this session. None of it needed the SimBrief/Navigraph API keys, which
+  are still pending: it builds entirely on the keyless prefill-URL redirect the app
+  already used for orig/dest/airframe, per that plan's own spike finding that the form
+  honours `airline`/`fltnum`/`date`/`deph`/`depm` too.
+  - Added `aircraft.operator_icao` (migration `0006_last_sauron.sql`) alongside the
+    existing `operator_iata` — IATA drives the airline logo, ICAO is what SimBrief's
+    `airline` parameter and a real callsign want, and neither derives from the other.
+    `AircraftForm`'s airline picker now stores both from one selection. Backfilled the
+    existing fleet via `scripts/backfill-operator-icao.ts` (`npm run
+    db:backfill-operator-icao`), matching stored IATA codes against the vendored airline
+    list; anything with a free-typed operator (no code to recover) is reported and left
+    alone rather than guessed.
+  - `src/renderer/src/dispatch-time.ts` is a pure module (no React) for the two things
+    most likely to be subtly wrong: `defaultDepartureTime` (now + 45 min, rounded up to
+    the next 5 minutes) and `toSimBriefDeparture` (a `Date` → SimBrief's
+    `{date, deph, depm}` shape — midnight-UTC epoch seconds plus plain UTC hour/minute).
+    Unit-tested against the documented known-good conversion
+    (2026-09-02T18:25Z → `date=1788307200, deph=18, depm=25`) and a rollover case
+    (23:58 + 45 min crossing midnight in UTC). `toSimBriefDeparture` returns `null` for
+    anything more than a year from now rather than silently sending a malformed date —
+    SimBrief mis-reads a bad `date` as a 1970 departure instead of rejecting it, so the
+    guard lives on the Flightdeck side.
+  - The departure field is a plain `<input type="datetime-local">`, but its value is
+    **never** interpreted in the browser's local timezone — `dispatch-time.ts`'s
+    to/fromDatetimeLocalValue treat the string as UTC wall-clock time directly, and the
+    field is labelled "Departure (UTC/Z)" so that's honest to the user too.
+  - Cost index: `general.costindex` parsed via a new `optNum`/`optStr` pair in
+    `simbrief-client.ts` rather than the existing `num`/`str` — the trap documented at the
+    top of `docs/simbrief-notes.md` (an empty SimBrief field deserializes to `{}`, and
+    `Number({})` throws) applies to every new optional field from here on, not just this
+    one. Shown as a `DetailField` on Dispatch's fetched-OFP card; not stored on the
+    `flight` row since the raw OFP JSON already carries it and nothing queries by it yet.
+  - Deliberately not built: `static_id` (fetching back the exact plan generated rather
+    than "whatever's latest") — noted as a real correctness improvement in the plan doc,
+    out of scope for this branch.
+- 2026-09-03: **Implemented `plan/fleet-simbrief-airframe`** — the second of six
+  `plan/*` branches. SimBrief has no API to create, edit or list a saved airframe (only
+  the web UI at dispatch.simbrief.com/airframes), so this doesn't reimplement that editor
+  in Electron — it makes the link between a fleet aircraft and its SimBrief profile
+  visible, verifiable, and one click to reach.
+  - `dispatchOpenSimBriefAirframes` (new IPC channel) derives a saved airframe's direct
+    editor URL from `aircraft.simbrief_airframe_id` — `.../airframes/saved/<suffix>`,
+    where `<suffix>` is everything after the `_` in the stored `<user id>_<airframe id>`
+    string. Confirmed live against a real airframe (docs/simbrief-notes.md). Falls back to
+    the plain airframes list page for a malformed/absent ID, or an ID predating this
+    format. The suffix is treated as an opaque string throughout, never parsed as a date —
+    it happens to look like a millisecond epoch in the current format but the older format
+    is 10-digit seconds, and "take it verbatim" is what makes that not matter.
+  - **No SimBrief default-airframe list is vendored.** Their aircraft list exists only as
+    an unlicensed HTML page — scraping it would be redistributing data with no permission,
+    which `CONTRIBUTING.md`'s licensing stance since the GPL relicense now explicitly rules
+    out. Went with the plan's cheapest alternative instead: a free-text
+    `aircraft.simbrief_type` column (migration `0007_cooing_tiger_shark.sql`), separate
+    from the custom `simbrief_airframe_id`. SimBrief validates the type itself and falls
+    back to its own default on anything it doesn't recognise — same behaviour `icaoType`
+    already relied on before this column existed, so a wrong pick degrades gracefully
+    rather than failing.
+  - Dispatch's airframe-or-type precedence (`main/index.ts`'s `dispatchOpenSimBrief`
+    handler) is now custom airframe ID → `simbrief_type` → `icaoType`, extending rather
+    than replacing the fallback chain the first SimBrief-generation branch already built.
+  - **Auto-capture, not copy-paste.** A fetched OFP states `aircraft.internal_id` and
+    `aircraft.is_custom` (docs/simbrief-notes.md) — confirmed live that a *custom*
+    airframe's `internal_id` is in the exact `<user id>_<airframe id>` form
+    `simbrief_airframe_id` already stores, while a *stock* airframe's `internal_id` is just
+    the bare type code and must never be offered for capture (guarded on `is_custom`, not
+    just presence of the field). When a fetch's custom airframe differs from what's saved
+    on the matched fleet aircraft, Dispatch offers (never auto-applies) "Save this
+    airframe" — same propose-don't-apply pattern as the existing registration-match
+    heuristic. When a plan used SimBrief's *default* despite the aircraft having a saved
+    profile, Dispatch now surfaces that as a warning toast too — previously a wrong or
+    stale ID failed completely silently.
+  - `AircraftForm`'s airframe-ID field gets a soft format warning (`digits_digits`) rather
+    than a hard rejection, since the format is observed from real IDs, not documented, and
+    a hard rule on an undocumented shape would eventually reject something valid.
+- 2026-09-03: **Implemented `plan/dispatch-advanced-tab`** — the third of six `plan/*`
+  branches, built on top of the SimBrief-generation branch's URL builder. Not blocked on
+  the API key either: every advanced field is another parameter on the same keyless
+  prefill redirect.
+  - `src/renderer/src/dispatch-options.ts` is a pure module (no React), because the real
+    risk here isn't the UI, it's silently sending the wrong thing to SimBrief. Every field
+    is typed `string | 'auto' | null` — three genuinely distinct states (unset/don't-send,
+    SimBrief's own literal `"auto"`, and a real value) that a plain `number` would collapse
+    into two.
+  - **`dispatchOptionsFromApiParams` is a translation, not a copy**, for the "load settings
+    from a previous flight" feature. A stored flight's raw OFP JSON already carries
+    `api_params` — the exact parameters that plan was generated with — so no new table or
+    saved-form-state was needed. But `api_params` echoes different names/units than the
+    real input parameters (`civalue`, the cost index the user actually sets, isn't echoed
+    at all — the number lives in `general.costindex` instead; the echo only says
+    `cruisemode`/`cruisesub`). Read `civalue` from `general.costindex` specifically, and
+    left `notams`/`units` (renamed to `notams_opt`/`pounds` in the echo, and encoded
+    differently) out of this branch's four field groups entirely rather than get either
+    subtly wrong.
+  - Deliberately **not** restored on "load settings from": departure date/time — always
+    reset to the now-+45-minutes default instead. It's Callum's own stated reason for
+    wanting this feature ("regenerate it with up to date departure times"), and reloading a
+    stale departure would be the one thing an obvious-looking reload feature got wrong by
+    default.
+  - Advanced options live behind an "Advanced (N)" button inside the existing "Plan a
+    flight" card, not a new top-level tab — the app's five tabs are areas of the app,
+    and generation parameters for one card don't rise to that. The count in the button
+    label exists specifically so a cost index set for a previous flight is never silently
+    still in effect with nothing on screen saying so.
+  - `main/index.ts`'s `dispatchOpenSimBrief` handler takes a generic `extra: [string,
+    string][]` from the renderer rather than growing per-field parameters itself — the
+    renderer (where `dispatchOptionsToUrlParams` is unit-tested) computes the final,
+    already-filtered pair list, and the handler stays a dumb pass-through appender.
+- 2026-09-03: **Implemented half of `plan/sid-star-selection`** — the fourth of six
+  `plan/*` branches, and the first one that's genuinely split by the Navigraph blocker
+  rather than sidestepping it entirely. That plan has two asks: (1) show the SID and STAR
+  as distinct, labelled segments of the route, and (2) pick a different, real, currently
+  valid procedure from a dropdown. Only (1) is built here — (2) needs Flightdeck's own
+  procedure data (Navigraph Digital Flight Data), which needs Navigraph API credentials
+  that are still pending. **`plan/sid-star-selection` branch is deliberately left
+  unmerged** as the record of the navdata-sync half's design, to pick up once credentials
+  arrive — nothing about it is stale, it just couldn't be built without them.
+  - The unblocked half turned out to need no inference at all: a fetched OFP already
+    states its chosen procedures outright (`general.sid_ident`/`star_ident`), and every
+    navlog fix says whether it belongs to a procedure and which one (`via_airway`,
+    corroborated by `is_sid_star`). `route.ts` gained `segmentWaypoints` (labels every
+    parsed waypoint `'sid' | 'enroute' | 'star'`) and `parseRouteProcedures` (the two
+    stated names, `{}`-guarded).
+  - **Two edge cases the segmentation rule has to get right, both confirmed against real
+    OFPs** (docs/simbrief-notes.md): the fix a SID terminates at carries `is_sid_star:
+    "0"` despite still belonging to the procedure (segmenting on `via_airway` alone, not
+    the flag, avoids a one-waypoint gap); and a STAR's transition handoff fix carries
+    `via_airway` = the *inbound enroute airway*, not the STAR's own name — so STAR
+    segmentation starts from the fix whose `ident` matches `star_trans` when one exists,
+    falling back to the first `via_airway === star_ident` match only when it doesn't.
+  - Surfaced in two places: Dispatch's Route section now shows "SID ___" / "STAR ___"
+    badges above the route string when either is set, and `FlightMap`'s waypoint pins are
+    colour-coded by segment (amber SID, purple STAR, grey enroute) — both Track and
+    Logbook get this automatically since they already render through the same
+    `parseWaypointsFromOfpJson`.
+  - This labels whichever procedure SimBrief already chose. There is still no way to
+    swap one out for a different valid one — that's entirely what part (2) is, and it's
+    the part still blocked.
+- 2026-09-03: **Implemented `plan/gsx-invoices`** — the fifth of six `plan/*` branches,
+  and unrelated to the SimBrief/Navigraph roadblock entirely (no external API — GSX Pro
+  writes local receipt files). Opt-in and off by default: a fresh install shows nothing
+  from this feature until Settings' GSX card is turned on, and every code path in
+  `src/main/gsx/` is a no-op when disabled or the configured folder doesn't exist.
+  - **Snapshot at flight completion, not a live folder read.** GSX's own admin UI can
+    bulk-delete old receipts, so a Logbook that re-scanned the folder on every page view
+    would silently lose historical costs the day someone tidies up. `TrackingController`
+    now fire-and-forgets a best-effort scan+store right after `completeFlight` (both the
+    automatic-shutdown and manual-finish paths) — errors are swallowed there deliberately,
+    since flight completion has already succeeded by the time it runs. A manual "Rescan"
+    button on the Logbook detail page covers flights completed before this feature existed,
+    and any receipt GSX writes slightly after the snapshot fires.
+  - **Matching is filename-only until a receipt actually matches.** `<timestamp>_<ICAO>_
+    <tail>.json` carries every key needed (docs/gsx-notes.md) — `src/main/gsx/filename.ts`
+    parses it with no file reads, and `matcher.ts` decides tail+ICAO+time-window-with-
+    tolerance matches as pure functions before anything gets opened. **Matches on tail,
+    never `aircraftType`** — confirmed the same tail reports two different types across
+    real receipts, since it just reflects whatever was loaded in the sim at the time.
+  - **A `NOTAIL` receipt (GSX had no tail assigned yet — a real, confirmed occurrence) is
+    offered, never auto-attached.** Time+airport alone isn't enough confidence to silently
+    add a charge to a flight, so these surface on the Logbook detail page with a manual
+    "Attach" action instead.
+  - **Money: arithmetic on the USD side only, local string always shown verbatim.** Every
+    amount is pre-formatted text like `"£1,359.71 ~$ 1,818.96"` — prefixes vary in kind,
+    decimals vary by currency, and no EUR sample exists to confirm the `.`/`,` convention
+    on a swapped locale. The USD half is consistently `$`-prefixed in every sample and GSX
+    has already done the conversion itself (with `fxDisclosure` recording the rate/date/
+    source), so summing there is the only honest way to total receipts that might be in
+    different currencies.
+  - **`logoDataUri` (16-30 KB of repeated base64 PNG) is stripped before storage** — kept
+    only in the original `.html`, which "Open receipt" opens via `shell.openPath` when the
+    user wants the real styled document.
+  - Storage is additive, not replace-wholesale: repeated rescans dedupe on `receiptId`
+    rather than deleting and re-inserting, specifically so a rescan can never wipe out a
+    NOTAIL receipt attached by hand (which the confident-match scan would never re-find on
+    its own).
+  - `PriceLists\` (a one-off, user-triggered per-airport rate card, no JSON companion) is
+    deliberately never read — confirmed it's not an automatically-maintained pricing feed.
+- 2026-09-03: **Implemented the unblocked core of `plan/landing-analysis`** (PLAN.md's
+  original M6) — the last of six `plan/*` branches, and the one with a different kind of
+  roadblock than the rest: not a missing API key, but a genuine "spike first" requirement
+  (CLAUDE.md's M1/M6 rule) that needs a live MSFS 2024 flight to resolve, which wasn't
+  available this session. Handled the same way as everything else blocked this session —
+  built everything that doesn't depend on the unresolved question, defaulted conservatively
+  on the part that does, and left the exact spike ready to run.
+  - **The one genuinely open question: are MSFS 2024's dedicated touchdown SimVars
+    (`PLANE TOUCHDOWN NORMAL VELOCITY`/`PITCH DEGREES`/`BANK DEGREES`) trustworthy?**
+    Unverified, so `landing-capture.ts` always uses the already-flowing 1 Hz ingested-tick
+    values instead (`vertical_speed_ms`/`pitch_deg`/`bank_deg`, the same numbers Track's
+    telemetry overlay already shows) and stamps every row `touchdown_source: 'derived'`.
+    `scripts/spike-landing.ts` (new, mirrors `spike-simconnect.ts`) is ready to run on a
+    real landing and print both sets side by side — the schema's `touchdown_source` column
+    already supports a future `'simvar'` value once that's confirmed, so switching over
+    later needs no migration, just a code change guarded by the spike's answer. Per the
+    plan's own explicit caution, the high-rate (`SIM_FRAME`) trace was **not** built
+    pre-emptively — it's gated on the same spike showing 1 Hz isn't good enough, which
+    hasn't been checked either.
+  - **Vendored `resources/runways.csv`** (`scripts/vendor-runways.ts`, public domain
+    OurAirports data, same pattern as the other three vendored CSVs) — 23,413 usable
+    runway-end rows (heading + threshold position both present), trimmed to airports
+    already in the app's vendored `airports.csv`. This is the fuller cut
+    `airports.LICENSE.txt` already flagged M6 would need back when `airports.csv` was
+    first trimmed down.
+  - **`resolveRunwayEnd`** (`src/main/airports/runway-lookup.ts`) matches a touchdown's
+    ICAO + heading + rough position to the nearest runway end, scoring heading agreement
+    first and touchdown-position proximity second — the second term is specifically what
+    correctly picks between parallel runways (25L/25R) sharing the same published heading,
+    which a heading-only resolver would get silently wrong.
+  - **`track_point` gained `g_force`/`wind_speed_ms`/`wind_direction_deg`** (migration
+    `0009_youthful_reptil.sql`) — already computed and shown live every tick, just never
+    persisted before. Given schema-level defaults (gForce 1, wind 0) specifically so
+    SQLite's `ALTER TABLE ADD COLUMN NOT NULL` can backfill existing rows — **verified live
+    against a real pre-existing database** (seeded a `track_point` row on the prior schema,
+    applied this migration, confirmed the row backfilled cleanly with no error) rather than
+    assumed safe. Every new row still supplies real values explicitly; the defaults only
+    ever apply to history captured before this shipped.
+  - **New `landing` table**, one row per flight (unique `flight_id`), captured inside
+    `TrackingController`'s existing `onRecorded`-guarded branch — exactly the branch
+    PLAN.md's own touchdown detection already fires on, so no new transition-detection
+    mechanism was needed, just more work done inside the one that already exists.
+  - **Deliberately not built: `bounce_count`.** The plan flagged this as "arguably a
+    nice-to-have, not the core ask" in its own Open Questions, needing a dedicated
+    ground-contact-toggle counter with no other use — cut from v1 rather than added
+    speculatively; the column isn't in the schema at all, so nothing is silently unpopulated.
+  - **Fleet's per-aircraft landing history and Logbook's per-flight landing pane share one
+    `classifyLanding` function** (`src/renderer/src/landing-severity.ts`) and one
+    `LandingBadge` component against the same `useLandingThresholds` — by construction,
+    they can't disagree about what counts as a hard landing. Thresholds (`firmFpm`/
+    `hardFpm`) are a Settings value with general-aviation-leaning defaults (480/600 fpm),
+    not a hardcoded constant, since this app spans a C172 to an A380.
+  - Sanity-clamped G-force only (`landing-capture.ts`) — PLAN.md §7's open risk register
+    flagged a payware aircraft reporting an implausible reading as unmitigated; a hard
+    clamp on an obviously-impossible value (NaN, or wildly outside [-3g, 6g]) is cheap
+    insurance against a headline-wrong number without asserting anything about what a real
+    hard landing should read.
+- 2026-09-03: Callum obtained a real SimBrief API key plus SimBrief's own developer
+  integration package. Per the terms attached to that package, and per Callum's own
+  explicit instruction, **the mechanism it describes is not documented anywhere in this
+  repo** — not the literal files, and not a prose paraphrase either (see
+  `docs/simbrief-notes.md`'s "Generation" section for what's safe to say and why). Code
+  that implements the real HTTP calls is fine and necessary once this is built — a URL
+  isn't a tutorial — but explanatory comments describing SimBrief's own protocol stay out.
+  - **Credential storage, agreed before any code touched it** (per this file's own rule
+    that storing credentials is a decision, not an implementation detail): the API key
+    goes in the existing `app_setting` key/value table, entered via a masked Settings
+    field — the same pattern the SimBrief username already uses. Considered an OS-native
+    credential store instead; rejected for now as a new dependency (supply-chain
+    scrutiny) that would make this one setting behave differently from every other one,
+    for a local-only single-user app where the DB itself is already the trust boundary.
+  - **Both open questions this needs answered were resolved by a live test**
+    (`scripts/spike-simbrief-generation.ts`, throwaway, not a description of the
+    mechanism — see `docs/simbrief-notes.md` for the safe write-up of what was confirmed).
+    Generation turns out to need nothing new on the retrieval side: the already-trusted
+    `fetchLatestOfp` is sufficient once a plan has actually been generated.
+  - Building this required opening a real, visible browser window for SimBrief's own
+    login/generation UI (not something a background request can do — confirmed live, not
+    assumed) — an Electron `BrowserWindow`, not `shell.openExternal`, so the app can
+    detect when it's done. Discovered Electron's default behaviour is to quit the whole
+    app the instant that window closes (which SimBrief's flow does on its own once
+    finished); a spike built on that default silently lost its own result every time.
+    Anything built on this needs to override `window-all-closed` deliberately.
+  - Not yet built: the production feature itself. This entry records the unblocking
+    research and the credential decision; the actual "Generate" button is a separate
+    plan (`plan/simbrief-plan-generation`, design doc first per this file's own workflow),
+    since the key didn't exist when the six other 2026-09-03 plans were scoped.
+- 2026-09-03: Built the real "Generate" feature from the plan above (`plan/simbrief-plan-
+  generation`) — Dispatch can now trigger a real SimBrief generation from a visible popup
+  window and auto-fetch the result, reusing the existing `fetchLatestOfp`/matched-aircraft
+  logic. **Superseded this same day's earlier credential-storage decision** (masked
+  Settings field, per-user key) with an application-level built-in key instead — recorded
+  here rather than silently editing the earlier entry, since both the reasoning and the
+  reversal are worth keeping visible.
+  - **Why the reversal**: re-reading the mechanism showed the API key doesn't identify
+    *who's* generating a plan — the pilot's own interactive SimBrief login in the popup
+    does that. The key only authorizes a request as coming from a registered application,
+    the same shape as the original VA-website use case the SimBrief package assumes: one
+    VA, one key, many pilots each logging into their own account. Flightdeck fits that
+    shape (one freely-distributed app, not a hosted multi-tenant service), and the email
+    that requested the key already disclosed the eventual public/free release and got the
+    key issued anyway — real, if not 100%-explicit, grounding. SimToolkitPro (an
+    established, comparable MSFS companion app) was also cited as a working precedent for
+    one key serving all of an app's users.
+  - **Encryption was considered and rejected as a false solution**: any secret shipped
+    inside a distributed binary is extractable regardless of encryption, since the
+    decryption logic has to ship in the same binary to be usable at runtime — true for any
+    client-side app on any platform, not an Electron-specific weakness. The real
+    alternative (a server Callum operates, holding the key server-side, brokering every
+    request) was explicitly rejected for now: that's a new "introduces a server" decision
+    in its own right (this file's own rule), turning a local-first feature into one
+    depending on infrastructure Callum would have to run and pay for indefinitely, for a
+    key that isn't actually protecting anyone's individual identity in the first place.
+  - **Mechanics**: `MAIN_VITE_SIMBRIEF_API_KEY` in `.env` (gitignored, `.env.example`
+    committed as the template) — loaded via electron-vite's `MAIN_VITE_` prefix, inlined
+    into the compiled main-process bundle at build time (confirmed by grepping the built
+    `out/main/index.js`: the source identifier is gone post-build, replaced by the literal
+    value). CI packaging (`.github/workflows/package.yml`) reads it from a `SIMBRIEF_API_KEY`
+    repo secret — safe because that workflow only runs on push-to-main or manual dispatch,
+    never on `pull_request`, so it never runs against a fork's code.
+  - **Removed, not left half-supported**: the per-user Settings API key field, its
+    `app_setting` row/getter/setter, and the three-file IPC lockstep behind it — all
+    deleted the same day, once the built-in key replaced them, rather than left as dead
+    code alongside the new path.
+  - **"Generate…" now replaces "Plan on SimBrief…"** as Dispatch's primary button
+    whenever a built-in key is present (i.e. any normal build) — the external-browser flow
+    only reappears automatically as a fallback for a build with no key baked in (e.g. built
+    from source with no `.env`), so Dispatch is never left with zero ways to create a plan.
+  - Live-verified end to end: Generate opens the popup, completes a real login+generation,
+    and the app auto-fetches the result with no extra clicks — see
+    `docs/plans/simbrief-plan-generation.md` for the earlier per-mechanism findings (date
+    format, identifier scheme, the `window-all-closed` non-issue in production) that this
+    was built against.
+  - **Bug found the same day, against a real saved custom airframe**: the initial build
+    sent the saved profile as a separate `airframe=` parameter (mirroring the keyless
+    prefill URL), which this endpoint silently ignores — no error, just a plan generated
+    against the bare type default instead. Diagnosed by inspecting the actual returned
+    OFP's `simbriefIsCustom`/`simbriefInternalId` fields rather than guessing from the
+    symptom, then confirmed the fix (internal_id passed as `type` itself) the same way
+    against a fresh real generation. Full write-up: `docs/simbrief-notes.md`.

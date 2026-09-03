@@ -1,0 +1,33 @@
+# Static security analysis. Free for public repositories, and the repo is public — see
+# CLAUDE.md's Security section for what this is meant to catch that review might not:
+# injection through the SimBrief URL builder, unsafe handling of third-party OFP/GSX
+# input, path handling in the import/export dialogs.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so newly-published query updates run against unchanged code too — most
+    # findings arrive this way rather than from a commit.
+    - cron: '0 6 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      # Least privilege: read the code, write findings, nothing else.
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # Adds the security queries that aren't in the default set. Noisier, but this
+          # app handles third-party data and ships as a binary.
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
