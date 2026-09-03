@@ -2,7 +2,7 @@
 
 Electron + React + TypeScript desktop app for tracking flights in Microsoft Flight
 Simulator 2024: fleet management, SimBrief dispatch, live SimConnect tracking, and a
-logbook with landing analysis. Local-first — no accounts, no server, no cloud sync.
+logbook with landing analysis. Runs locally against a local SQLite database.
 
 **Read `PLAN.md` in full before doing anything else.** It has the architecture, data
 model, milestone breakdown, and the six open decisions in §9. `docs/decisions.md` is
@@ -51,12 +51,65 @@ docs/           decisions.md, simconnect-notes.md, and per-milestone notes as ne
   `src/main/sim/simvars.ts`. Don't scatter SimVar strings through the codebase.
 - Every schema change is a Drizzle migration, generated via `npm run db:generate`.
   Never hand-edit `flightdeck.db` or a migration file after it's been applied.
-- No accounts, no backend, no telemetry-to-a-server. If a feature needs one, it's out
-  of scope for v1 — see PLAN.md §1 non-goals before proposing it.
+- Anything that sends data off the machine, stores credentials, or introduces an account
+  or a server is a **decision, not an implementation detail**. Propose it, get agreement,
+  and record it in `docs/decisions.md` before building it. Nothing is ruled out — but
+  nothing arrives by accident either, and the default stays local.
 - Prefer a boring, working implementation over a clever one. This is a personal tool
   flown solo, not a platform.
 - Convert units at the IPC boundary per the decision in `docs/decisions.md` — don't let
   sim-native and SI units mix inside the same layer.
+
+## Security
+
+**The GitHub repo is public** (`github.com/Catalyst4K/flightdeck`), and the app is
+distributed as an installable binary. Both mean mistakes here are visible and shipped, so
+treat security as part of finishing a change rather than a separate pass.
+
+Before committing or pushing:
+
+- **Never commit secrets.** No API keys, tokens, cookies, or credentials — not in source,
+  not in test fixtures, not in a `docs/` note, not in a commit message. Real cases already
+  live in this project: the SimBrief username, and the Navigraph OAuth tokens the SID/STAR
+  work will need. Those belong in the `app_setting` table at runtime, never in the repo.
+- **Check what a broad `git add` actually staged** (`git status` after it) and read any
+  file whose name doesn't obviously explain its contents.
+- **Scrub personal data out of test fixtures.** Real OFPs carry a SimBrief pilot ID; real
+  GSX receipts carry tail numbers, airports and prices. Fixtures should be trimmed and
+  anonymised, not pasted whole.
+
+When touching anything that crosses a trust boundary, actively look for the vulnerability
+rather than assuming there isn't one:
+
+- **External data is data, never code.** OFP JSON, GSX receipt JSON, imported CSVs and
+  SimConnect strings are all third-party input. No `eval`, no `new Function`, no
+  `innerHTML`/`dangerouslySetInnerHTML` with it. Parse defensively — a malformed field
+  should degrade, not throw or execute.
+- **URLs handed to `shell.openExternal`.** Dispatch builds SimBrief URLs from user input
+  and DB values; anything interpolated must be `encodeURIComponent`'d, and the scheme must
+  be `https:` — never pass through a URL derived from third-party data without checking
+  its scheme, since `file:` and other schemes can do real damage.
+- **File paths from outside the app.** Import/export dialogs and the planned GSX receipts
+  reader all take paths that didn't come from us. Resolve them and confirm they're inside
+  the directory you expect before reading or writing.
+- **Queries go through Drizzle's query builder**, which parameterises. If you ever reach
+  for raw `sql`` `` with a runtime value in it, that's the moment to stop and ask why.
+- **The renderer is not a security boundary.** `sandbox: false` is set on the
+  `BrowserWindow` (needed for the preload), so a renderer compromise is serious. Keep
+  every side effect behind a typed IPC channel that validates its input in the main
+  process — the renderer's checks are for the user's benefit, not the app's safety. Never
+  load remote content into a window.
+- **New dependencies are supply chain.** Prefer few, well-known packages. Check
+  `npm audit` when adding one, and keep `package-lock.json` committed. A dependency that
+  wants postinstall scripts or network access at build time deserves scrutiny.
+
+For the repo itself, these are worth having on and are free for public repos: Dependabot
+alerts, secret scanning with push protection, and branch protection on `main` requiring a
+PR. Note that GitHub Actions workflows here run on `pull_request` from forks — never add a
+workflow that exposes secrets to fork PRs (`pull_request_target` with a checkout of the
+PR head is the classic mistake).
+
+If you find something, say so plainly and fix it or flag it — don't quietly work around it.
 
 ## Testing
 

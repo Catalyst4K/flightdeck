@@ -1,7 +1,8 @@
 # Flight Companion — Project Plan
 
-> Working title: **Flightdeck** (rename before M0)
-> Status: pre-kickoff. Nothing built yet.
+> Status: in active development — M0–M7 built. This document is the original plan, kept
+> as the north star for scope and architecture; `docs/decisions.md` is the running record
+> of what actually happened and where it diverged.
 > Target sim: Microsoft Flight Simulator 2024 (2020 as a bonus if free).
 
 Drop this file in the repo root as `PLAN.md` on day one. It's the north star document —
@@ -34,11 +35,17 @@ Write these down so you don't get dragged sideways:
   stays *possible*, but do not build it.)
 - VATSIM / IVAO online traffic overlays.
 - Charts, METAR/TAF/NOTAM browsers, taxi diagrams.
-- Cloud sync, accounts, multi-user, a backend server of any kind. **Everything local.**
 - Streaming overlays.
 - Mobile companion apps.
 
 Anything on this list that you still want later becomes a v2 issue, not a v1 distraction.
+
+**Accounts, sync and a backend are no longer ruled out.** v1 was built deliberately
+local-only, and local stays the default — it's simpler, it's faster, and it's a genuine
+differentiator against the alternatives (see §2). But it's a starting point rather than a
+principle now, and a feature that genuinely needs a server or a signed-in account can be
+proposed on its merits. Two conditions: it goes through `docs/decisions.md` first, and
+local-only usage keeps working without it.
 
 ---
 
@@ -298,7 +305,7 @@ Keep it short and factual; it's loaded into every session.
 ```markdown
 # Flightdeck
 
-Electron + React + TypeScript desktop app. Local-first. See PLAN.md for scope.
+Electron + React + TypeScript desktop app. See PLAN.md for scope.
 
 ## Commands
 npm run dev / build / test / lint / typecheck
