@@ -42,6 +42,62 @@ function DetailField(props: { label: string; value: React.ReactNode }): React.JS
   )
 }
 
+/**
+ * Three states, per docs/decisions.md's fleet-simbrief-airframe entry — this deliberately
+ * doesn't reimplement SimBrief's own airframe editor, just makes the link between a fleet
+ * aircraft and its SimBrief profile visible and one click to reach:
+ * - a custom profile is set: open *that* airframe's editor directly.
+ * - no custom profile, but a SimBrief default type is chosen: show it, offer to change it
+ *   or create a custom one instead.
+ * - nothing set at all: explain the (usually fine) fallback and offer to create a profile.
+ */
+function SimBriefProfileCard(props: { aircraft: Aircraft }): React.JSX.Element {
+  const a = props.aircraft
+
+  function openAirframes(): void {
+    void window.flightdeck.dispatchOpenSimBriefAirframes(a.simbriefAirframeId)
+  }
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-base">SimBrief profile</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 text-sm">
+        {a.simbriefAirframeId ? (
+          <>
+            <p className="text-foreground">
+              Custom profile: <span className="font-mono">{a.simbriefAirframeId}</span>
+            </p>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={openAirframes}>
+              Open in SimBrief
+            </Button>
+          </>
+        ) : a.simbriefType ? (
+          <>
+            <p className="text-foreground">
+              Using SimBrief default: <span className="font-mono">{a.simbriefType}</span>
+            </p>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={openAirframes}>
+              Create a custom airframe in SimBrief
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-muted-foreground">
+              No profile set — plans fall back to SimBrief's own default for {a.icaoType}, which is usually
+              fine and occasionally very wrong on weights (and therefore fuel).
+            </p>
+            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={openAirframes}>
+              Create a custom airframe in SimBrief
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function AircraftDetail(props: {
   aircraft: Aircraft
   stats: FleetStats | undefined
@@ -67,12 +123,12 @@ function AircraftDetail(props: {
         <CardContent className="flex flex-col gap-4">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
             <DetailField label="Airline" value={<AirlineLabel operator={a.operator} operatorIata={a.operatorIata} />} />
-            <DetailField label="SimBrief profile" value={a.simbriefAirframeId ?? '—'} />
             <DetailField label="Current airport" value={a.currentIcao ?? s?.lastArrIcao ?? '—'} />
             <DetailField label="Total hours" value={s ? s.totalHours.toFixed(1) : '0.0'} />
             <DetailField label="Flights" value={s?.totalCycles ?? 0} />
             <DetailField label="Last flight" value={formatDate(s?.lastFlightInUtc ?? null)} />
           </dl>
+          <SimBriefProfileCard aircraft={a} />
           <div className="flex gap-2">
             <Button type="button" variant="outline" size="sm" onClick={props.onEdit}>
               <Pencil />
