@@ -5,20 +5,27 @@ Simulator 2024: fleet management, SimBrief dispatch, live SimConnect tracking, a
 logbook with landing analysis. Runs locally against a local SQLite database.
 
 **Read `PLAN.md` in full before doing anything else.** It has the architecture, data
-model, milestone breakdown, and the six open decisions in §9. `docs/decisions.md` is
-where those decisions get recorded once made — check it before assuming a default.
+model, and the milestone history — M0–M5 done, M6 redesigned as an ongoing plan, M7
+partial; see its §6 and §10. `docs/decisions.md` is the log of every decision and
+judgment call made since, including the six originally listed as open in PLAN.md §9 (all
+resolved) — check it before assuming a default.
 
-## First session checklist
+## Starting a new piece of work
 
-If `package.json` doesn't exist yet, this is session one. Before writing any app code:
+This is a working app, not a from-scratch build — `package.json` exists, most of PLAN.md's
+milestones are done, and ongoing feature work is organized as design docs, not numbered
+milestones:
 
-1. Read `PLAN.md` end to end.
-2. Walk through the six decisions in `PLAN.md` §9 with the user and record the answers
-   in `docs/decisions.md`.
-3. Scaffold M0 (see PLAN.md — Electron + Vite + React + TS, SQLite via better-sqlite3,
-   Drizzle migrations, ESLint/Prettier/Vitest, GitHub Actions running lint + test on PR).
-4. Do not start M1 (the SimConnect spike) until M0's `npm run dev` opens a window that
-   reads and writes a row.
+1. Check `PLAN.md` §10 and `git branch -a` for the current list of `plan/<name>` branches.
+   If the user's request matches one, read its `docs/plans/<name>.md` in full before
+   touching code — it carries context (what's verified against real data, what's still
+   open) that isn't repeated anywhere else.
+2. For a genuinely new feature with no existing plan: write one, following the shape of
+   the existing plans (context, what's confirmed vs. assumed, implementation, open
+   questions), on its own `plan/<name>` branch, before writing production code — same
+   spike-first discipline as M1/M6 below, generalised to any undocumented external system
+   (a third-party API, an undocumented file format), not just SimConnect.
+3. One plan, one branch, one PR. Don't mix unrelated changes into a plan branch.
 
 ## Commands (once scaffolded)
 
@@ -126,13 +133,17 @@ plain `node`/`tsx`: it's the same binary the app ships with, so there's only one
 the module to keep track of. Don't "simplify" these scripts back to bare `vitest`/`tsx` —
 that reintroduces an ABI mismatch and the native module fails to load.
 
-## Milestones
+## Milestones and ongoing plans
 
-See `PLAN.md` §6 for the full breakdown (M0–M7). Work one milestone per branch
-(`feat/m3-simbrief-fetch`), one concern per PR. Don't start a milestone's tasks until
-the previous milestone's "Done when" condition is actually true.
+See `PLAN.md` §6 for the full M0–M7 breakdown and status (M0–M5 done, M7 partial, M6
+redesigned) and §10 for the current list of `plan/<name>` branches carrying feature work
+forward. "Starting a new piece of work" above covers the workflow — one plan, one branch,
+one PR.
 
-For M1 (SimConnect spike) and M6 (landing analysis spike): write a throwaway script in
-`scripts/` first, confirm real behaviour against a running sim, *then* build the
-production version. Don't build either from assumptions about how SimConnect behaves —
-log anything surprising in `docs/simconnect-notes.md` as you find it.
+The M1/M6 rule generalises: for anything depending on a real external system whose
+behaviour isn't documented — SimConnect, SimBrief's JSON schema, GSX's receipt files, a
+future Navigraph integration — write a throwaway script or read real captured data first,
+confirm actual behaviour, *then* build the production version. Don't build any of it from
+assumptions. Log anything surprising in the matching `docs/*-notes.md` file
+(`simconnect-notes.md`, `simbrief-notes.md`, and so on) as you find it — this has paid for
+itself many times over already.

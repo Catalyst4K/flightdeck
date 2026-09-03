@@ -1,8 +1,9 @@
 # Flight Companion — Project Plan
 
-> Status: in active development — M0–M7 built. This document is the original plan, kept
-> as the north star for scope and architecture; `docs/decisions.md` is the running record
-> of what actually happened and where it diverged.
+> Status: in active development. M0–M5 done, M7 partially done; M6 was never built and is
+> redesigned as an ongoing plan rather than a milestone — see §6 and §10. This document is
+> the original plan, kept as the north star for scope and architecture; `docs/decisions.md`
+> is the running record of what actually happened and where it diverged.
 > Target sim: Microsoft Flight Simulator 2024 (2020 as a bonus if free).
 
 Drop this file in the repo root as `PLAN.md` on day one. It's the north star document —
@@ -34,11 +35,18 @@ Write these down so you don't get dragged sideways:
 - X-Plane / P3D support. MSFS only. (Design the sim connector behind an interface so this
   stays *possible*, but do not build it.)
 - VATSIM / IVAO online traffic overlays.
-- Charts, METAR/TAF/NOTAM browsers, taxi diagrams.
+- Charts, TAF/NOTAM browsers, taxi diagrams.
 - Streaming overlays.
 - Mobile companion apps.
 
 Anything on this list that you still want later becomes a v2 issue, not a v1 distraction.
+
+**One item has already happened: a METAR panel was built** (`MetarPanel.tsx`,
+`src/main/weather/metar-client.ts`), on Dispatch rather than Track after a later move
+(`docs/decisions.md`, 2026-09-02). Narrowly in scope — current conditions for the
+dep/arr/altn airports already on screen, not a general weather browser — so left off the
+list above rather than treated as a broken rule; TAF/NOTAM and a standalone browser stay
+out of scope.
 
 **Accounts, sync and a backend are no longer ruled out.** v1 was built deliberately
 local-only, and local stays the default — it's simpler, it's faster, and it's a genuine
@@ -123,66 +131,98 @@ connector swappable later.
 
 ## 4. Before kickoff — accounts, keys, data
 
-- [ ] **SimBrief account.** Note your Navigraph Alias (username) and Pilot ID. The fetch
-      endpoint is `https://www.simbrief.com/api/xml.fetcher.php?username={alias}&json=1`
-      and needs no key — it returns your most recent OFP as JSON. That's enough for v1.
-- [ ] **SimBrief API key** — only needed if you want the app to *generate* plans directly
-      rather than popping the SimBrief dispatch page. Keys are issued by email request to
-      Navigraph with a description of your use. Request early; plan the fallback (open the
-      dispatch URL in a browser window, then fetch the result) so you aren't blocked.
-- [ ] **Custom airframes.** SimBrief lets you save airframes and reference them by internal
-      ID (e.g. `123456_1582090020`) in place of a type code. This maps beautifully onto your
-      fleet — one saved airframe per tail number. Decide whether fleet entries own a SimBrief
-      airframe ID or push `acdata` JSON per request.
-- [ ] **Airport/runway data.** OurAirports (`davidmegginson.github.io/ourairports-data/`) —
-      public domain, regenerated nightly, ~80k airports plus `runways.csv`, `navaids.csv`,
-      `airport-frequencies.csv`. Vendor a snapshot into the repo or ship a first-run import.
-      Runway thresholds, lengths and headings are what the landing analyser needs.
-- [ ] **Map tiles.** MapLibre needs a source. Options: OpenFreeMap (free, no key),
-      MapTiler / Stadia (free tier + key), or self-hosted PMTiles for offline. Decide in M4.
-- [ ] **MSFS SDK** — not required with `node-simconnect`, but install it anyway for the
-      SimVar documentation.
-- [ ] **GitHub repo**, private, `main` protected.
+This was the pre-M0 checklist. Kept for the record; current state noted against each item
+rather than deleted, since a couple are still open and the rest explain decisions later
+sections now assume.
+
+- [x] **SimBrief account.** Resolved — the keyless
+      `xml.fetcher.php?username={alias}&json=1` fetch is what Dispatch uses, and turned out
+      to accept far more than "just fetch the latest": the same prefill mechanism generates
+      plans too, verified live (`docs/simbrief-notes.md`). No API key needed for anything
+      built so far.
+- [ ] **SimBrief API key** — still not obtained, and turned out not to matter. SimBrief's
+      real generation API is a browser-popup widget for websites with a server backend, not
+      a REST call a desktop app can make regardless of a key
+      (`docs/decisions.md`, 2026-09-01; `docs/simbrief-notes.md`). The keyless prefill URL
+      does everything planned in `docs/plans/simbrief-plan-generation.md`. Leave this
+      unchecked — there's no longer a reason to request one.
+- [x] **Custom airframes.** Resolved — fleet entries own a SimBrief airframe ID
+      (`aircraft.simbrief_airframe_id`, see §5 and `docs/decisions.md` §4). Confirmed live
+      that the internal ID's format is `<simbrief user id>_<airframe id>` and that the
+      second half is also the path segment of that airframe's direct edit URL
+      (`docs/simbrief-notes.md`) — used in `docs/plans/fleet-simbrief-airframe.md`.
+- [ ] **Airport/runway data.** Half done. `resources/airports.csv` is vendored (OurAirports,
+      public domain) but trimmed to a name/ICAO search slice for Dispatch's airport
+      picker — lat/lon, and `runways.csv`/`navaids.csv` entirely, were deliberately left out
+      pending the milestone that actually needs them
+      (`docs/decisions.md`, 2026-09-01). That milestone is now
+      `docs/plans/landing-analysis.md`, and this is its first prerequisite: no runway
+      threshold, length or heading data exists in the app yet.
+- [x] **Map tiles.** Resolved — OpenFreeMap, no key, matching the reasoning here (shared
+      quota risk for a public app) — see `docs/decisions.md`.
+- [x] **MSFS SDK** — not needed; `node-simconnect`'s own docs plus live verification against
+      a running sim (`docs/simconnect-notes.md`) covered everything actually used.
+- [x] **GitHub repo** — public rather than private (a deliberate later choice, not the
+      original private-by-default plan; see the GPL-3.0 relicensing entry in
+      `docs/decisions.md`, 2026-09-03), with `main` protected against force-push and
+      deletion and the standard security settings enabled
+      (`scripts/github-repo-security.sh`).
 
 ---
 
-## 5. Data model (first cut)
+## 5. Data model
 
-Sketch only — refine in M0 when you write the Drizzle schema.
+This was a first-cut sketch pre-M0. The real schema (`src/main/db/schema.ts`, source of
+truth — regenerate this section's text from there if it drifts again) diverged from it in
+ways worth recording, not just silently overriding:
 
 ```
 aircraft
-  id, registration (unique), icao_type, name, operator, livery,
-  simbrief_airframe_id?, oew, mzfw, mtow, mlw, max_fuel, max_pax,
-  equip, transponder, pbn, wake_cat,
-  current_icao, total_hours, total_cycles, is_active, notes
+  id, registration (unique), icao_type, operator, operator_iata,
+  simbrief_airframe_id?, current_icao, created_at
 
 flight
   id, aircraft_id → aircraft, status (planned|active|completed|abandoned),
-  flight_number, dep_icao, arr_icao, altn_icao, route_string, cruise_alt,
+  flight_number, dep_icao, arr_icao, altn_icao, route_string, cruise_alt_m,
   sched_out_utc, sched_in_utc,
   actual_out_utc, actual_off_utc, actual_on_utc, actual_in_utc,
   block_minutes, air_minutes,
   fuel_planned_kg, fuel_out_kg, fuel_in_kg, fuel_burn_kg,
-  pax, cargo_kg, zfw_kg, tow_kg, law_kg,
-  ofp_id, ofp_json (raw SimBrief payload), sim_version, created_at
+  pax, cargo_kg, zfw_kg, tow_kg, ldw_kg,
+  ofp_id, ofp_json (raw SimBrief payload, verbatim), sim_version, created_at
+
+app_setting                    -- key/value; SimBrief username, unit preferences, etc.
+  key (primary key), value
 
 track_point                    -- keep sparse; this table gets big
-  id, flight_id, ts_utc, lat, lon, alt_ft, agl_ft, ias_kt, gs_kt,
-  vs_fpm, hdg_true, pitch, bank, phase, on_ground, fuel_kg
+  id, flight_id, ts_utc, latitude, longitude, altitude_m, altitude_agl_m,
+  indicated_airspeed_ms, ground_speed_ms, vertical_speed_ms, heading_true_deg,
+  pitch_deg, bank_deg, phase, on_ground, fuel_kg
 
-landing
-  flight_id (unique), touchdown_ts_utc, vs_fpm, g_force,
-  pitch_deg, bank_deg, hdg_true, ias_kt, gs_kt,
-  wind_dir, wind_kt, headwind_kt, crosswind_kt,
-  runway_ident, dist_from_threshold_m, centreline_offset_m,
-  bounce_count, flap_setting, grade,
-  trace_json  -- ±30 s of high-rate samples around touchdown
+landing                        -- not built. See docs/plans/landing-analysis.md.
 ```
 
-**Storage note:** at 1 Hz a ten-hour flight is 36,000 rows. Fine for SQLite, but downsample
-cruise (write a point on significant change or every 15 s, whichever first) and keep full
-rate only for the last 60 s before touchdown.
+What changed, and why it matters if you're reading this sketch as a guide to the real
+schema rather than the schema itself:
+
+- **`aircraft` dropped every performance field** (`oew`, `mzfw`, `mtow`, `mlw`, `max_fuel`,
+  `max_pax`, `equip`, `transponder`, `pbn`, `wake_cat`) along with `total_hours`/
+  `total_cycles`. Deliberate simplification, not an oversight: that data lives in the
+  linked SimBrief airframe profile instead of being duplicated here, and hours/cycles are
+  computed live from flight history rather than stored (`docs/decisions.md`, 2026-09-01 —
+  real data loss for the fields dropped, done at Callum's request). `name` and `livery`
+  were never built at all.
+- **Everything is SI** (`_m`, `_ms`, `_kg`), per decision §9.5 below, converted only at the
+  IPC boundary — not the sim-native units this sketch used (`alt_ft`, `ias_kt`, `vs_fpm`).
+- **`landing` does not exist.** M6 was never built. The design for it now lives in
+  `docs/plans/landing-analysis.md` rather than here, informed by what the phase machine
+  and SimConnect layer actually do today (both already exist and already detect the
+  touchdown transition — see that plan for specifics).
+
+**Storage note** (still holds): at 1 Hz a ten-hour flight is 36,000 rows. Fine for SQLite.
+`FlightRecorder` downsamples cruise to ~15 s intervals and writes every other phase at the
+sim feed's 1 Hz rate, so a short flight is a few hundred rows in practice
+(`docs/decisions.md`, 2026-09-01).
 
 ---
 
@@ -190,13 +230,18 @@ rate only for the last 60 s before touchdown.
 
 Each milestone ends with something that runs. Don't move on until "Done when" is true.
 
-### M0 — Skeleton (½ day)
+**M0–M5 are done.** M6 was never built and is redesigned as an ongoing plan rather than a
+milestone (see below). M7 is partially done. Status is noted under each; the original
+milestone text is kept because it's still an accurate description of what was built, not
+rewritten as if this had been known from the start.
+
+### M0 — Skeleton (½ day) — ✅ done
 Electron + Vite + React + TS boots to a window. SQLite opens, Drizzle migration runs,
 one table exists. ESLint, Prettier, Vitest, GitHub Actions running lint + test on PR.
 `CLAUDE.md` written (see §8).
 **Done when:** `npm run dev` opens a window that reads and writes a row.
 
-### M1 — SimConnect spike ⚠️ *the risky one, do it first*
+### M1 — SimConnect spike ⚠️ *the risky one, do it first* — ✅ done
 A throwaway CLI script (`scripts/spike-simconnect.ts`) that connects to a running MSFS,
 requests a handful of SimVars, and prints them at 1 Hz. Then fold it into a
 `SimConnectService` in the main process with connect / disconnect / auto-retry, streaming
@@ -215,17 +260,31 @@ rather than trusting any list, including this one:**
 **Done when:** live numbers from the sim appear in the Electron window, the app survives
 the sim being closed and reopened, and reconnects on its own.
 
-**Before this ships:** `node-simconnect` is LGPL-3.0-or-later, not permissive — fine for
-a free app, but add a NOTICE / "Third-Party Licenses" file with the installer as part of
-this milestone, not as an afterthought. Full detail in `docs/decisions.md`'s 2026-09-01
-licence-audit entry.
+Shipped as `src/main/sim/SimConnectService.ts` / `src/main/sim/simvars.ts`, all at a fixed
+1 Hz (`SimConnectPeriod.SECOND`) — no higher-rate request exists yet, which
+`docs/plans/landing-analysis.md` needs and picks up. Live behaviour that didn't match
+assumptions is logged in `docs/simconnect-notes.md`, per this milestone's own rule below.
+The `msfs-simconnect-api-wrapper` evaluation this milestone floated never happened as a
+separate step — `node-simconnect` was used directly from the start and that was never
+revisited, so it's absent from `package.json`. Not a problem in practice; noted so this
+section doesn't imply an evaluation took place that didn't.
 
-### M2 — Fleet
+**LGPL note actioned, later than planned.** This milestone said to ship the
+`node-simconnect` notice with the installer as part of M1, not as an afterthought — it
+ended up being exactly that: done during the GPL-3.0 relicensing pass
+(`docs/decisions.md`, 2026-09-03), not here. `THIRD-PARTY-LICENSES.md` now carries it,
+shipped via `extraResources` in `electron-builder.yml`.
+
+### M2 — Fleet — ✅ done
 CRUD for aircraft. Form with validation, list view, detail view. Seed from a JSON file so
 you can bulk-add your existing fleet. Import/export as JSON.
 **Done when:** you've entered your real fleet and it persists across restarts.
 
-### M3 — Dispatch
+Built, then deliberately simplified — see §5's note on the `aircraft` table. Import/export
+is JSON via `src/main/db/aircraft-import-export.ts`; a CSV logbook import exists too
+(`db/logbook-import.ts`), which this milestone didn't originally scope.
+
+### M3 — Dispatch — ✅ done
 Fetch the latest OFP by SimBrief username, parse it, map it onto a `flight` row linked to
 an aircraft. Show route, fuel, weights, times, waypoint list. Store the raw JSON.
 If the API key came through, add direct generation; otherwise open SimBrief's dispatch page
@@ -236,7 +295,15 @@ build without that (see `docs/decisions.md`). The free, keyless `xml.fetcher.php
 fetch has no such issue and should stay the default regardless.
 **Done when:** you can plan a flight on SimBrief and pull it into the app in one click.
 
-### M4 — Live map + tracking
+Built without the API key, and it turned out that path was never needed — see §4. Beyond
+the original scope: `docs/plans/simbrief-generation.md` and
+`docs/plans/dispatch-advanced-tab.md` extend Dispatch further (flight number and
+departure-time prefill, an advanced-options dialog, reloading a past plan's settings), and
+`docs/plans/sid-star-selection.md` covers labelling and swapping SID/STAR procedures.
+`docs/plans/fleet-simbrief-airframe.md` closes the loop back to Fleet for managing the
+airframe link this milestone introduced.
+
+### M4 — Live map + tracking — ✅ done
 MapLibre with the planned route drawn, the aircraft as a rotating marker, and a breadcrumb
 trail. `FlightRecorder` state machine ties telemetry to the active flight and writes
 `track_point` rows. Phase detection. Handle pause, slew, sim rate ≠ 1, and crashes.
@@ -245,13 +312,24 @@ adoption, prefer one with no shared quota to blow through (OpenFreeMap, or self-
 PMTiles) over a shared MapTiler/Stadia key — see `docs/decisions.md`.
 **Done when:** a full short flight tracks end to end without babysitting.
 
-### M5 — Logbook
+`FlightRecorder`/`TrackingController` (`src/main/tracking/`) match this description
+closely, including the pause/slew handling. One thing not yet built: starting tracking is
+still a manual button press rather than automatic — `AutoStartDetector.ts` exists and
+watches for a settled sim state, but the manual "Start tracking" control hasn't been
+removed. Map gained follow/zoom controls and an identity bar beyond the original scope
+(`docs/decisions.md`, 2026-09-02).
+
+### M5 — Logbook — ✅ done
 Completed-flight list with filters. Flight detail: route map, altitude/speed profile
 charts, block vs air time, fuel planned vs actual. Fleet stats roll up (hours, cycles,
 last location per tail).
 **Done when:** the M4 flight appears with correct times and fuel burn.
 
-### M6 — Landing analysis
+Built as described. `docs/plans/gsx-invoices.md` extends the flight-detail summary with
+per-flight ground-service costs, which this milestone didn't anticipate — GSX's invoice
+feature didn't exist yet when this plan was written.
+
+### M6 — Landing analysis — not built; redesigned as `docs/plans/landing-analysis.md`
 Ring-buffer high-rate samples (`SIM_FRAME` period) whenever below ~500 ft AGL. On the
 `SIM ON GROUND` false→true transition, capture the touchdown record and freeze ±30 s of
 trace. Compute crosswind from wind vs runway heading, nearest runway and distance from
@@ -265,91 +343,122 @@ values as a fallback.
 
 **Done when:** you can grease one on and see a plausible fpm figure with a trace chart.
 
-### M7 — Package and live with it
+**This idea is not dropped.** It's carried forward as `plan/landing-analysis`, in the same
+one-plan-per-branch shape as the SimBrief/GSX/SID-STAR work started 2026-09-02 — a design
+doc that gets built when picked up, rather than a numbered milestone blocking everything
+after it. It's grounded in more than this sketch had: the phase machine already has a
+`landing` phase and already detects the `SIM ON GROUND` false→true transition (the exact
+touchdown moment this milestone describes), and wind/pitch/bank/G-force already flow at
+1 Hz — see that plan for what's actually still missing (runway geometry data, chiefly).
+
+### M7 — Package and live with it — partially done
 `electron-builder` NSIS installer, auto-update deferred. Crash/error logging to a rotating
 local file. DB backup-on-launch. Then **fly with it for two weeks and fix what annoys you**
 before writing a single new feature.
 
+**Packaging config exists** (`electron-builder.yml`, `.github/workflows/package.yml`) and
+the "fly with it" half has, in effect, already happened — Callum has been dispatching and
+tracking real flights throughout M2–M5's development, which is where several of the
+`docs/decisions.md` entries and the GSX/SimBrief plans came from. **Not yet built:**
+crash/error logging and DB backup-on-launch. No installer has actually been produced or
+run outside CI's packaging smoke test.
+
 **Before a public flightsim.to release** (separate from M7, do this once the app is
-actually ready to give away): ship the LGPL NOTICE file from M1, ship the ODbL attribution
-for the vendored airline database (resources/airlines.LICENSE.txt) alongside it, drop in
-a "not affiliated with or endorsed by Microsoft or Asobo Studio" disclaimer, re-read
-flightsim.to's current Terms of Service directly (their content-license clause caused a
-developer boycott in 2023 — check it hasn't regressed), and consider a listing title that
-doesn't collide with flightsim.to's own "FlightDeck" creator-analytics product. Full
-context in `docs/decisions.md`'s 2026-09-01 licence-audit and airline-search entries.
+actually ready to give away): ship the LGPL NOTICE file — done, ahead of schedule, as part
+of the GPL-3.0 relicensing pass rather than M1 (see M1 above and
+`docs/decisions.md`, 2026-09-03) — ship the ODbL attribution for the vendored airline
+database (resources/airlines.LICENSE.txt) alongside it — also done, in the same pass, via
+`THIRD-PARTY-LICENSES.md` — drop in a "not affiliated with or endorsed by Microsoft or
+Asobo Studio" disclaimer — **not yet done** — re-read flightsim.to's current Terms of
+Service directly (their content-license clause caused a developer boycott in 2023 — check
+it hasn't regressed) — **not yet done** — and consider a listing title that doesn't
+collide with flightsim.to's own "FlightDeck" creator-analytics product. Full context in
+`docs/decisions.md`'s 2026-09-01 licence-audit and airline-search entries.
+
+One thing this section didn't anticipate: the project moved from "give it away free" to
+"GPL-3.0, with dual licensing kept possible" (`docs/decisions.md`, 2026-09-03). A
+flightsim.to release and a commercial licence aren't in tension — GPL permits both — but
+re-read that entry, `CONTRIBUTING.md` and `THIRD-PARTY-LICENSES.md` before the first
+public release, not just this section, since they're the ones that actually govern it now.
 
 ---
 
 ## 7. Known hard bits
 
-| Risk | Mitigation |
-|---|---|
-| SimConnect flakiness — the historical complaint about STKP | Reconnect loop with backoff; never let a sim disconnect corrupt an in-progress flight; write track points incrementally, not at the end. |
-| Sim pause / slew / 4× time compression corrupting times and fuel | Track sim time *and* wall time separately. Ignore samples while `IS SLEW ACTIVE`. Freeze the phase machine on pause. |
-| Payware aircraft reporting odd values (fuel in wrong units, gear vars unused on gliders) | Per-aircraft-type overrides table; sanity-clamp obviously wrong values rather than trusting them. |
-| Which flight is active? | Explicit "start flight" button in v1. Auto-detection by matching dep/arr is a v2 nicety and a bug factory. |
-| MSFS 2024 SimVar differences vs 2020 | Detect sim version on connect; keep a per-version SimVar map behind one interface. |
-| Landing detection false positives (hard bumps, bounces, touch-and-go) | Require sustained ground contact (>2 s) before finalising; count bounces separately. |
-| Scope creep toward charts/VATSIM/overlays | §1 non-goals list. Re-read it monthly. |
+| Risk | Mitigation | Status |
+|---|---|---|
+| SimConnect flakiness — the historical complaint about STKP | Reconnect loop with backoff; never let a sim disconnect corrupt an in-progress flight; write track points incrementally, not at the end. | Built — `SimConnectService`'s reconnect loop, incremental `track_point` writes. |
+| Sim pause / slew / 4× time compression corrupting times and fuel | Track sim time *and* wall time separately. Ignore samples while `IS SLEW ACTIVE`. Freeze the phase machine on pause. | Built — see `FlightRecorder`, and `docs/decisions.md`'s flight-reload-spike entries (2026-09-02) on the closely related stale-telemetry-after-reload finding. |
+| Payware aircraft reporting odd values (fuel in wrong units, gear vars unused on gliders) | Per-aircraft-type overrides table; sanity-clamp obviously wrong values rather than trusting them. | **Not built.** No per-aircraft-type overrides table exists in `simvars.ts` or the schema. Revisit if a real payware aircraft is found reporting bad values — no evidence of one yet, so this hasn't been prioritised. |
+| Which flight is active? | Explicit "start flight" button in v1. Auto-detection by matching dep/arr is a v2 nicety and a bug factory. | **In progress**, sooner than "v2 nicety" suggested — `AutoStartDetector.ts` exists and watches for a settled sim state, but the manual "Start tracking" button hasn't been removed yet (both coexist in `TrackView.tsx`). The bug-factory risk this row warned about is exactly why: see `docs/decisions.md`'s stale-telemetry findings, which is what the detector's "settled state" logic exists to guard against. |
+| MSFS 2024 SimVar differences vs 2020 | Detect sim version on connect; keep a per-version SimVar map behind one interface. | **Not built, and not needed** — MSFS 2020 support was never pursued (§1 non-goals), so there's only ever been one SimVar map. The `flight.sim_version` column exists but nothing populates or branches on it yet. |
+| Landing detection false positives (hard bumps, bounces, touch-and-go) | Require sustained ground contact (>2 s) before finalising; count bounces separately. | **Not built** — no `landing` table or bounce-count logic exists. Design moved to `docs/plans/landing-analysis.md`, which inherits this exact risk. |
+| Scope creep toward charts/VATSIM/overlays | §1 non-goals list. Re-read it monthly. | Holding — no VATSIM/IVAO overlay or chart browser has been built or proposed. §1 was revised 2026-09-03 to stop ruling out accounts/sync/a backend, but the feature-scope non-goals in that list are untouched. |
 
 ---
 
 ## 8. Working with Claude Code
 
-### `CLAUDE.md` — write this at M0
+The `CLAUDE.md` template this section originally specified has long since diverged from
+the real one — the real `CLAUDE.md` is the source of truth for working conventions now,
+not this section, and it's grown a Security section and other rules the M0-era template
+never anticipated. Kept here only as a pointer, not duplicated: read `CLAUDE.md` directly.
 
-Keep it short and factual; it's loaded into every session.
+### Session workflow — current shape, not the original one
 
-```markdown
-# Flightdeck
+The original workflow was one numbered milestone per branch (`feat/m3-simbrief-fetch`),
+strictly sequential. That fit a from-scratch build; it stopped fitting once M0–M5 landed
+and ongoing work became a set of independent features rather than a strict sequence. The
+workflow that replaced it, starting 2026-09-02:
 
-Electron + React + TypeScript desktop app. See PLAN.md for scope.
-
-## Commands
-npm run dev / build / test / lint / typecheck
-npm run db:generate   # drizzle migration from schema
-npm run db:migrate
-
-## Layout
-src/main/       Electron main. Sim, DB, SimBrief, IPC handlers.
-src/preload/    contextBridge only. No logic.
-src/renderer/   React. Never imports from main/ except shared types.
-src/shared/     Types and constants used by both sides.
-scripts/        Spikes and data import.
-
-## Rules
-- Renderer has no filesystem, network or sim access. Everything via typed IPC.
-- SimVar names and units go in src/main/sim/simvars.ts. Nowhere else.
-- Every DB change is a Drizzle migration. Never hand-edit the .db.
-- Money-free, account-free, server-free. If a feature needs a backend, it's out of scope.
-- Prefer a boring, working implementation over a clever one.
-
-## Testing
-Vitest. Sim-dependent code sits behind SimConnectService — mock it, don't require a sim.
-```
-
-### Session workflow
-
-- One milestone per branch, one concern per PR. `feat/m3-simbrief-fetch`.
-- Start sessions by pointing Claude at `PLAN.md` and the specific milestone.
-- For M1 and M6 — the two spikes — write a throwaway script first, confirm the real
-  behaviour against a running sim, *then* ask for the production version. Don't let
-  either be built from assumptions about how SimConnect behaves.
-- Record every surprising sim behaviour in `docs/simconnect-notes.md` as you find it.
-  That file will save you more time than anything else in the repo.
-- Ask for tests alongside anything touching the phase machine or landing maths. Those are
-  hard to eyeball and easy to get subtly wrong.
+- **One plan, one branch, one doc.** A feature gets designed in a `docs/plans/<name>.md`
+  file on its own `plan/<name>` branch before it's built — context, what's been verified
+  against real data, an implementation shape, and open questions. See the six current
+  plans listed in §10 for the actual shape these take; they're a better reference than a
+  description here.
+- **Verify before building, still.** M1 and M6's "spike first" rule generalised: for
+  anything depending on a real external system whose behaviour isn't documented
+  (SimConnect, SimBrief's JSON schema, GSX's receipt files, Navigraph's data), read real
+  data or run a throwaway script before designing — don't guess a schema or an API
+  contract into a plan doc. `docs/simconnect-notes.md` and `docs/simbrief-notes.md` are
+  what this discipline produced; the SimBrief-generation and GSX plans in §10 are recent
+  examples of a plan being substantially rewritten after real data corrected a guess.
+- Record every surprising sim or third-party-API behaviour in its own `docs/*-notes.md`
+  file as you find it — this has repeatedly saved more time than anything else in the
+  repo.
+- Ask for tests alongside anything touching the phase machine, unit conversions, or
+  parsing of third-party data. Those are hard to eyeball and easy to get subtly wrong.
 
 ---
 
-## 9. Decisions to settle at kickoff
+## 9. Decisions settled at kickoff
 
-1. **Name.** Affects package name, DB path, window title, repo. Pick before M0.
-2. **Electron/TypeScript or .NET/C#?** §3 recommends the former; your comfort wins.
-3. **MSFS 2024 only, or 2020 too?** Cheap to support both *if* decided now, expensive later.
-4. **Fleet ↔ SimBrief airframes:** saved airframe IDs, or push `acdata` per request?
-5. **Units:** store everything SI internally (kg, m, m/s) and convert at the edges, or store
-   as the sim reports? Pick one now — mixed units is the classic source of silent bugs.
-6. **Licence and visibility.** Private repo, or open source it? Affects whether you can
-   vendor OurAirports data (public domain, so yes) and how you treat any GPL reference code.
+The six decisions this section used to list open are all resolved — recorded in
+`docs/decisions.md` §1–§6, kept there rather than duplicated here since that's the file
+this section itself designated as the answer log. Summary, in case this document is all
+that's open: **Flightdeck**; **Electron + React + TypeScript**; **MSFS 2024 only**;
+**saved SimBrief airframe IDs**, not per-request `acdata`; **SI units internally**,
+converted at the IPC boundary; **public repo**, licence since changed from the original
+MIT to **GPL-3.0-only** (`docs/decisions.md`, 2026-09-03 — see §6 there for why, and for
+what changed as a result).
+
+---
+
+## 10. Ongoing plans
+
+Feature work beyond M0–M7 lives as a design doc on its own branch, per §8's workflow —
+not merged to `main` until picked up and built, so `git branch -a` after fetching is the
+authoritative list if this drifts. As of 2026-09-03:
+
+| Plan | Branch | Depends on |
+|---|---|---|
+| SimBrief plan generation (flight number, departure time, cost index) | `plan/simbrief-generation` | — |
+| Dispatch advanced options (loads, fuel, cost index, reload a past plan) | `plan/dispatch-advanced-tab` | `plan/simbrief-generation` |
+| Fleet ↔ SimBrief airframe management | `plan/fleet-simbrief-airframe` | — |
+| GSX ground-service invoices in the Logbook | `plan/gsx-invoices` | — |
+| Alternate SID/STAR selection | `plan/sid-star-selection` | Navigraph API credentials (applied for, pending) |
+| Landing analysis (M6, redesigned) | `plan/landing-analysis` | Runway geometry data (not yet vendored) |
+
+None of these are scoped to a deadline. Pick one, read its plan doc in full, verify
+anything it flags as unconfirmed against real data before writing code, and follow the
+same one-plan-one-PR shape the existing five were built with.
