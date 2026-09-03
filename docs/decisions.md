@@ -913,3 +913,33 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     clamp on an obviously-impossible value (NaN, or wildly outside [-3g, 6g]) is cheap
     insurance against a headline-wrong number without asserting anything about what a real
     hard landing should read.
+- 2026-09-03: Callum obtained a real SimBrief API key plus SimBrief's own developer
+  integration package. Per the terms attached to that package, and per Callum's own
+  explicit instruction, **the mechanism it describes is not documented anywhere in this
+  repo** — not the literal files, and not a prose paraphrase either (see
+  `docs/simbrief-notes.md`'s "Generation" section for what's safe to say and why). Code
+  that implements the real HTTP calls is fine and necessary once this is built — a URL
+  isn't a tutorial — but explanatory comments describing SimBrief's own protocol stay out.
+  - **Credential storage, agreed before any code touched it** (per this file's own rule
+    that storing credentials is a decision, not an implementation detail): the API key
+    goes in the existing `app_setting` key/value table, entered via a masked Settings
+    field — the same pattern the SimBrief username already uses. Considered an OS-native
+    credential store instead; rejected for now as a new dependency (supply-chain
+    scrutiny) that would make this one setting behave differently from every other one,
+    for a local-only single-user app where the DB itself is already the trust boundary.
+  - **Both open questions this needs answered were resolved by a live test**
+    (`scripts/spike-simbrief-generation.ts`, throwaway, not a description of the
+    mechanism — see `docs/simbrief-notes.md` for the safe write-up of what was confirmed).
+    Generation turns out to need nothing new on the retrieval side: the already-trusted
+    `fetchLatestOfp` is sufficient once a plan has actually been generated.
+  - Building this required opening a real, visible browser window for SimBrief's own
+    login/generation UI (not something a background request can do — confirmed live, not
+    assumed) — an Electron `BrowserWindow`, not `shell.openExternal`, so the app can
+    detect when it's done. Discovered Electron's default behaviour is to quit the whole
+    app the instant that window closes (which SimBrief's flow does on its own once
+    finished); a spike built on that default silently lost its own result every time.
+    Anything built on this needs to override `window-all-closed` deliberately.
+  - Not yet built: the production feature itself. This entry records the unblocking
+    research and the credential decision; the actual "Generate" button is a separate
+    plan (`plan/simbrief-plan-generation`, design doc first per this file's own workflow),
+    since the key didn't exist when the six other 2026-09-03 plans were scoped.

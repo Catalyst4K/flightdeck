@@ -20,6 +20,7 @@
     "db:backfill-operator-icao": "cross-env ELECTRON_RUN_AS_NODE=1 electron ./node_modules/tsx/dist/cli.mjs scripts/backfill-operator-icao.ts",
     "spike:simconnect": "tsx scripts/spike-simconnect.ts",
     "spike:landing": "tsx scripts/spike-landing.ts",
+    "spike:simbrief-generation": "esbuild scripts/spike-simbrief-generation.ts --bundle --platform=node --format=cjs --outfile=out/spike-simbrief-generation.cjs --external:electron --external:better-sqlite3 --external:bufferutil --external:utf-8-validate && electron ./out/spike-simbrief-generation.cjs",
     "vendor:runways": "tsx scripts/vendor-runways.ts",
     "licenses:generate": "tsx scripts/generate-third-party-licenses.ts",
     "package": "electron-vite build && electron-builder --publish=never",
