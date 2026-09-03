@@ -319,95 +319,39 @@ it either way.
 
 ## Generation
 
-**Callum obtained a real API key from SimBrief on 2026-09-03**, along with SimBrief's own
-integration package (README + `demo.php`/`demo_output.php`/`simbrief.apiv1.js`/`.php`,
-"Release 1.1 — 26/08/2021"). This is a real, still-current mechanism, not the abandoned
-API the 2026-09-01 finding assumed might be — read directly rather than inferred from
-forum posts this time.
+**Callum obtained a real SimBrief API key on 2026-09-03**, along with SimBrief's own
+developer integration materials. Per the terms attached to those materials — and to stay
+safely clear of them rather than relying on a fine judgment call about paraphrasing —
+**the specific mechanism they describe (endpoint URLs, request signing, field-level
+protocol) is deliberately not documented in this public repository.** If those specifics
+are needed again, they belong in a private, uncommitted note, not here — this file is
+published on GitHub.
 
-**The package itself is not vendored into this repo, and its source is not reproduced
-here.** Its README is explicit: *"you may not distribute this package, with or without
-modification, without our prior consent in writing."* What follows is the *mechanism*
-described in our own words — facts and protocols aren't the copyrighted part, the actual
-PHP/JS is — confirmed by reading the real files on 2026-09-03, kept only on Callum's
-machine.
+What's safe to record, because it doesn't require reproducing anything of theirs:
 
-Confirms and sharpens the 2026-09-01 finding rather than overturning it:
+- **A real key does not turn generation into a plain server-to-server call.** The pilot
+  still has to be logged in to SimBrief for a plan to actually generate — confirmed
+  directly, not assumed. So a key doesn't remove the "someone has to be signed in" step
+  the 2026-09-01 finding already established; don't design around the assumption that it
+  does.
+- **It likely enables fetching back the *exact* plan just generated**, rather than
+  "whatever's newest" — a real improvement on the `static_id` open question in
+  `docs/plans/simbrief-plan-generation.md`. Not designed further until the items below are
+  confirmed, and not by reference to the restricted materials even then — by testing the
+  live API directly.
+- **Two things need live verification before anything is built on this**, same
+  "don't guess, test the real thing" discipline as everywhere else in this file:
+  1. Whether a departure date on this path is a formatted date string or a Unix epoch —
+     the keyless prefill URL (below) wants an epoch, and there's a specific, concrete
+     reason to think the keyed path might not follow the same convention. Don't assume
+     either without testing the real endpoint.
+  2. Whether the OFP identifier this path hands back matches the `xml_file` naming already
+     seen in a normal fetched OFP (above in this file), or is a separate, parallel scheme.
 
-- **It is still a browser-popup flow, not a server-to-server call**, even with a real key.
-  The pilot must be logged in to SimBrief for the popup to complete — the key authorizes
-  the *request*, it doesn't bypass the login. So "keyed generation" doesn't remove the
-  human-in-the-loop step; it removes the ambiguity around which plan you get back
-  afterward (below).
-- **The key's actual job is a single keyed hash, computed per-request.** The client asks a
-  small server-side helper (`simbrief.apiv1.php`, running under the developer's own web
-  host — this is the part that has no equivalent in an Electron main process, see
-  "What this means for Flightdeck" below) for `md5(api_key + api_req)`, where `api_req` is
-  built from the form's own `orig`+`dest`+`type` values, a timestamp, and the output-page
-  URL. That hash is submitted alongside the form to authorize the request. The key itself
-  never leaves that server-side helper.
-- **The submission target is a fixed, undocumented-elsewhere URL**:
-  `https://www.simbrief.com/ofp/ofp.loader.api.php`, submitted via a real HTML `<form>`
-  (method GET) targeting a popup window, with the dispatch options as ordinary named
-  inputs — the same input names already confirmed live against the keyless prefill URL
-  (`airline`, `fltnum`, `orig`, `dest`, `type`, `deph`, `depm`, …), plus three more added
-  by the API layer itself: `apicode` (the hash above), `outputpage`, `timestamp`.
-- **The client computes its own OFP identifier** before the popup even opens —
-  `ofp_id = <unix-timestamp>_<10-char-uppercase-hash-of-orig+dest+type>` — and polls until
-  the popup window closes, then redirects back to the caller's page with `?ofp_id=...`
-  appended. The caller can then fetch that *exact* plan directly:
-  `https://www.simbrief.com/ofp/flightplans/xml/<ofp_id>.xml` (XML; the demo's PHP class
-  converts to array/JSON after fetching, using the same field names already documented
-  above in this file — no separate schema).
-- This is a materially better answer to the `static_id` open question in
-  `docs/plans/simbrief-plan-generation.md`: instead of "fetch whatever's newest and hope
-  nothing else was generated in between," the app would know the *exact* identifier of the
-  plan it just asked for and fetch precisely that one.
-
-### Two things this reopens that need verifying before any of it is built
-
-Both are the kind of assumption this project has been burned by twice already
-(`stepClimbs`) — real, but from a 2014–2021-dated package, not from today's site.
-
-1. **`date` may not be an epoch after all.** `demo.php`'s example hidden input is
-   `<input name="date" value="01JAN14">` — a `DDMONYY` string, not a unix timestamp. This
-   directly contradicts the 2026-09-02 finding above (`date=020926` on the *prefill URL*
-   produced a 1970 departure, implying epoch seconds). The two are plausibly **different
-   receiving endpoints** — `dispatch.simbrief.com/options/custom` (the modern web dispatch
-   form) versus `ofp.loader.api.php` (this older, keyed API) — and nothing says they parse
-   `date` the same way. **Do not assume either format for the API path** — test
-   `date=01JAN14`-style against the real `ofp.loader.api.php` submission before trusting a
-   date on this path.
-2. **Whether the `ofp_id` format is still current.** A real fetched OFP's own
-   `params.xml_file` (see the `api_params`/`params` section above) is named
-   `EGLLWSSS_XML_1788371626.xml` — `<DEP><ARR>_XML_<epoch>`, a *different* shape from this
-   package's `<epoch>_<hash>` scheme. Both could be valid simultaneously (a friendly alias
-   alongside an internal ID), or the client-side `ofp_id` computation could be stale
-   relative to a site that's had 5+ years of changes since this package was last updated.
-   Confirm by actually running the flow once and comparing the `ofp_id` the popup redirect
-   hands back against what `demo.php`'s formula predicts, and against the `xml_file` name
-   in the resulting fetch.
-
-### What this means for Flightdeck specifically
-
-Flightdeck has no PHP, and no public web server for SimBrief's popup to redirect back to —
-it's a desktop app. The mechanism above assumes a website with a server-side component in
-both roles. Two pieces need a from-scratch (Electron-native) equivalent, not a port of the
-PHP:
-
-- **The `apicode` hash** — trivial. `md5(apiKey + apiReq)` is one line in Node's `crypto`
-  module in the main process; the PHP file does nothing else of substance for this step.
-  The key stays in the main process and is never sent anywhere except as that hash.
-- **The popup itself** — Electron can open a real child `BrowserWindow` in place of the
-  browser `window.open()` the JS file uses, pointed at a small locally-generated HTML page
-  (or a data URL) containing the form, submitting to the same
-  `https://www.simbrief.com/ofp/ofp.loader.api.php` target. The pilot logs in inside that
-  window exactly as they would in a browser. Detecting the window closing (or navigating
-  back to a known "done" state) replaces the JS file's `setInterval` polling loop.
-
-Not designed further here — this is `docs/simbrief-notes.md`, not a plan. See
-`docs/plans/simbrief-plan-generation.md` for what changes there now that a real key
-exists.
+Everything from before the key arrived (2026-09-01) still holds and isn't restated here:
+SimBrief's dispatch website has a keyless URL that already does everything
+`docs/plans/simbrief-plan-generation.md` needs, confirmed live below — no key required for
+any of it.
 
 What works today with no key at all is the URL prefill the app already uses:
 `https://dispatch.simbrief.com/options/custom?orig=&dest=&airframe=`-or-`type=`,
