@@ -49,6 +49,16 @@ export interface SimBriefOfp {
   ldwKg: number
   /** Plain cost index, no scaling — null if the field is absent (see optNum). */
   costIndex: number | null
+  /** Whether this OFP was generated against a saved custom airframe (`aircraft.is_custom`)
+   *  rather than SimBrief's own default for the type. See simbriefInternalId. */
+  simbriefIsCustom: boolean
+  /** `aircraft.internal_id` — for a stock airframe this is just the bare type code
+   *  ("A388"), NOT comparable to aircraft.simbrief_airframe_id. Only meaningful (and only
+   *  in the `<user id>_<airframe id>` form that simbrief_airframe_id stores) when
+   *  simbriefIsCustom is true — docs/simbrief-notes.md, "aircraft — which airframe
+   *  profile was used". Callers must check simbriefIsCustom before treating this as an
+   *  airframe ID. */
+  simbriefInternalId: string | null
   waypoints: { ident: string; altitudeFt: number; distanceNm: number }[]
   /** Planned mid-cruise altitude increases — see parseStepClimbs. */
   stepClimbs: SimBriefStepClimb[]
@@ -195,6 +205,8 @@ export async function fetchLatestOfp(username: string): Promise<SimBriefOfp> {
     towKg: toKg(weights.est_tow),
     ldwKg: toKg(weights.est_ldw),
     costIndex: optNum(general.costindex),
+    simbriefIsCustom: str(aircraft.is_custom) === '1',
+    simbriefInternalId: optStr(aircraft.internal_id),
     waypoints: fixes.map((fix) => ({
       ident: str(fix.ident),
       altitudeFt: num(fix.altitude_feet ?? 0),

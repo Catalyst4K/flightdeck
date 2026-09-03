@@ -116,16 +116,19 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, params: DispatchOpenSimBriefParams) => {
-    const { origIcao, destIcao, icaoType, simbriefAirframeId, airlineIcao, flightNumber, departure } = params
+    const { origIcao, destIcao, icaoType, simbriefAirframeId, simbriefType, airlineIcao, flightNumber, departure } =
+      params
     if (!origIcao || !destIcao || (!icaoType && !simbriefAirframeId)) {
       return shell.openExternal('https://dispatch.simbrief.com/')
     }
     // `airframe=` takes priority when a saved SimBrief profile exists; otherwise `type=`
     // lets SimBrief fall back to its own default airframe for that type ICAO — SimBrief's
-    // own behavior, nothing Flightdeck implements itself (docs/decisions.md).
+    // own behavior, nothing Flightdeck implements itself (docs/decisions.md). A chosen
+    // simbriefType (a specific SimBrief default, e.g. "A20N" rather than the bare
+    // icaoType "A320") takes priority over icaoType within that fallback.
     const airframeParam = simbriefAirframeId
       ? `airframe=${encodeURIComponent(simbriefAirframeId)}`
-      : `type=${encodeURIComponent(icaoType)}`
+      : `type=${encodeURIComponent(simbriefType || icaoType)}`
     let url =
       `https://dispatch.simbrief.com/options/custom?orig=${encodeURIComponent(origIcao)}` +
       `&dest=${encodeURIComponent(destIcao)}&${airframeParam}`
@@ -140,6 +143,21 @@ app.whenReady().then(() => {
     if (departure) {
       url += `&date=${departure.dateEpochSeconds}&deph=${departure.hour}&depm=${departure.minute}`
     }
+    return shell.openExternal(url)
+  })
+
+  ipcMain.handle(IpcChannels.dispatchOpenSimBriefAirframes, (_event, airframeId: string | null) => {
+    // The internal ID is `<simbrief user id>_<airframe id>`, and the per-airframe editor
+    // takes just the suffix (docs/simbrief-notes.md, "Saved airframes" — confirmed live
+    // against a real airframe). Treated as an opaque string, never parsed as a date, even
+    // though it happens to look like a millisecond epoch — an older ID format uses a
+    // 10-digit seconds value instead, and the rule is "take the suffix verbatim" either
+    // way. Falls back to the plain list page for a malformed/absent ID, or one from
+    // before this format existed.
+    const suffix = airframeId?.split('_')[1]
+    const url = suffix
+      ? `https://dispatch.simbrief.com/airframes/saved/${encodeURIComponent(suffix)}`
+      : 'https://dispatch.simbrief.com/airframes'
     return shell.openExternal(url)
   })
 

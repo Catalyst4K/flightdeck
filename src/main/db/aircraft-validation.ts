@@ -6,6 +6,7 @@ const OPTIONAL_STRING_FIELDS = [
   'operatorIata',
   'operatorIcao',
   'simbriefAirframeId',
+  'simbriefType',
   'currentIcao'
 ] as const
 

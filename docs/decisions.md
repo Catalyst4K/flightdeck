@@ -714,3 +714,42 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   - Deliberately not built: `static_id` (fetching back the exact plan generated rather
     than "whatever's latest") — noted as a real correctness improvement in the plan doc,
     out of scope for this branch.
+- 2026-09-03: **Implemented `plan/fleet-simbrief-airframe`** — the second of six
+  `plan/*` branches. SimBrief has no API to create, edit or list a saved airframe (only
+  the web UI at dispatch.simbrief.com/airframes), so this doesn't reimplement that editor
+  in Electron — it makes the link between a fleet aircraft and its SimBrief profile
+  visible, verifiable, and one click to reach.
+  - `dispatchOpenSimBriefAirframes` (new IPC channel) derives a saved airframe's direct
+    editor URL from `aircraft.simbrief_airframe_id` — `.../airframes/saved/<suffix>`,
+    where `<suffix>` is everything after the `_` in the stored `<user id>_<airframe id>`
+    string. Confirmed live against a real airframe (docs/simbrief-notes.md). Falls back to
+    the plain airframes list page for a malformed/absent ID, or an ID predating this
+    format. The suffix is treated as an opaque string throughout, never parsed as a date —
+    it happens to look like a millisecond epoch in the current format but the older format
+    is 10-digit seconds, and "take it verbatim" is what makes that not matter.
+  - **No SimBrief default-airframe list is vendored.** Their aircraft list exists only as
+    an unlicensed HTML page — scraping it would be redistributing data with no permission,
+    which `CONTRIBUTING.md`'s licensing stance since the GPL relicense now explicitly rules
+    out. Went with the plan's cheapest alternative instead: a free-text
+    `aircraft.simbrief_type` column (migration `0007_cooing_tiger_shark.sql`), separate
+    from the custom `simbrief_airframe_id`. SimBrief validates the type itself and falls
+    back to its own default on anything it doesn't recognise — same behaviour `icaoType`
+    already relied on before this column existed, so a wrong pick degrades gracefully
+    rather than failing.
+  - Dispatch's airframe-or-type precedence (`main/index.ts`'s `dispatchOpenSimBrief`
+    handler) is now custom airframe ID → `simbrief_type` → `icaoType`, extending rather
+    than replacing the fallback chain the first SimBrief-generation branch already built.
+  - **Auto-capture, not copy-paste.** A fetched OFP states `aircraft.internal_id` and
+    `aircraft.is_custom` (docs/simbrief-notes.md) — confirmed live that a *custom*
+    airframe's `internal_id` is in the exact `<user id>_<airframe id>` form
+    `simbrief_airframe_id` already stores, while a *stock* airframe's `internal_id` is just
+    the bare type code and must never be offered for capture (guarded on `is_custom`, not
+    just presence of the field). When a fetch's custom airframe differs from what's saved
+    on the matched fleet aircraft, Dispatch offers (never auto-applies) "Save this
+    airframe" — same propose-don't-apply pattern as the existing registration-match
+    heuristic. When a plan used SimBrief's *default* despite the aircraft having a saved
+    profile, Dispatch now surfaces that as a warning toast too — previously a wrong or
+    stale ID failed completely silently.
+  - `AircraftForm`'s airframe-ID field gets a soft format warning (`digits_digits`) rather
+    than a hard rejection, since the format is observed from real IDs, not documented, and
+    a hard rule on an undocumented shape would eventually reject something valid.
