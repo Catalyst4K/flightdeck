@@ -544,3 +544,67 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   and also resets `hasCenteredRef` so the *next* flight's first point does a clean
   `jumpTo` again instead of animating an `easeTo` across the map from the stale leftover
   position — directly relevant to the turnaround workflow this was found while testing.
+- 2026-09-03: **Relicensed from MIT to GPL-3.0-only**, with the deliberate aim of keeping
+  dual licensing possible later. Callum confirmed there are no existing forks, so the
+  switch binds every copy in circulation rather than only future versions.
+  - **The stated goal needed correcting first.** GPL does not mean someone must pay to
+    monetize the project — it explicitly permits commercial use and selling copies. What
+    it prevents is *closed-source* redistribution. "They'd have to pay me" is the **dual
+    licensing** model: retain copyright, publish under GPL, and sell a separate commercial
+    licence to anyone who wants out of the GPL obligations. GPL is a necessary part of
+    that, not the whole of it. GPL-3.0 rather than AGPL-3.0 because this is a local-first
+    desktop app with no server side; `GPL-3.0-only` rather than `-or-later` to keep
+    control of which terms apply. Apache-2.0 dependencies (drizzle-orm,
+    class-variance-authority) are compatible with GPLv3 but *not* GPLv2, which settles
+    the version question independently.
+  - **`node-simconnect` is LGPL-3.0-or-later** — the only non-permissive dependency, and
+    it ships in the app. Good news for this move (LGPLv3 explicitly permits conveying
+    under GPLv3, so it's *more* compatible than it was with MIT) and it doesn't block
+    dual licensing either, since LGPL allows proprietary applications that merely *use*
+    the library. But it carries obligations that were **not previously being met**: no
+    notice, no licence text, no source pointer shipped to users. That was a pre-existing
+    gap under MIT, not something this change created — it just stops being academic once
+    money is involved. Now addressed three ways: a compliance statement and the full LGPL
+    text in `THIRD-PARTY-LICENSES.md`; confirmation that the library is dynamically
+    required rather than bundled (`externalizeDepsPlugin` already externalizes it, so the
+    built main process does a plain `require("node-simconnect")`); and
+    `node_modules/node-simconnect/**/*` added to `asarUnpack` so it exists as replaceable
+    files on disk in an installed copy, which is the substantive LGPL requirement rather
+    than a paperwork one.
+  - **`THIRD-PARTY-LICENSES.md` is generated, not hand-written**
+    (`scripts/generate-third-party-licenses.ts`, `npm run licenses:generate`). MIT,
+    BSD-3-Clause, ISC and Apache-2.0 all require their text to be *reproduced* by
+    redistributors, and a hand-maintained list goes stale the first time a dependency is
+    bumped — with a licence violation as the failure mode rather than a broken build. The
+    script walks production dependencies only (devDependencies don't ship), embeds each
+    bundled licence file, and warns when a package declares a text-required licence but
+    ships no file. It flagged exactly one on first run: **drizzle-orm declares Apache-2.0
+    but ships no licence file**, so it's listed with a pointer to upstream instead.
+  - Both notices go in `extraResources` so they land as readable files in an installed
+    copy rather than sealed inside `app.asar`.
+  - **`resources/airlines.csv` (OpenFlights) is ODbL 1.0 and cannot be relicensed.** The
+    trimmed slice is a derivative database, so share-alike applies to *it* — not to the
+    app's code, which is why this was already fine and stays fine. The consequence for
+    the future aim: a commercial licensee inherits ODbL on that one file. Kept and
+    disclosed rather than replaced; replace OpenFlights if that ever becomes
+    unacceptable. `airports.csv` is public domain and `icao-aircraft-types.csv` is MIT,
+    both unencumbered.
+  - **`CONTRIBUTING.md` added, and it's the load-bearing piece for dual licensing.** A
+    single outside contribution licensed inbound under GPL-3.0 alone would permanently
+    end the option, since no commercial licence covering the whole work could then be
+    granted without that contributor's agreement. So inbound contributions are accepted
+    under **MIT** while the project is distributed under GPL-3.0 — one-way compatible,
+    keeps the public project fully GPL, and avoids the paperwork of a signed CLA. The
+    file also states what can't be added as a dependency: copyleft libraries, unlicensed
+    or scraped datasets, and share-alike data licences without a documented consequence.
+  - **Deliberately skipped: per-file SPDX/copyright headers.** GPL's own recommended
+    practice, and genuinely useful for a dual-licensed codebase, but it's 40+ files of
+    churn for a solo project where `LICENSE` plus a single copyright holder is
+    unambiguous. Worth revisiting if outside contributors ever appear.
+  - **Flagged for `plan/fleet-simbrief-airframe`:** that plan proposes scraping SimBrief's
+    ~200-row supported-aircraft page into `resources/simbrief-aircraft.csv`. Redistributing
+    unlicensed third-party data is tolerable in a hobby project and a different question
+    entirely once licences are being sold. Revisit that approach before implementing it.
+  - Not legal advice, and recorded as such: if commercial licensing actually happens, the
+    dual-licensing arrangement above is worth a lawyer's review, because that's where
+    these setups usually go wrong.
