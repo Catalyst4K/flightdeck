@@ -1,0 +1,13 @@
+runways.csv
+
+Source: https://davidmegginson.github.io/ourairports-data/runways.csv
+        (fetched 2026-09-03)
+License: Public domain (OurAirports data)
+
+Trimmed from the full ~48k-row, 20-column, ~3.9 MB source to icao,ident,lat,lon,
+heading_true_deg — one row per usable runway end (both heading and threshold position
+present), for airports already present in the vendored resources/airports.csv (this
+app's ICAO-dispatchable set). Closed runways dropped. 23413 rows.
+
+Used by src/main/airports/runway-lookup.ts (landing analysis, PLAN.md M6) to resolve a
+touchdown position/heading to the nearest matching runway end.
