@@ -27,6 +27,11 @@ export function getAircraftByRegistration(db: FlightdeckDb, registration: string
   return row ? toAircraft(row) : undefined
 }
 
+export function getAircraftById(db: FlightdeckDb, id: number): Aircraft | undefined {
+  const row = db.select().from(aircraft).where(eq(aircraft.id, id)).get()
+  return row ? toAircraft(row) : undefined
+}
+
 export function createAircraft(db: FlightdeckDb, input: NewAircraft): Aircraft {
   const [row] = db.insert(aircraft).values(input).returning().all()
   return toAircraft(row)

@@ -816,3 +816,42 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
   - This labels whichever procedure SimBrief already chose. There is still no way to
     swap one out for a different valid one — that's entirely what part (2) is, and it's
     the part still blocked.
+- 2026-09-03: **Implemented `plan/gsx-invoices`** — the fifth of six `plan/*` branches,
+  and unrelated to the SimBrief/Navigraph roadblock entirely (no external API — GSX Pro
+  writes local receipt files). Opt-in and off by default: a fresh install shows nothing
+  from this feature until Settings' GSX card is turned on, and every code path in
+  `src/main/gsx/` is a no-op when disabled or the configured folder doesn't exist.
+  - **Snapshot at flight completion, not a live folder read.** GSX's own admin UI can
+    bulk-delete old receipts, so a Logbook that re-scanned the folder on every page view
+    would silently lose historical costs the day someone tidies up. `TrackingController`
+    now fire-and-forgets a best-effort scan+store right after `completeFlight` (both the
+    automatic-shutdown and manual-finish paths) — errors are swallowed there deliberately,
+    since flight completion has already succeeded by the time it runs. A manual "Rescan"
+    button on the Logbook detail page covers flights completed before this feature existed,
+    and any receipt GSX writes slightly after the snapshot fires.
+  - **Matching is filename-only until a receipt actually matches.** `<timestamp>_<ICAO>_
+    <tail>.json` carries every key needed (docs/gsx-notes.md) — `src/main/gsx/filename.ts`
+    parses it with no file reads, and `matcher.ts` decides tail+ICAO+time-window-with-
+    tolerance matches as pure functions before anything gets opened. **Matches on tail,
+    never `aircraftType`** — confirmed the same tail reports two different types across
+    real receipts, since it just reflects whatever was loaded in the sim at the time.
+  - **A `NOTAIL` receipt (GSX had no tail assigned yet — a real, confirmed occurrence) is
+    offered, never auto-attached.** Time+airport alone isn't enough confidence to silently
+    add a charge to a flight, so these surface on the Logbook detail page with a manual
+    "Attach" action instead.
+  - **Money: arithmetic on the USD side only, local string always shown verbatim.** Every
+    amount is pre-formatted text like `"£1,359.71 ~$ 1,818.96"` — prefixes vary in kind,
+    decimals vary by currency, and no EUR sample exists to confirm the `.`/`,` convention
+    on a swapped locale. The USD half is consistently `$`-prefixed in every sample and GSX
+    has already done the conversion itself (with `fxDisclosure` recording the rate/date/
+    source), so summing there is the only honest way to total receipts that might be in
+    different currencies.
+  - **`logoDataUri` (16-30 KB of repeated base64 PNG) is stripped before storage** — kept
+    only in the original `.html`, which "Open receipt" opens via `shell.openPath` when the
+    user wants the real styled document.
+  - Storage is additive, not replace-wholesale: repeated rescans dedupe on `receiptId`
+    rather than deleting and re-inserting, specifically so a rescan can never wipe out a
+    NOTAIL receipt attached by hand (which the confident-match scan would never re-find on
+    its own).
+  - `PriceLists\` (a one-off, user-triggered per-airport rate card, no JSON companion) is
+    deliberately never read — confirmed it's not an automatically-maintained pricing feed.

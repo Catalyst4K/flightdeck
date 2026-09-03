@@ -82,6 +82,30 @@ export const appSetting = sqliteTable('app_setting', {
   value: text('value').notNull()
 })
 
+// A snapshot of a matched GSX ground-service receipt, taken at flight completion rather
+// than read live from the folder — GSX's own admin UI can bulk-delete old receipts, so a
+// Logbook that only ever reads the live folder would silently lose historical costs the
+// day someone tidies up (docs/decisions.md, gsx-invoices entry). logoDataUri is stripped
+// from receiptJson before storage — 16-30 KB of repeated base64 PNG nothing here renders.
+export const flightInvoice = sqliteTable('flight_invoice', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  flightId: integer('flight_id')
+    .notNull()
+    .references(() => flight.id),
+  serviceGroup: text('service_group', { enum: ['catering', 'fuel', 'handling', 'passengerBus'] }).notNull(),
+  receiptId: text('receipt_id').notNull(),
+  issuedUtc: text('issued_utc').notNull(),
+  icao: text('icao').notNull(),
+  tail: text('tail').notNull(),
+  operator: text('operator'),
+  // USD equivalent GSX itself computed, for cross-currency totals — never re-derived from
+  // the local-currency text, which isn't safely parseable (docs/gsx-notes.md).
+  totalUsd: real('total_usd'),
+  totalText: text('total_text'),
+  sourceHtmlPath: text('source_html_path').notNull(),
+  receiptJson: text('receipt_json').notNull()
+})
+
 // track_point per PLAN.md §5 — "keep sparse; this table gets big". FlightRecorder
 // (src/main/tracking) downsamples cruise to ~15s intervals and writes every other phase
 // at the sim feed's own 1 Hz, so a short flight is a few hundred rows, not tens of
