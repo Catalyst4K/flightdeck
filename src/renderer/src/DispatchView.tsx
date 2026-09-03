@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Aircraft, AltitudeUnit, DispatchOfp, FleetStats, WeightUnit } from '@shared/ipc'
+import type { Aircraft, AltitudeUnit, DispatchOfp, FleetStats, Flight, WeightUnit } from '@shared/ipc'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,8 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AirportSearch } from './AirportSearch'
+import { DispatchAdvancedDialog } from './DispatchAdvancedDialog'
+import { countSetOptions, defaultDispatchOptions, dispatchOptionsToUrlParams, type DispatchOptions } from './dispatch-options'
 import { defaultDepartureTime, fromDatetimeLocalValue, toDatetimeLocalValue, toSimBriefDeparture } from './dispatch-time'
 import { MetarPanel } from './MetarPanel'
 import { formatAltitude, formatWeight, mToFt } from './units'
@@ -58,6 +60,9 @@ export function DispatchView(props: {
   const { ofp } = props
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [fleetStats, setFleetStats] = useState<FleetStats[]>([])
+  const [pastFlights, setPastFlights] = useState<Flight[]>([])
+  const [dispatchOptions, setDispatchOptions] = useState<DispatchOptions>(defaultDispatchOptions())
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedAircraftId, setSelectedAircraftId] = useState<number | null>(null)
   const [planAircraftId, setPlanAircraftId] = useState<number | null>(null)
   const [depIcao, setDepIcao] = useState('')
@@ -84,6 +89,9 @@ export function DispatchView(props: {
   useEffect(() => {
     window.flightdeck.aircraftList().then(setAircraft)
     window.flightdeck.logbookFleetStats().then(setFleetStats)
+    // Source list for the advanced dialog's "Load settings from a previous flight" —
+    // flightList already returns newest-first (docs/decisions.md).
+    window.flightdeck.flightList().then(setPastFlights)
   }, [])
 
   function handlePlanAircraftChange(id: number): void {
@@ -111,7 +119,8 @@ export function DispatchView(props: {
       simbriefType: selected.simbriefType,
       airlineIcao: airlineIcao || null,
       flightNumber: flightNumber || null,
-      departure: departureUtc ? toSimBriefDeparture(departureUtc) : null
+      departure: departureUtc ? toSimBriefDeparture(departureUtc) : null,
+      extra: dispatchOptionsToUrlParams(dispatchOptions)
     })
   }
 
@@ -233,6 +242,7 @@ export function DispatchView(props: {
       setAirlineIcao('')
       setFlightNumber('')
       setDepartureUtc(null)
+      setDispatchOptions(defaultDispatchOptions())
       props.onPlanned?.()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -311,13 +321,19 @@ export function DispatchView(props: {
                   onChange={(e) => setDepartureUtc(fromDatetimeLocalValue(e.target.value))}
                 />
               </Label>
-              <Button
-                type="button"
-                onClick={handleOpenSimBrief}
-                disabled={planAircraftId == null || !depIcao || !destIcao}
-              >
-                Plan on SimBrief…
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  className="flex-1"
+                  onClick={handleOpenSimBrief}
+                  disabled={planAircraftId == null || !depIcao || !destIcao}
+                >
+                  Plan on SimBrief…
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setAdvancedOpen(true)}>
+                  Advanced{countSetOptions(dispatchOptions) > 0 ? ` (${countSetOptions(dispatchOptions)})` : ''}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -471,6 +487,14 @@ export function DispatchView(props: {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DispatchAdvancedDialog
+        open={advancedOpen}
+        onOpenChange={setAdvancedOpen}
+        options={dispatchOptions}
+        onOptionsChange={setDispatchOptions}
+        flights={pastFlights}
+      />
     </div>
   )
 }
