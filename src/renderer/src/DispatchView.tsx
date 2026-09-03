@@ -23,6 +23,7 @@ import { DispatchAdvancedDialog } from './DispatchAdvancedDialog'
 import { countSetOptions, defaultDispatchOptions, dispatchOptionsToUrlParams, type DispatchOptions } from './dispatch-options'
 import { defaultDepartureTime, fromDatetimeLocalValue, toDatetimeLocalValue, toSimBriefDeparture } from './dispatch-time'
 import { MetarPanel } from './MetarPanel'
+import { parseRouteProcedures } from './route'
 import { formatAltitude, formatWeight, mToFt } from './units'
 
 function formatUtc(iso: string): string {
@@ -431,6 +432,23 @@ export function DispatchView(props: {
                 </div>
                 <div className="flex flex-col gap-1.5 text-sm">
                   <span className="text-muted-foreground">Route</span>
+                  {(() => {
+                    const { sidIdent, starIdent } = parseRouteProcedures(ofp.ofpJson)
+                    return (sidIdent || starIdent) ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {sidIdent && (
+                          <Badge variant="outline" className="font-normal">
+                            SID {sidIdent}
+                          </Badge>
+                        )}
+                        {starIdent && (
+                          <Badge variant="outline" className="font-normal">
+                            STAR {starIdent}
+                          </Badge>
+                        )}
+                      </div>
+                    ) : null
+                  })()}
                   <p className="max-h-16 overflow-auto text-foreground">{ofp.routeString}</p>
                 </div>
 
