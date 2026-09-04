@@ -484,6 +484,9 @@ export const IpcChannels = {
   dispatchOpenSimBriefAirframes: 'dispatch:open-simbrief-airframes',
   settingsGetSimbriefUsername: 'settings:get-simbrief-username',
   settingsSetSimbriefUsername: 'settings:set-simbrief-username',
+  dispatchGenerateOfp: 'dispatch:generate-ofp',
+  dispatchLoginSimbrief: 'dispatch:login-simbrief',
+  dispatchGenerationAvailable: 'dispatch:generation-available',
   settingsGetWeightUnit: 'settings:get-weight-unit',
   settingsSetWeightUnit: 'settings:set-weight-unit',
   settingsGetAltitudeUnit: 'settings:get-altitude-unit',
@@ -552,6 +555,22 @@ export interface FlightdeckApi {
   dispatchOpenSimBriefAirframes: (airframeId: string | null) => Promise<void>
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
+  /**
+   * Triggers a real plan generation via SimBrief's keyed API, signed by flightdeck-backend
+   * rather than a locally-held key (docs/decisions.md, 2026-09-04) — opens a visible window
+   * for SimBrief's own login/generation UI, and resolves with the resulting OFP once it
+   * closes. Throws if no username is set, the backend signing request fails, or the window
+   * closed without a new plan actually being generated.
+   */
+  dispatchGenerateOfp: (params: DispatchOpenSimBriefParams) => Promise<DispatchOfp>
+  /** Whether generation is possible at all right now — always true, since generation goes
+   *  through flightdeck-backend rather than a per-build key. Kept as a channel for a
+   *  possible future bring-your-own-key or backend-downtime fallback. */
+  dispatchGenerationAvailable: () => Promise<boolean>
+  /** Pre-authenticates the generation window's session for the current app run only —
+   *  login doesn't persist across a restart (docs/simbrief-notes.md). Purely a
+   *  convenience; dispatchGenerateOfp handles its own login inline regardless. */
+  dispatchLoginSimbrief: () => Promise<void>
   settingsGetWeightUnit: () => Promise<WeightUnit>
   settingsSetWeightUnit: (unit: WeightUnit) => Promise<void>
   settingsGetAltitudeUnit: () => Promise<AltitudeUnit>

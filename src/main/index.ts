@@ -54,7 +54,8 @@ import { listTrackPoints } from './db/track-point-repo'
 import { defaultGsxReceiptsPath } from './gsx/default-path'
 import { buildFlightMatchWindow } from './gsx/flight-window'
 import { readReceipt, receiptFileFromPath, scanGsxFolder } from './gsx/scan'
-import { fetchLatestOfp } from './simbrief/simbrief-client'
+import { fetchLatestOfp, type SimBriefOfp } from './simbrief/simbrief-client'
+import { generateOfp, loginToSimbrief } from './simbrief/simbrief-generate'
 import { SimConnectService } from './sim/SimConnectService'
 import { TrackingController } from './tracking/TrackingController'
 import { AutoStartDetector } from './tracking/AutoStartDetector'
@@ -117,14 +118,41 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.flightList, () => listFlights(db))
 
-  ipcMain.handle(IpcChannels.dispatchFetchOfp, async (): Promise<DispatchOfp> => {
-    const username = getSimbriefUsername(db)
-    if (!username) throw new Error('Set your SimBrief username first')
-    const ofp = await fetchLatestOfp(username)
+  function mapOfpForIpc(ofp: SimBriefOfp): DispatchOfp {
     const matched = getAircraftByRegistration(db, ofp.aircraftRegistration)
     const { rawJson, ...rest } = ofp
     return { ...rest, ofpJson: rawJson, matchedAircraftId: matched?.id ?? null }
+  }
+
+  ipcMain.handle(IpcChannels.dispatchFetchOfp, async (): Promise<DispatchOfp> => {
+    const username = getSimbriefUsername(db)
+    if (!username) throw new Error('Set your SimBrief username first')
+    return mapOfpForIpc(await fetchLatestOfp(username))
   })
+
+  ipcMain.handle(
+    IpcChannels.dispatchGenerateOfp,
+    async (_event, params: DispatchOpenSimBriefParams): Promise<DispatchOfp> => {
+      const username = getSimbriefUsername(db)
+      if (!username) throw new Error('Set your SimBrief username first')
+
+      // Baseline for the "did a new plan actually appear" check below — best-effort, a
+      // pilot with no prior OFP at all is a valid starting state, not an error.
+      const baselineOfpId = await fetchLatestOfp(username)
+        .then((ofp) => ofp.ofpId)
+        .catch(() => null)
+
+      await generateOfp(params)
+
+      const ofp = await fetchLatestOfp(username)
+      if (ofp.ofpId === baselineOfpId) {
+        throw new Error('No new plan was generated — the window may have been closed before finishing')
+      }
+      return mapOfpForIpc(ofp)
+    }
+  )
+
+  ipcMain.handle(IpcChannels.dispatchLoginSimbrief, () => loginToSimbrief())
 
   ipcMain.handle(IpcChannels.dispatchOpenSimBrief, (_event, params: DispatchOpenSimBriefParams) => {
     const {
@@ -191,6 +219,11 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.settingsSetSimbriefUsername, (_event, username: string) =>
     setSimbriefUsername(db, username)
   )
+  // Always true now — generation goes through flightdeck-backend rather than a per-build
+  // key, so there's no "build with no key baked in" case to fall back from anymore. Kept
+  // as a channel (rather than removing it and the renderer's "Plan on SimBrief…" fallback
+  // entirely) in case a future bring-your-own-key or backend-downtime path wants it back.
+  ipcMain.handle(IpcChannels.dispatchGenerationAvailable, () => true)
 
   ipcMain.handle(IpcChannels.settingsGetWeightUnit, () => getWeightUnit(db))
   ipcMain.handle(IpcChannels.settingsSetWeightUnit, (_event, unit: WeightUnit) => setWeightUnit(db, unit))
