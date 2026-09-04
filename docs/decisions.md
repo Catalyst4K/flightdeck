@@ -1183,3 +1183,22 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     Generate…, logged into SimBrief in the popup, and a real plan came back successfully
     — confirming the deployed Worker, the rate-limit binding, and the full popup/
     re-fetch flow all work together against production, not just against tests.
+- 2026-09-04: **Cutover — new decisions and plan docs move to the private `flightdeck-backend`
+  repo, for the whole project, not just backend-service work.** Callum's explicit call.
+  This log (and `docs/plans/`) in *this* repo is now a frozen historical record through
+  today's date — not purged, not rewritten, and still the right place to look for why
+  something already built is the way it is. Nothing dated after this entry should be
+  expected here; check `flightdeck-backend/docs/decisions.md` and `.../docs/plans/`
+  instead. `CLAUDE.md` and `PLAN.md` §10 both carry pointers to this so a future session
+  reading only this repo doesn't assume the log simply stopped.
+  - **Why a private repo rather than the previous `docs/future-monetization.md` pattern**
+    (a single gitignored, untracked file — see that 2026-09-01 entry above): that approach
+    never synced between Callum's two machines, since an untracked file lives on whichever
+    machine created it. `flightdeck-backend` is already a real, private, properly-tracked
+    repo both machines can clone — a strictly better home for anything that needs to stay
+    off the public repo but still wants git history and cross-machine sync.
+  - **What doesn't move**: `plan/<name>` feature branches and their code stay in *this*
+    repo exactly as before — only the planning document's location changed, not where
+    anything ships or how it's branched. The `docs/*-notes.md` files (`simconnect-notes.md`,
+    `simbrief-notes.md`, and so on — findings about a real external system's actual
+    behaviour) aren't decisions or plans and stay here too, dated or not.

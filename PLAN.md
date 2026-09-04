@@ -470,6 +470,12 @@ Feature work beyond M0–M7 starts as a design doc on its own `plan/<name>` bran
 §8's workflow, then ships on a matching `feat/<name>` branch once built. `git branch -a`
 after fetching is the authoritative list if this table drifts.
 
+**As of 2026-09-04, new plan docs (and new `docs/decisions.md` entries) live in the
+private `flightdeck-backend` repo instead of this one** — see the note at the top of
+`CLAUDE.md`. The `plan/<name>` branch and its code still live here; only the design doc's
+location changed. All six plans below predate the cutover, so their docs stay in this
+repo's `docs/plans/`.
+
 **Five of the six branches below were built in one session on 2026-09-03**, the day after
 they were planned — a much faster turnaround than the table implies by listing them
 individually. Each has its own dated `docs/decisions.md` entry with what shipped and what

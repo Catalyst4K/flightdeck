@@ -7,8 +7,18 @@ logbook with landing analysis. Runs locally against a local SQLite database.
 **Read `PLAN.md` in full before doing anything else.** It has the architecture, data
 model, and the milestone history — M0–M5 done, M6 redesigned as an ongoing plan, M7
 partial; see its §6 and §10. `docs/decisions.md` is the log of every decision and
-judgment call made since, including the six originally listed as open in PLAN.md §9 (all
-resolved) — check it before assuming a default.
+judgment call made from kickoff through 2026-09-04, including the six originally listed
+as open in PLAN.md §9 (all resolved) — check it before assuming a default.
+
+**As of 2026-09-04, new decisions and plan docs are written in the private
+`flightdeck-backend` repo instead of here** (Callum's call — plan documents for the whole
+project, not just the backend service itself, going forward). This repo's `docs/decisions.md`
+and `docs/plans/*.md` are the frozen historical record up to that date — not purged,
+not rewritten, still the right place to look for *why* something already in this
+codebase is the way it is. Anything from 2026-09-04 onward lives in
+`flightdeck-backend/docs/` instead; see "Starting a new piece of work" below for exactly
+where. `plan/<name>` feature branches themselves stay in *this* repo either way — only the
+planning document's location changed, not where the code ships or how it's branched.
 
 ## Starting a new piece of work
 
@@ -17,14 +27,19 @@ milestones are done, and ongoing feature work is organized as design docs, not n
 milestones:
 
 1. Check `PLAN.md` §10 and `git branch -a` for the current list of `plan/<name>` branches.
-   If the user's request matches one, read its `docs/plans/<name>.md` in full before
-   touching code — it carries context (what's verified against real data, what's still
-   open) that isn't repeated anywhere else.
+   If the user's request matches one, read its plan doc in full before touching code — it
+   carries context (what's verified against real data, what's still open) that isn't
+   repeated anywhere else. For a plan dated before 2026-09-04, that's `docs/plans/<name>.md`
+   in *this* repo; for anything newer, it's `docs/plans/<name>.md` in the private
+   `flightdeck-backend` repo instead (see the note at the top of this file) — check there
+   if it's not here.
 2. For a genuinely new feature with no existing plan: write one, following the shape of
    the existing plans (context, what's confirmed vs. assumed, implementation, open
-   questions), on its own `plan/<name>` branch, before writing production code — same
-   spike-first discipline as M1/M6 below, generalised to any undocumented external system
-   (a third-party API, an undocumented file format), not just SimConnect.
+   questions), in `flightdeck-backend`'s `docs/plans/<name>.md` — not in this repo — before
+   writing production code, same spike-first discipline as M1/M6 below, generalised to any
+   undocumented external system (a third-party API, an undocumented file format), not just
+   SimConnect. The `plan/<name>` feature branch itself is still created and built in *this*
+   repo, exactly as before — only the design doc's location moved.
 3. One plan, one branch, one PR. Don't mix unrelated changes into a plan branch.
 
 ## Commands (once scaffolded)
@@ -60,11 +75,13 @@ docs/           decisions.md, simconnect-notes.md, and per-milestone notes as ne
   Never hand-edit `flightdeck.db` or a migration file after it's been applied.
 - Anything that sends data off the machine, stores credentials, or introduces an account
   or a server is a **decision, not an implementation detail**. Propose it, get agreement,
-  and record it in `docs/decisions.md` before building it. Nothing is ruled out — but
-  nothing arrives by accident either, and the default stays local. The backend-service
-  credential broker (`docs/plans/backend-service.md`) is the first case of this actually
-  happening — SimBrief and Navigraph access built in rather than every user requesting
-  their own key — not a hypothetical the rule is guarding against anymore.
+  and record it before building it — in `flightdeck-backend`'s `docs/decisions.md` for
+  anything from 2026-09-04 onward (see the note at the top of this file), this repo's for
+  anything before. Nothing is ruled out — but nothing arrives by accident either, and the
+  default stays local. The backend-service credential broker (`docs/plans/backend-service.md`,
+  in this repo since it predates the cutover) is the first case of this actually happening
+  — SimBrief and Navigraph access built in rather than every user requesting their own key
+  — not a hypothetical the rule is guarding against anymore.
 - Prefer a boring, working implementation over a clever one. This is a personal tool
   flown solo, not a platform.
 - Convert units at the IPC boundary per the decision in `docs/decisions.md` — don't let
@@ -168,7 +185,8 @@ that reintroduces an ABI mismatch and the native module fails to load.
 See `PLAN.md` §6 for the full M0–M7 breakdown and status (M0–M5 done, M7 partial, M6
 redesigned) and §10 for the current list of `plan/<name>` branches carrying feature work
 forward. "Starting a new piece of work" above covers the workflow — one plan, one branch,
-one PR.
+one PR — and where the plan doc itself now lives (this repo before 2026-09-04,
+`flightdeck-backend` from then on).
 
 The M1/M6 rule generalises: for anything depending on a real external system whose
 behaviour isn't documented — SimConnect, SimBrief's JSON schema, GSX's receipt files, a
@@ -176,4 +194,6 @@ future Navigraph integration — write a throwaway script or read real captured 
 confirm actual behaviour, *then* build the production version. Don't build any of it from
 assumptions. Log anything surprising in the matching `docs/*-notes.md` file
 (`simconnect-notes.md`, `simbrief-notes.md`, and so on) as you find it — this has paid for
-itself many times over already.
+itself many times over already. These `*-notes.md` files (findings about a real external
+system's actual behaviour, not project decisions or plans) stay in this repo regardless of
+date — only `decisions.md` and `docs/plans/` moved.
