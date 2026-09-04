@@ -84,7 +84,10 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   const dbPath = join(app.getPath('userData'), 'flightdeck.db')
-  migrateDb(dbPath)
+  // app.getAppPath() is the project root in dev and the asar root when packaged — both
+  // have drizzle/ as a direct sibling of package.json, unlike a cwd-relative path, which
+  // isn't reliable once the app is launched from a shortcut rather than a terminal.
+  migrateDb(dbPath, join(app.getAppPath(), 'drizzle'))
   const { db } = createDb(dbPath)
 
   // No native menu bar — in-app navigation (the top tab bar in App.tsx) is the only
@@ -358,6 +361,13 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+}).catch((error: unknown) => {
+  // Without this, a startup failure (e.g. a missing/broken migration) leaves the process
+  // running with no window and no visible error — indistinguishable from "still loading"
+  // until someone goes looking for it. A native dialog is the one thing guaranteed to work
+  // even if nothing else in the app initialized.
+  dialog.showErrorBox('Flightdeck failed to start', error instanceof Error ? error.stack ?? error.message : String(error))
+  app.exit(1)
 })
 
 app.on('window-all-closed', () => {
