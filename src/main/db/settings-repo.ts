@@ -80,3 +80,15 @@ export function setLandingThresholds(db: FlightdeckDb, thresholds: LandingThresh
   setSetting(db, FIRM_LANDING_FPM_KEY, String(thresholds.firmFpm))
   setSetting(db, HARD_LANDING_FPM_KEY, String(thresholds.hardFpm))
 }
+
+/** Per-table sync cursor (flightdeck-backend/docs/plans/cloud-sync.md's pull-then-push
+ *  protocol) — null means "never synced", so a pull fetches everything and a push sends
+ *  every local row. Updated only after both directions succeed for a sync run, so a
+ *  failed sync retries cleanly rather than marking partial progress as done. */
+export function getLastSyncedAt(db: FlightdeckDb, table: string): string | null {
+  return getSetting(db, `lastSyncedAt:${table}`) ?? null
+}
+
+export function setLastSyncedAt(db: FlightdeckDb, table: string, isoTimestamp: string): void {
+  setSetting(db, `lastSyncedAt:${table}`, isoTimestamp)
+}
