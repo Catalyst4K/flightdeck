@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DispatchOpenSimBriefParams } from '../../shared/ipc'
+import { dispatchOptionsToUrlParams, type DispatchOptions } from '@shared/dispatch-options'
 import { buildGenerateUrl } from './simbrief-generate'
 
 const BASE: DispatchOpenSimBriefParams = {
@@ -57,5 +58,43 @@ describe('buildGenerateUrl', () => {
     const url = new URL(buildGenerateUrl({ ...BASE, extra: [['units', 'KGS'], ['contpct', '0.03']] }, 'abc123', 1788307200))
     expect(url.searchParams.get('units')).toBe('KGS')
     expect(url.searchParams.get('contpct')).toBe('0.03')
+  })
+
+  // Every field the Advanced tab can set (src/renderer/src/dispatch-options.ts), fed
+  // through its own real dispatchOptionsToUrlParams — not a hand-picked subset — to catch
+  // a field silently dropped or renamed between the advanced dialog and the keyed
+  // generation URL, which the smaller spot-check above wouldn't necessarily surface.
+  it('round-trips every real Advanced-tab field into the generation URL', () => {
+    const filledOptions: DispatchOptions = {
+      pax: 'auto',
+      cargo: '2000',
+      manualzfw: '65000',
+      manualpayload: '18000',
+      fuelfactor: '1.02',
+      addedfuel: '500',
+      contpct: '0.03',
+      resvrule: '45',
+      taxiout: '15',
+      taxiin: '10',
+      tankering: '0',
+      civalue: '85',
+      cruisemode: 'LRC',
+      cruisesub: 'auto',
+      fl: '370',
+      climb: '250/300/.78',
+      descent: '.78/300/250',
+      route: 'DCT',
+      origrwy: '27L',
+      destrwy: '02C'
+    }
+    const extra = dispatchOptionsToUrlParams(filledOptions)
+    // Sanity check on the fixture itself — every field above is set, so this should be a
+    // 1:1 mapping with no accidental omissions before it's even fed through the URL builder.
+    expect(extra).toHaveLength(Object.keys(filledOptions).length)
+
+    const url = new URL(buildGenerateUrl({ ...BASE, extra }, 'abc123', 1788307200))
+    for (const [field, value] of extra) {
+      expect(url.searchParams.get(field), `field "${field}"`).toBe(value)
+    }
   })
 })

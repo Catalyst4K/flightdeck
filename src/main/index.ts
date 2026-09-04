@@ -191,7 +191,7 @@ app.whenReady().then(() => {
     if (departure) {
       url += `&date=${departure.dateEpochSeconds}&deph=${departure.hour}&depm=${departure.minute}`
     }
-    // Advanced options (pax/fuel/cruise/route) from dispatch-options.ts — already reduced
+    // Advanced options (pax/fuel/cruise/route) from src/shared/dispatch-options.ts — already reduced
     // to only the fields the user actually set, so an untouched advanced dialog appends
     // nothing here (docs/decisions.md, dispatch-advanced-tab entry).
     for (const [key, value] of extra ?? []) {

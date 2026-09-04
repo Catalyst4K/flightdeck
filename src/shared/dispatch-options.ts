@@ -3,7 +3,9 @@
  * other SimBrief generation parameters worth exposing beyond origin/destination/airframe.
  * Pure, no React, deliberately — this is where the real risk of the whole feature lives
  * (docs/decisions.md, dispatch-advanced-tab entry), so it's unit-testable without
- * rendering anything.
+ * rendering anything. Lives in src/shared rather than src/renderer (moved 2026-09-04) so
+ * main-process tests can build a real generation URL from the same field set the Advanced
+ * dialog actually produces, rather than a hand-picked subset.
  *
  * Every field is `string | 'auto' | null` rather than a number: SimBrief represents
  * "let SimBrief decide" as the literal string `"auto"` for several fields (pax, manualzfw,

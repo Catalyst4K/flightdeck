@@ -19,7 +19,7 @@ import {
   dispatchOptionsFromApiParams,
   type DispatchOptions,
   type OptionValue
-} from './dispatch-options'
+} from '@shared/dispatch-options'
 
 /** Bound to a plain text Input: blank means unset (don't send this parameter at all —
  *  SimBrief's own default applies), and typing the literal word "auto" sends SimBrief's
