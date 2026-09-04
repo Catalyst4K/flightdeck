@@ -4,43 +4,47 @@ Electron + React + TypeScript desktop app for tracking flights in Microsoft Flig
 Simulator 2024: fleet management, SimBrief dispatch, live SimConnect tracking, and a
 logbook with landing analysis. Runs locally against a local SQLite database.
 
-**Read `PLAN.md` in full before doing anything else.** It has the architecture, data
-model, and the milestone history — M0–M5 done, M6 redesigned as an ongoing plan, M7
-partial; see its §6 and §10. `docs/decisions.md` is the log of every decision and
-judgment call made from kickoff through 2026-09-04, including the six originally listed
-as open in PLAN.md §9 (all resolved) — check it before assuming a default.
+**All development documentation for this project — architecture, data model, milestone
+history, the decision log, and design docs for ongoing work — lives in the private
+`flightdeck-backend` repo, not here.** Read its `PLAN.md` and `docs/decisions.md` in full
+before doing any non-trivial work; this file only carries what's needed to make routine
+code changes in *this* repo day to day. `flightdeck-backend` needs to be cloned (or
+otherwise readable) alongside this repo to follow that instruction — if it isn't
+available, ask before assuming a default rather than guessing at unrecorded context.
 
-**As of 2026-09-04, new decisions and plan docs are written in the private
-`flightdeck-backend` repo instead of here** (Callum's call — plan documents for the whole
-project, not just the backend service itself, going forward). This repo's `docs/decisions.md`
-and `docs/plans/*.md` are the frozen historical record up to that date — not purged,
-not rewritten, still the right place to look for *why* something already in this
-codebase is the way it is. Anything from 2026-09-04 onward lives in
-`flightdeck-backend/docs/` instead; see "Starting a new piece of work" below for exactly
-where. `plan/<name>` feature branches themselves stay in *this* repo either way — only the
-planning document's location changed, not where the code ships or how it's branched.
+This repo's own `docs/` folder holds nothing but user-facing content (or is currently
+empty) — no development history, decisions, or plans belong here. If you're about to
+write a design doc or record a decision, it goes in `flightdeck-backend`'s `docs/plans/`
+or `docs/decisions.md`, never here — see "Starting a new piece of work" below.
 
 ## Starting a new piece of work
 
-This is a working app, not a from-scratch build — `package.json` exists, most of PLAN.md's
-milestones are done, and ongoing feature work is organized as design docs, not numbered
-milestones:
+This is a working app, not a from-scratch build. Ongoing feature work is organized as
+design docs (in `flightdeck-backend`, see above), not numbered milestones:
 
-1. Check `PLAN.md` §10 and `git branch -a` for the current list of `plan/<name>` branches.
-   If the user's request matches one, read its plan doc in full before touching code — it
-   carries context (what's verified against real data, what's still open) that isn't
-   repeated anywhere else. For a plan dated before 2026-09-04, that's `docs/plans/<name>.md`
-   in *this* repo; for anything newer, it's `docs/plans/<name>.md` in the private
-   `flightdeck-backend` repo instead (see the note at the top of this file) — check there
-   if it's not here.
+1. Check `flightdeck-backend`'s `PLAN.md` §10 and `git branch -a` here for the current
+   list of `plan/<name>` branches. If the user's request matches one, read its plan doc
+   (`flightdeck-backend/docs/plans/<name>.md`) in full before touching code — it carries
+   context (what's verified against real data, what's still open) that isn't repeated
+   anywhere else.
 2. For a genuinely new feature with no existing plan: write one, following the shape of
    the existing plans (context, what's confirmed vs. assumed, implementation, open
-   questions), in `flightdeck-backend`'s `docs/plans/<name>.md` — not in this repo — before
-   writing production code, same spike-first discipline as M1/M6 below, generalised to any
-   undocumented external system (a third-party API, an undocumented file format), not just
-   SimConnect. The `plan/<name>` feature branch itself is still created and built in *this*
-   repo, exactly as before — only the design doc's location moved.
+   questions), in `flightdeck-backend`'s `docs/plans/<name>.md` — before writing
+   production code, same spike-first discipline as the M1/M6 rule below, generalised to
+   any undocumented external system (a third-party API, an undocumented file format), not
+   just SimConnect. The `plan/<name>` feature branch itself is created and built in
+   *this* repo, exactly as always — only the design doc's location is different.
 3. One plan, one branch, one PR. Don't mix unrelated changes into a plan branch.
+4. Once a plan ships (its branch merges here), its design doc moves from
+   `flightdeck-backend/docs/plans/` to nowhere — it just stays there, done. Nothing about
+   a shipped plan's doc needs to come back to this repo.
+
+The M1/M6 rule generalises: for anything depending on a real external system whose
+behaviour isn't documented — SimConnect, SimBrief's JSON schema, GSX's receipt files, a
+future Navigraph integration — write a throwaway script or read real captured data first,
+confirm actual behaviour, *then* build the production version. Don't build any of it from
+assumptions. Log anything surprising in `flightdeck-backend`'s matching `docs/*-notes.md`
+file (`simconnect-notes.md`, `simbrief-notes.md`, and so on) as you find it.
 
 ## Commands (once scaffolded)
 
@@ -62,7 +66,7 @@ src/preload/    contextBridge exposure only — no logic here.
 src/renderer/   React UI. Never imports from src/main except via src/shared types.
 src/shared/     Types and constants used by both main and renderer.
 scripts/        One-off spikes and data import scripts (e.g. OurAirports import).
-docs/           decisions.md, simconnect-notes.md, and per-milestone notes as needed.
+docs/           User-facing content only, or empty — see the note at the top of this file.
 ```
 
 ## Rules
@@ -75,17 +79,15 @@ docs/           decisions.md, simconnect-notes.md, and per-milestone notes as ne
   Never hand-edit `flightdeck.db` or a migration file after it's been applied.
 - Anything that sends data off the machine, stores credentials, or introduces an account
   or a server is a **decision, not an implementation detail**. Propose it, get agreement,
-  and record it before building it — in `flightdeck-backend`'s `docs/decisions.md` for
-  anything from 2026-09-04 onward (see the note at the top of this file), this repo's for
-  anything before. Nothing is ruled out — but nothing arrives by accident either, and the
-  default stays local. The backend-service credential broker (`docs/plans/backend-service.md`,
-  in this repo since it predates the cutover) is the first case of this actually happening
-  — SimBrief and Navigraph access built in rather than every user requesting their own key
-  — not a hypothetical the rule is guarding against anymore.
+  and record it in `flightdeck-backend`'s `docs/decisions.md` before building it. Nothing
+  is ruled out — but nothing arrives by accident either, and the default stays local. The
+  backend-service credential broker is the first case of this actually happening — SimBrief
+  and Navigraph access built in rather than every user requesting their own key — not a
+  hypothetical the rule is guarding against anymore.
 - Prefer a boring, working implementation over a clever one. This is a personal tool
   flown solo, not a platform.
-- Convert units at the IPC boundary per the decision in `docs/decisions.md` — don't let
-  sim-native and SI units mix inside the same layer.
+- Convert units at the IPC boundary (SI internally, aviation units only at the UI layer)
+  — don't let sim-native and SI units mix inside the same layer.
 
 ## Security
 
@@ -108,10 +110,10 @@ Before committing or pushing:
   in this repo — not in prose, not in code, not even in a "throwaway" spike. A working
   implementation of a keyed signature scheme discloses it more completely than any
   paraphrase would, so "it's just code, not a description" is not an exception — a real
-  case of exactly this mistake happened and was corrected (`docs/decisions.md`,
-  2026-09-04). If a future spike needs to exercise a mechanism like this, run it locally,
-  capture only the safe findings in the matching `docs/*-notes.md`, and don't commit the
-  script itself.
+  case of exactly this mistake happened and was corrected (`flightdeck-backend`'s
+  `docs/decisions.md`, 2026-09-04). If a future spike needs to exercise a mechanism like
+  this, run it locally, capture only the safe findings in `flightdeck-backend`'s matching
+  `docs/*-notes.md`, and don't commit the script itself here.
 - **Check what a broad `git add` actually staged** (`git status` after it) and read any
   file whose name doesn't obviously explain its contents.
 - **Scrub personal data out of test fixtures.** Real OFPs carry a SimBrief pilot ID; real
@@ -143,9 +145,9 @@ rather than assuming there isn't one:
   `npm audit` when adding one, and keep `package-lock.json` committed. A dependency that
   wants postinstall scripts or network access at build time deserves scrutiny.
 
-**A second trust boundary now exists: the backend-service Flightdeck talks to over HTTPS**
-(`docs/plans/backend-service.md` — a credential broker for SimBrief and Navigraph, living
-in its own private repo, not this one). It changes how a couple of the rules above apply:
+**A second trust boundary exists: the backend-service Flightdeck talks to over HTTPS**
+(a credential broker for SimBrief and Navigraph, living in its own private repo,
+`flightdeck-backend` — not this one). It changes how a couple of the rules above apply:
 - The base URL is one constant (matching the `simvars.ts` discipline above), always
   `https:`, never sprinkled through the codebase.
 - Its responses are external data like any other third-party input — parse them
@@ -179,21 +181,3 @@ Node ABI (via `postinstall`) — not the system Node ABI. That's why `npm test` 
 plain `node`/`tsx`: it's the same binary the app ships with, so there's only one build of
 the module to keep track of. Don't "simplify" these scripts back to bare `vitest`/`tsx` —
 that reintroduces an ABI mismatch and the native module fails to load.
-
-## Milestones and ongoing plans
-
-See `PLAN.md` §6 for the full M0–M7 breakdown and status (M0–M5 done, M7 partial, M6
-redesigned) and §10 for the current list of `plan/<name>` branches carrying feature work
-forward. "Starting a new piece of work" above covers the workflow — one plan, one branch,
-one PR — and where the plan doc itself now lives (this repo before 2026-09-04,
-`flightdeck-backend` from then on).
-
-The M1/M6 rule generalises: for anything depending on a real external system whose
-behaviour isn't documented — SimConnect, SimBrief's JSON schema, GSX's receipt files, a
-future Navigraph integration — write a throwaway script or read real captured data first,
-confirm actual behaviour, *then* build the production version. Don't build any of it from
-assumptions. Log anything surprising in the matching `docs/*-notes.md` file
-(`simconnect-notes.md`, `simbrief-notes.md`, and so on) as you find it — this has paid for
-itself many times over already. These `*-notes.md` files (findings about a real external
-system's actual behaviour, not project decisions or plans) stay in this repo regardless of
-date — only `decisions.md` and `docs/plans/` moved.

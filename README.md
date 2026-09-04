@@ -4,11 +4,8 @@ A personal fleet-management, dispatch, live-tracking and logbook companion for
 Microsoft Flight Simulator — fleet → SimBrief dispatch → SimConnect tracking on a map →
 logbook with landing analysis. Runs locally against a local SQLite database.
 
-See `PLAN.md` §2 for prior art in this space and why this exists as its own project.
-
 **Status:** in active development. Fleet, SimBrief dispatch, live SimConnect tracking and
-the logbook all work; see `PLAN.md` for the milestone breakdown and `docs/decisions.md`
-for the running log of decisions.
+the logbook all work.
 
 ## Getting started
 
@@ -23,17 +20,10 @@ than plain Node.
 
 ## Docs
 
-- [`PLAN.md`](./PLAN.md) — architecture, data model, milestones, risks.
 - [`CLAUDE.md`](./CLAUDE.md) — working agreement for Claude Code sessions in this repo.
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — how contributions are licensed, and what can
   and can't be added as a dependency. Read this before opening a PR.
-- [`docs/decisions.md`](./docs/decisions.md) — answers to the open questions in
-  PLAN.md §9, and a log of judgment calls made since.
-- [`docs/simconnect-notes.md`](./docs/simconnect-notes.md) — real-world SimConnect
-  behaviour discovered during development.
-- [`docs/simbrief-notes.md`](./docs/simbrief-notes.md) — SimBrief's undocumented OFP
-  JSON schema, verified against real responses.
-- [`docs/plans/`](./docs/plans/) — designs for work not yet built.
+- [`SECURITY.md`](./SECURITY.md) — reporting a vulnerability.
 
 ## Licence
 
