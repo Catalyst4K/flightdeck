@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { GeoJSONSource, LngLatBounds, Map as MapLibreMap, Marker, setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import { Locate, LocateFixed, ZoomIn, ZoomOut } from 'lucide-react'
 import type { SimTelemetry, TrackPoint } from '@shared/ipc'
 import { Button } from '@/components/ui/button'
@@ -10,10 +10,36 @@ import { mToFt, msToKt } from './units'
 
 // maplibre-gl ships its tile-parsing worker as a separate chunk and locates it via its
 // own import.meta.url at runtime — a resolution that doesn't survive Vite's dependency
-// pre-bundling, so the worker silently loads no real code and every vector tile request
-// hangs forever (base map renders as a blank/fallback colour, nothing ever appears).
-// Pointing it at Vite's resolved asset URL explicitly sidesteps that.
-setWorkerUrl(maplibreWorkerUrl)
+// pre-bundling in dev, so pointing setWorkerUrl at Vite's resolved asset URL directly
+// (maplibreWorkerUrl) was the original fix for that. Two more layers of the same class of
+// bug surfaced once actually packaged, both confirmed live against a real build:
+//
+// 1. `?url` copies the referenced file byte-for-byte as an opaque static asset — it never
+//    parses it as JS, so maplibre-gl-worker.mjs's own top-level `import ... from
+//    "./maplibre-gl-shared.mjs"` was never noticed, and that sibling chunk was never
+//    emitted into the build at all. Worked in dev only because Vite's dev server will
+//    happily serve any file a browser asks for straight out of node_modules, sibling
+//    chunk included — nothing about that generalizes to a real production build.
+//    `?worker&url` is the fix: it tells Vite this file *is* a worker entry point, so it
+//    traces and bundles that import's whole dependency graph into one genuinely
+//    self-contained chunk, instead of copying the file as inert bytes.
+// 2. Even a fully self-contained worker script still can't be loaded via `new
+//    Worker(url)` from a file:// URL that points *inside* an asar archive — Chromium
+//    doesn't extend the same asar transparency it gives a <script src> or a fetch() to a
+//    dedicated Worker's script load. Confirmed live: style/sprite/TileJSON all fetch
+//    fine, but not one .pbf tile request is ever even issued, because the worker never
+//    finishes initializing. Fetching the worker's source as text (which *does* work
+//    through asar, same as any other fetch) and handing maplibre a blob: URL instead
+//    sidesteps the limitation — safe now that the file has no external relative import
+//    left to resolve against that blob: URL. The CSP's `worker-src 'self' blob:` already
+//    anticipates exactly this mechanism.
+let workerReady: Promise<void> | null = null
+function ensureWorkerReady(): Promise<void> {
+  workerReady ??= fetch(maplibreWorkerUrl)
+    .then((res) => res.blob())
+    .then((blob) => setWorkerUrl(URL.createObjectURL(blob)))
+  return workerReady
+}
 
 // docs/decisions.md, 2026-09-01 M4 tile source entry: OpenFreeMap, no key/quota/backend.
 // positron over liberty: a low-color basemap reads better under a flight track overlay.
@@ -106,92 +132,100 @@ export function FlightMap({
   // was made toggleable.
   const [followEnabled, setFollowEnabled] = useState(true)
 
-  // Map setup — once. Data is pushed in via separate effects below as it changes.
+  // Map setup — once. Data is pushed in via separate effects below as it changes. Gated on
+  // ensureWorkerReady() so the worker's blob: URL is registered (setWorkerUrl) before
+  // MapLibreMap's constructor ever spawns the worker that needs it.
   useEffect(() => {
     if (!mapContainerRef.current) return
-    const map = new MapLibreMap({
-      container: mapContainerRef.current,
-      style: MAP_STYLE,
-      center: [0, 0],
-      zoom: 1
-    })
-    mapRef.current = map
+    let cancelled = false
 
-    // 'load' waits for every tile in the current viewport to finish rendering — at this
-    // initial [0,0]/zoom 1 (whole-world) view that can take a very long time or never
-    // fully fire. 'style.load' fires once the style itself is parsed, which is all that's
-    // needed to safely add sources/layers (sim-confirmed: 'load' never fired within 10s
-    // in manual testing here, 'style.load' fires almost immediately).
-    map.on('style.load', () => {
-      map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: lineString([]) })
-      map.addLayer({
-        id: ROUTE_SOURCE_ID,
-        type: 'line',
-        source: ROUTE_SOURCE_ID,
-        paint: { 'line-color': '#888', 'line-width': 2, 'line-dasharray': [2, 2] }
+    ensureWorkerReady().then(() => {
+      if (cancelled || !mapContainerRef.current) return
+      const map = new MapLibreMap({
+        container: mapContainerRef.current,
+        style: MAP_STYLE,
+        center: [0, 0],
+        zoom: 1
       })
+      mapRef.current = map
 
-      map.addSource(TRAIL_SOURCE_ID, { type: 'geojson', data: lineString([]) })
-      map.addLayer({
-        id: TRAIL_SOURCE_ID,
-        type: 'line',
-        source: TRAIL_SOURCE_ID,
-        paint: { 'line-color': '#1a73e8', 'line-width': 3 }
+      // 'load' waits for every tile in the current viewport to finish rendering — at this
+      // initial [0,0]/zoom 1 (whole-world) view that can take a very long time or never
+      // fully fire. 'style.load' fires once the style itself is parsed, which is all that's
+      // needed to safely add sources/layers (sim-confirmed: 'load' never fired within 10s
+      // in manual testing here, 'style.load' fires almost immediately).
+      map.on('style.load', () => {
+        map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: lineString([]) })
+        map.addLayer({
+          id: ROUTE_SOURCE_ID,
+          type: 'line',
+          source: ROUTE_SOURCE_ID,
+          paint: { 'line-color': '#888', 'line-width': 2, 'line-dasharray': [2, 2] }
+        })
+
+        map.addSource(TRAIL_SOURCE_ID, { type: 'geojson', data: lineString([]) })
+        map.addLayer({
+          id: TRAIL_SOURCE_ID,
+          type: 'line',
+          source: TRAIL_SOURCE_ID,
+          paint: { 'line-color': '#1a73e8', 'line-width': 3 }
+        })
+
+        map.addSource(WAYPOINT_SOURCE_ID, { type: 'geojson', data: waypointFeatures([]) })
+        map.addLayer({
+          id: `${WAYPOINT_SOURCE_ID}-circle`,
+          type: 'circle',
+          source: WAYPOINT_SOURCE_ID,
+          paint: {
+            'circle-radius': 3,
+            // SID/STAR fixes stand out from plain enroute waypoints — same route.ts
+            // segmentation SimBrief itself reports (docs/decisions.md, sid-star-selection
+            // entry), not yet swappable for an alternate procedure (blocked on Navigraph).
+            'circle-color': [
+              'match',
+              ['get', 'segment'],
+              'sid',
+              '#e67700',
+              'star',
+              '#7048e8',
+              /* enroute */ '#888'
+            ],
+            'circle-stroke-width': 1,
+            'circle-stroke-color': '#fff'
+          }
+        })
+        map.addLayer({
+          id: `${WAYPOINT_SOURCE_ID}-label`,
+          type: 'symbol',
+          source: WAYPOINT_SOURCE_ID,
+          layout: {
+            'text-field': ['get', 'ident'],
+            'text-size': 11,
+            'text-offset': [0, 1],
+            'text-anchor': 'top'
+          },
+          paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 1 }
+        })
+
+        // A text glyph (e.g. '✈') isn't drawn pointing true north in every font, so
+        // setRotation(heading) comes out offset by whatever the glyph's own heading is.
+        // This SVG is authored nose-up (pointing north at 0 rotation), so it lines up exactly.
+        const el = document.createElement('div')
+        el.style.width = '22px'
+        el.style.height = '22px'
+        el.innerHTML =
+          '<svg width="22" height="22" viewBox="0 0 24 24">' +
+          '<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z" fill="#1a73e8" stroke="#0b3d91" stroke-width="0.5"/>' +
+          '</svg>'
+        markerRef.current = new Marker({ element: el, rotationAlignment: 'map' })
+
+        setMapReady(true)
       })
-
-      map.addSource(WAYPOINT_SOURCE_ID, { type: 'geojson', data: waypointFeatures([]) })
-      map.addLayer({
-        id: `${WAYPOINT_SOURCE_ID}-circle`,
-        type: 'circle',
-        source: WAYPOINT_SOURCE_ID,
-        paint: {
-          'circle-radius': 3,
-          // SID/STAR fixes stand out from plain enroute waypoints — same route.ts
-          // segmentation SimBrief itself reports (docs/decisions.md, sid-star-selection
-          // entry), not yet swappable for an alternate procedure (blocked on Navigraph).
-          'circle-color': [
-            'match',
-            ['get', 'segment'],
-            'sid',
-            '#e67700',
-            'star',
-            '#7048e8',
-            /* enroute */ '#888'
-          ],
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#fff'
-        }
-      })
-      map.addLayer({
-        id: `${WAYPOINT_SOURCE_ID}-label`,
-        type: 'symbol',
-        source: WAYPOINT_SOURCE_ID,
-        layout: {
-          'text-field': ['get', 'ident'],
-          'text-size': 11,
-          'text-offset': [0, 1],
-          'text-anchor': 'top'
-        },
-        paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 1 }
-      })
-
-      // A text glyph (e.g. '✈') isn't drawn pointing true north in every font, so
-      // setRotation(heading) comes out offset by whatever the glyph's own heading is.
-      // This SVG is authored nose-up (pointing north at 0 rotation), so it lines up exactly.
-      const el = document.createElement('div')
-      el.style.width = '22px'
-      el.style.height = '22px'
-      el.innerHTML =
-        '<svg width="22" height="22" viewBox="0 0 24 24">' +
-        '<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2.5 1.5V22l4-1 4 1v-1.5L13 19v-5.5l8 2.5z" fill="#1a73e8" stroke="#0b3d91" stroke-width="0.5"/>' +
-        '</svg>'
-      markerRef.current = new Marker({ element: el, rotationAlignment: 'map' })
-
-      setMapReady(true)
     })
 
     return () => {
-      map.remove()
+      cancelled = true
+      mapRef.current?.remove()
       mapRef.current = null
       markerRef.current = null
     }
