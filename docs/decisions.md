@@ -913,3 +913,42 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     clamp on an obviously-impossible value (NaN, or wildly outside [-3g, 6g]) is cheap
     insurance against a headline-wrong number without asserting anything about what a real
     hard landing should read.
+- 2026-09-03: **Scope decision: Flightdeck will operate a backend server, so end users
+  never need their own SimBrief or Navigraph credentials.** Callum's explicit direction,
+  matching SimToolkitPro's model (`PLAN.md` §2) rather than the "every user brings their
+  own key" pattern this app has used until now (SimBrief username, and the just-obtained
+  SimBrief API key were both heading toward per-user storage before this). This reopens
+  and supersedes PLAN.md §1's already-loosened "accounts/sync/a backend are no longer
+  ruled out, but propose on its merits" language — this is that proposal, accepted.
+  **Not yet designed or built** — this entry records the scope decision itself; the
+  backend's own design needs a `docs/plans/` doc, per the established workflow, before any
+  server code is written. Two credentials are in scope, and they are **not the same kind
+  of decision**:
+  - **SimBrief: confirmed low-risk, and this is the intended use case, not a workaround.**
+    SimBrief's own developer materials are explicitly aimed at "VA creators... who wish to
+    include SimBrief flight plans on their website" — one operator's key, proxied through
+    a server to many end users, is exactly the pattern their package is built for, not an
+    end-run around it. SimBrief support separately confirmed (email to Callum, 2026-09-03)
+    that porting their key-hashing to another language/stack is permitted provided the key
+    is protected — a server-side proxy holding the key server-side, never shipped in the
+    client, satisfies that. Remaining design work is ordinary backend engineering, not a
+    permissions question: the proxy itself needs its own abuse protection (rate-limiting,
+    distinguishing genuine Flightdeck installs from arbitrary callers), since a wide-open
+    proxy is exactly as exploitable as a client-embedded key — SimBrief revoking the key
+    for misuse breaks the feature for every user, not just the one who misused it.
+  - **Navigraph: NOT confirmed, and architecturally a different situation — needs a direct
+    answer from Navigraph before this is treated as settled scope.** `plan/sid-star-selection`
+    already designed Navigraph auth as OAuth2 Device Authorization Flow with PKCE,
+    specifically because their DFD navdata is licensed **per individual subscriber**
+    (~$12/mo) and the API serves a stale package without an active one — that flow exists
+    to bind data access to one person's own paid subscription, not to hand out a
+    reusable credential the way SimBrief's key works. A backend serving Navigraph data to
+    every Flightdeck install off Callum's own single subscription would mean one paid
+    subscription backing potentially unlimited end users, which is a materially different
+    ask than "let a VA's dispatch page use my SimBrief key" — it looks much closer to
+    reselling licensed data than proxying an API call, and Navigraph's whole auth design
+    suggests they've specifically engineered against it. **Do not build the Navigraph half
+    of this backend until Callum has asked Navigraph directly** (same pattern as the
+    SimBrief key request — a real email, not an assumption) and gotten an answer. If
+    Navigraph says no, `plan/sid-star-selection`'s original per-user-OAuth design is the
+    fallback, not a failure — it was already the correct design for that scenario.
