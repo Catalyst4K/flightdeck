@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadRunwayEnds, resolveRunwayEnd, type RunwayEnd } from './runway-lookup'
+import { loadRunwayEnds, resolveAirportPosition, resolveRunwayEnd, type RunwayEnd } from './runway-lookup'
 
 const FIXTURE: RunwayEnd[] = [
   // KLAX has real parallel runways at (nearly) the same heading — a good stand-in for
@@ -42,6 +42,25 @@ describe('resolveRunwayEnd', () => {
     // it's geographically nearer.
     const result = resolveRunwayEnd(FIXTURE, 'KLAX', 70, 33.9364, -118.3809)
     expect(result?.ident).toBe('07L')
+  })
+})
+
+describe('resolveAirportPosition', () => {
+  it('averages every runway end for the airport, not just one', () => {
+    // KLAX has three ends in the fixture, at three different lat/lons.
+    const result = resolveAirportPosition(FIXTURE, 'KLAX')
+    expect(result).toEqual({
+      lat: (33.9425 + 33.9364 + 33.9364) / 3,
+      lon: (-118.4081 + -118.4081 + -118.3809) / 3
+    })
+  })
+
+  it('is case-insensitive on the ICAO', () => {
+    expect(resolveAirportPosition(FIXTURE, 'egll')).toEqual({ lat: 51.4775, lon: -0.4614 })
+  })
+
+  it('returns null for an airport with no runway data at all', () => {
+    expect(resolveAirportPosition(FIXTURE, 'ZZZZ')).toBeNull()
   })
 })
 

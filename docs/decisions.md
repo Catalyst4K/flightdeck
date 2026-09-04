@@ -913,8 +913,79 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     clamp on an obviously-impossible value (NaN, or wildly outside [-3g, 6g]) is cheap
     insurance against a headline-wrong number without asserting anything about what a real
     hard landing should read.
-- 2026-09-03: **Scope decision: Flightdeck will operate a backend server, so end users
-  never need their own SimBrief or Navigraph credentials.** Callum's explicit direction,
+- 2026-09-03: Callum obtained a real SimBrief API key plus SimBrief's own developer
+  integration package. Per the terms attached to that package, and per Callum's own
+  explicit instruction, **the mechanism it describes is not documented anywhere in this
+  repo** — not the literal files, and not a prose paraphrase either (see
+  `docs/simbrief-notes.md`'s "Generation" section for what's safe to say and why). Code
+  that implements the real HTTP calls is fine and necessary once this is built — a URL
+  isn't a tutorial — but explanatory comments describing SimBrief's own protocol stay out.
+  - **Credential storage, agreed before any code touched it** (per this file's own rule
+    that storing credentials is a decision, not an implementation detail): the API key
+    goes in the existing `app_setting` key/value table, entered via a masked Settings
+    field — the same pattern the SimBrief username already uses. Considered an OS-native
+    credential store instead; rejected for now as a new dependency (supply-chain
+    scrutiny) that would make this one setting behave differently from every other one,
+    for a local-only single-user app where the DB itself is already the trust boundary.
+  - **Both open questions this needs answered were resolved by a live test**
+    (`scripts/spike-simbrief-generation.ts`, throwaway, not a description of the
+    mechanism — see `docs/simbrief-notes.md` for the safe write-up of what was confirmed).
+    Generation turns out to need nothing new on the retrieval side: the already-trusted
+    `fetchLatestOfp` is sufficient once a plan has actually been generated.
+  - Building this required opening a real, visible browser window for SimBrief's own
+    login/generation UI (not something a background request can do — confirmed live, not
+    assumed) — an Electron `BrowserWindow`, not `shell.openExternal`, so the app can
+    detect when it's done. Discovered Electron's default behaviour is to quit the whole
+    app the instant that window closes (which SimBrief's flow does on its own once
+    finished); a spike built on that default silently lost its own result every time.
+    Anything built on this needs to override `window-all-closed` deliberately.
+  - Not yet built: the production feature itself. This entry records the unblocking
+    research and the credential decision; the actual "Generate" button is a separate
+    plan (`plan/simbrief-plan-generation`, design doc first per this file's own workflow),
+    since the key didn't exist when the six other 2026-09-03 plans were scoped.
+- 2026-09-03: **Closed the one open question from the landing-analysis entry above** —
+  `scripts/spike-landing.ts` run against a real landing at VHHH (25C), confirming
+  `landing-capture.ts` should keep `touchdownSource: 'derived'` rather than switch to
+  MSFS 2024's dedicated `PLANE TOUCHDOWN *` SimVars. Those disagreed with the derived
+  values not just in magnitude but in trend — across the landing's two touchdowns (a real
+  bounce), the dedicated SimVar's reading *increased* on the softer second touchdown while
+  the derived value correctly decreased, which is enough on its own to distrust it without
+  a lot more investigation. No code change — this only confirms the existing default was
+  right. Also confirmed, on the same real flight: `TrackingController`'s `onRecorded`
+  guard captured only the bounce's first touchdown (matching the spike's harder-touchdown
+  numbers exactly) and produced exactly one `landing` row, not two. Full write-up:
+  `docs/simconnect-notes.md`.
+- 2026-09-03: **Fixed a real auto-start-tracking bug Callum hit live**: pressing "Fly" in
+  Dispatch while MSFS was still sitting on its flight-picker/World Map screen armed
+  `AutoStartDetector` against that menu's own live background scene — parked, on the
+  ground, perfectly stationary (Callum's case: sitting at Boeing Field) — which every
+  existing check (on ground, altitude sane, position/altitude unchanging) accepts just as
+  readily as a genuinely parked, armed flight. It fired there, then the real load-in
+  teleported the aircraft to the actual departure airport, recording one breadcrumb trail
+  straight across the globe between the two.
+  - **Fix**: `AutoStartDetector.arm()` now takes the armed flight's `depIcao` and resolves
+    a rough anchor position for it from the already-vendored runway data (new
+    `resolveAirportPosition`/`airportPosition` in `runway-lookup.ts` — the mean of that
+    airport's runway-end thresholds, not a precise position). `isStableStep` rejects a
+    sample more than ~1.1° away from that anchor, which comfortably separates any two real
+    airports without needing precision. When the departure airport isn't in the vendored
+    runway data at all, the check is skipped entirely — same behavior as before this
+    existed, rather than silently refusing to ever auto-start for that airport.
+  - This is exactly the risk the class's own doc comment had already named and accepted as
+    a narrower trade-off (a stale position from a *different* previous flight) — it turned
+    out to be broader in practice, since MSFS's own menu counts as "a different flight"
+    too. Doesn't require reintroducing the earlier "needs a disturbance from the armed
+    baseline first" precondition that was deliberately dropped (it didn't fit Callum's
+    normal "load the flight in MSFS, then press Fly" order) — the departure-position check
+    is orthogonal to that and catches this case without it.
+  - Not caught by this fix, and not worth chasing: two airports that happen to be within
+    the coarse ~1.1° threshold of each other. Dispatch's "Fly" confirmation dialog and the
+    manual "Start tracking" button remain the guardrails for whatever this narrower
+    residual risk still misses.
+- 2026-09-03: **Scope decision, superseding the per-user credential storage decision in
+  the entry immediately above** (that work was already in flight when this happened):
+  **Flightdeck will operate a backend server, so end users never need their own SimBrief
+  or Navigraph credentials.** Callum's explicit direction,
   matching SimToolkitPro's model (`PLAN.md` §2) rather than the "every user brings their
   own key" pattern this app has used until now (SimBrief username, and the just-obtained
   SimBrief API key were both heading toward per-user storage before this). This reopens

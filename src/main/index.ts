@@ -242,7 +242,7 @@ app.whenReady().then(() => {
     trackingController.stop()
     abandonAllPlanned(db)
     const flight = createFlight(db, input)
-    autoStartDetector.arm(flight.id, simConnectService.getLastTelemetry())
+    autoStartDetector.arm(flight.id, simConnectService.getLastTelemetry(), flight.depIcao)
     return flight
   })
   ipcMain.handle(IpcChannels.flightCancel, (_event, id: number) => {

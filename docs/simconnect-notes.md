@@ -71,3 +71,42 @@ pipe. Not itself a bug to fix, but `SimConnectService`'s retry/backoff loop (alr
 the spike) needs to keep this in mind: a sim that's still loading is indistinguishable
 from "not running yet" over the first few retries, and that's expected, not an error
 worth surfacing to the user immediately.
+
+## 2026-09-03 — MSFS 2024, `scripts/spike-landing.ts`, real landing at VHHH (25C)
+
+First run against a real landing — settles the one open question from `docs/decisions.md`'s
+landing-analysis entry: **are MSFS 2024's dedicated touchdown SimVars (`PLANE TOUCHDOWN
+NORMAL VELOCITY`/`PITCH DEGREES`/`BANK DEGREES`) trustworthy?** No — don't switch
+`landing-capture.ts`'s `touchdownSource` off `'derived'`.
+
+The landing was a bounce (two `SIM ON GROUND` false→true edges, a few seconds apart —
+useful, not a wasted run). Both dedicated-SimVar readings disagreed with the derived ones,
+and not just in magnitude:
+
+```
+Touchdown 1 (harder): derived -234 fpm   |  dedicated +93 fpm
+Touchdown 2 (softer):  derived  -74 fpm   |  dedicated +380 fpm
+```
+
+Derived correctly shows the second (softer) bounce as a smaller-magnitude descent than the
+first — matches what actually happened. The dedicated SimVar not only has the wrong sign
+throughout (positive during a descent onto the runway) but moves the *wrong direction*
+between the two touchdowns — larger on the softer bounce, not smaller. That's not just an
+offset or a unit mismatch that could be corrected for; it's internally inconsistent with
+the two touchdowns' own relative severity, which is enough on its own to not trust it
+without a lot more investigation. Pitch/bank were closer between the two readings (e.g.
+-6.71° derived vs -6.80° dedicated on the first touchdown) but that's not enough to
+justify switching just the touchdown SimVars for VS while keeping pitch/bank on either
+source — simplest and safest is to leave the whole `'derived'` path alone, which is what
+`landing-capture.ts` already defaults to.
+
+**Also confirms the production capture path end to end, not just the SimVar comparison.**
+The real `landing` table row this produced (flight 178, VHHH, runway `25C`) matches the
+spike's first/harder touchdown exactly (pitch -6.709°, bank -0.578°), confirming
+`TrackingController`'s `onRecorded` guard correctly captured only the *first* ground
+contact and ignored the bounce's second one — no duplicate `landing` row, no confusion
+about which touchdown counts. G-force (1.12g), runway match, and the derived
+crosswind/centreline figures all came out physically plausible for a real approach.
+
+No code change needed — `touchdownSource` was already defaulting to `'derived'`; this
+closes out the open question in its favour rather than changing anything.
