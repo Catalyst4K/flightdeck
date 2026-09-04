@@ -1022,4 +1022,46 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     of this backend until Callum has asked Navigraph directly** (same pattern as the
     SimBrief key request — a real email, not an assumption) and gotten an answer. If
     Navigraph says no, `plan/sid-star-selection`'s original per-user-OAuth design is the
-    fallback, not a failure — it was already the correct design for that scenario.
+    fallback, not a failure — it was already the correct design for that scenario.- 2026-09-03: **Refines the Navigraph entry immediately above, from Navigraph's own public
+  developer docs** (developers.navigraph.com — none of this is restricted material, unlike
+  the SimBrief situation, so it's fine to record in full detail). Callum's own recollection
+  ("permanent login," "a free base/outdated navdata tier exist") prompted checking the
+  actual docs rather than trusting memory, per this project's usual discipline — and it
+  checked out, with one important refinement:
+  - **Confirmed: no shared-subscription resale problem exists at all.** Every navdata
+    request is gated by the *calling user's own* subscription, read from their own OAuth
+    token's `subscription` claim — a user with no active subscription gets a real,
+    working but outdated package (built from an old AIRAC cycle); an active Navigation
+    Data or Ultimate subscription gets the current cycle. This is per-user by
+    construction, not something a shared backend credential could bypass or launder — so
+    the original worry (one paid subscription serving unlimited installs) doesn't apply
+    to how this API is actually built. Navigraph's own docs recommend Device Authorization
+    Flow with PKCE specifically *for* "flight simulator add-ons," i.e. exactly this shape
+    of app.
+  - **But device-flow login for this API needs a `client_secret`, not just a `client_id`
+    — confirmed from the actual request parameters in Navigraph's docs.** PKCE normally
+    exists so a public/native client *doesn't* need a secret; Navigraph's implementation
+    still requires one in both the device-authorization and token-exchange requests. A
+    secret embedded in a distributed Electron binary is exactly as extractable as the
+    SimBrief key would be — so **a small backend is warranted for Navigraph too, but for
+    a narrower, lower-risk reason than originally framed**: brokering the OAuth handshake
+    to keep the client_secret server-side, not proxying navdata or reusing Callum's own
+    subscription. The server never sees which user is logging in beyond relaying the
+    device/token exchange; each user's resulting token is theirs, at their own
+    subscription level, exactly as if they'd registered their own client. This is a
+    standard, well-trodden pattern (a "confidential client on behalf of a public app") —
+    Auth0/Okta-style OAuth providers document it for exactly this reason.
+  - **Registration is not self-service** — same shape as the SimBrief key: an email to
+    dev@navigraph.com describing the intended use, reviewed and approved by Navigraph's
+    dev team, not an instant signup. `plan/sid-star-selection` already notes credentials
+    were "applied for, pending" — worth Callum confirming that application actually
+    described *this* shape (a small OAuth-brokering backend behind a publicly distributed
+    multi-user app), since the description may predate this session's pivot to a
+    backend-server architecture. Not a blocker on the same order as before, but still
+    worth a direct check before treating this as fully settled, per this project's
+    standing "ask, don't assume" rule for anything usage-terms-adjacent.
+  - **Net effect on scope**: the backend-service plan can now cover both credentials in
+    one design — a SimBrief key-hashing proxy and a Navigraph OAuth-broker — rather than
+    treating Navigraph as blocked pending an external answer. The remaining open item is
+    confirming the existing application's description, not whether the architecture
+    itself is sound.
