@@ -1094,3 +1094,84 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     about rather than done unilaterally.
   - The same file existed identically on `plan/backend-service` (branched after it was
     already on `main`) and was removed there too, same commit shape.
+- 2026-09-04: **Superseded the built-in-key architecture above with a server-brokered
+  one.** The prior entry's own rejection of "a server Callum operates" was reconsidered
+  and reversed — Callum decided the ongoing cost/maintenance is worth it to stop shipping
+  the SimBrief keyed-authorization computation (the code that combines the key with a
+  request to produce `apicode`, not just the key itself) inside a public, distributed
+  binary at all. New rule, stricter than the prior entry's: retrieval code (the existing
+  keyless `xml.fetcher.php?username=` fetch) stays fine in the public repo; the
+  keyed-authorization *computation* must never be committed to the public repo's history,
+  full stop — only a new private repo may hold it, and the key itself is read from a
+  platform secret, never committed anywhere.
+  - **New private repo: `github.com/Catalyst4K/flightdeck-backend`** (GPL question doesn't
+    apply — private, not distributed). Implements a Cloudflare Worker with a single
+    `POST /simbrief/sign` route that takes the same non-secret request fields Flightdeck
+    already sends to the keyless prefill URL (orig/dest/type/timestamp/outputPage) and
+    returns the computed `apicode`, keeping the actual key server-side
+    (`SIMBRIEF_API_KEY`, set via `wrangler secret put`, never committed). Full design in
+    `docs/plans/backend-service.md`. Navigraph's two routes (`device-code`/`token`) are
+    deliberately not built yet — blocked on confirming Callum's existing Navigraph
+    developer-application description actually matches this shape.
+  - Cloudflare Workers chosen over alternatives for the usual reasons (free tier, no
+    infrastructure to run) — confirmed `node:crypto` works under `nodejs_compat` before
+    committing to it, and live-verified the deployed Worker's md5 output against an
+    independent Node computation before trusting it.
+  - **A real git-history purge was required, not just a tip-level revert**, because the
+    production `src/main/simbrief/simbrief-generate.ts` (the keyed-computation file
+    itself, plus its test and the earlier throwaway spike script) had already been
+    committed and pushed to two branches (`plan/simbrief-plan-generation`,
+    `plan/sid-star-selection`) — an initial fix on `main`/`plan/backend-service` alone
+    missed this. Purged via `git filter-repo --invert-paths` against scoped single-branch
+    clones (run outside the assistant's own tool access — history rewrites and
+    force-pushes are outside what it can execute even with explicit approval — Callum ran
+    the actual purge+force-push commands himself), then force-pushed to all 4 affected
+    branches (`main`, `plan/backend-service`, `plan/simbrief-plan-generation`,
+    `plan/sid-star-selection`), temporarily lifting `main`'s force-push branch protection
+    for the one push and re-enabling it immediately after. Verified afterward directly
+    against GitHub (not just local state) that the file is gone from every branch's
+    history. Old clones/forks predating this purge would still contain the removed
+    commits — none are known to exist, per the same "no existing forks" fact the GPL
+    relicensing entry above relied on.
+  - `flightdeck-backend` deployed live at
+    `https://flightdeck-backend.callum-jones5.workers.dev` and verified end to end: a real
+    POST to `/simbrief/sign` returns a computed `apicode` using the real secret, confirming
+    the deployed Worker (not just local `wrangler dev`) reads the platform secret
+    correctly. Rate limiting is left to Cloudflare's platform-level Rate Limiting Rules
+    (per the plan doc — this Worker is deliberately stateless, no KV/Durable Objects, so
+    app-level rate limiting isn't an option here) — not yet configured, still open.
+  - Not yet done: the Flightdeck-side client that calls this endpoint instead of computing
+    `apicode` locally (there is no local computation to replace right now — Dispatch is
+    currently back on the keyless `dispatch.simbrief.com` redirect, since the code that
+    called the keyed endpoint was exactly what got purged). Building that client, and
+    deciding whether/how to point a build at this backend, is unstarted follow-up work.
+- 2026-09-04: **Rate limiting on `flightdeck-backend`, and a correction to the plan doc's
+  assumption.** The plan doc assumed Cloudflare's platform-level WAF Rate Limiting Rules —
+  those require a zone (a custom domain on Cloudflare), which this deployment doesn't have
+  (it's on the shared `*.workers.dev` subdomain only, not `millcliffe.co.uk` or any other
+  owned domain — deliberately not pursued yet, see below). Used Cloudflare's native Workers
+  **Rate Limiting binding** instead (`ratelimits` in `wrangler.jsonc`, GA since 2025-09,
+  confirmed via current docs before implementing): no zone required, still no app-managed
+  state (not KV/Durable Objects — a single `env.SIMBRIEF_SIGN_RATE_LIMITER.limit({key})`
+  call), 20 requests/60s keyed on `CF-Connecting-IP` (the docs recommend a stable
+  identifier like a user/API key over IP, but this endpoint has neither — IP is the
+  practical choice for an unauthenticated public route).
+  - **Known limitation, verified live, not just assumed**: tested by firing 25 rapid
+    requests at the real deployed Worker — all 25 returned 200, no 429, both immediately
+    after deploy and again after a 90s+ wait (ruling out the kind of first-use propagation
+    delay seen earlier with the `workers.dev` subdomain's SSL cert). Isolated the cause by
+    running the identical binding config against local `wrangler dev`, where it worked
+    exactly as expected (request 21 onward correctly returned 429, proving the code and
+    config are both right). This matches a currently open Cloudflare Community thread,
+    "Workers Rate Limiting binding always returns success=true for the same key and colo" —
+    a platform-side bug in production enforcement, not something on this repo's side to fix.
+  - **Shipped anyway.** It fails open (never blocks legitimate traffic), the actual traffic
+    volume here is a handful of personal users, and it should start enforcing for real the
+    moment Cloudflare fixes their bug, with no code change needed here. Flagging this
+    explicitly so a future session doesn't mistake the binding's presence for verified
+    protection — re-run the same 25-requests-in-a-row live check after any future
+    `flightdeck-backend` deploy to see if it's started working.
+  - `millcliffe.co.uk` (a domain Callum owns) came up as a possible custom domain for a
+    nicer URL than `*.workers.dev` — deliberately not pursued in this pass, since pointing
+    it at Cloudflare would touch that domain's existing DNS (any current email/site use),
+    which is its own decision, not a default to fold in silently.
