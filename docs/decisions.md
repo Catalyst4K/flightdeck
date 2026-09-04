@@ -996,3 +996,39 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     OFP's `simbriefIsCustom`/`simbriefInternalId` fields rather than guessing from the
     symptom, then confirmed the fix (internal_id passed as `type` itself) the same way
     against a fresh real generation. Full write-up: `docs/simbrief-notes.md`.
+- 2026-09-04: **Rebuilt `src/main/simbrief/simbrief-generate.ts` against flightdeck-backend**,
+  following on from the git-history purge and backend deployment above — this branch's
+  generation feature was left broken (the file that computed `apicode` locally was exactly
+  what got purged), so this finishes the pivot rather than starting new work.
+  - New `src/main/backend/backend-client.ts` (matching the plan doc's suggested shape,
+    alongside `src/main/simbrief/`, `src/main/gsx/`): one constant
+    (`https://flightdeck-backend.callum-jones5.workers.dev`), one function,
+    `signSimbriefRequest`, that POSTs the same non-secret fields already sent to the
+    keyless prefill URL and gets back the `apicode` SimBrief's keyed endpoint needs. The
+    key itself never touches this repo, in code or in memory here, matching the corrected
+    rule from the entry above.
+  - `simbrief-generate.ts` itself changes only in **where** `apicode` comes from — every
+    other detail (the worker endpoint, the popup-window mechanism, the query parameters,
+    the in-memory `simbrief-generate` session partition that doesn't persist across app
+    restarts) is unchanged from before the purge, reconstructed from the still-present
+    `docs/simbrief-api-package.local.md` (gitignored, never committed — Callum's own copy
+    of SimBrief's developer materials) rather than guessed. `buildGenerateUrl` is factored
+    out as a pure, unit-tested function; the actual `BrowserWindow` popup logic stays thin
+    and untested, consistent with how this codebase already draws that line elsewhere
+    (`shell.openExternal` calls aren't unit tested either — only the pure logic feeding
+    them is).
+  - `dispatchGenerationAvailable` now always returns `true` — there's no more "build with
+    no key baked in" case to fall back from, since generation no longer depends on a
+    per-build secret at all. Left the IPC channel and the renderer's "Plan on SimBrief…"
+    fallback UI in place rather than ripping them out, in case a future bring-your-own-key
+    path or backend downtime wants them back.
+  - Cleaned up the now-dead built-in-key config this replaced:
+    `MAIN_VITE_SIMBRIEF_API_KEY` removed from `.env.example` and
+    `.github/workflows/package.yml`; `src/main/vite-env.d.ts` deleted outright (its sole
+    purpose was typing that one var). The matching `SIMBRIEF_API_KEY` GitHub Actions
+    secret is now unused but was deliberately left in place pending Callum's own call on
+    deleting it.
+  - Live-verified end to end, real account: picked an aircraft in Dispatch, hit
+    Generate…, logged into SimBrief in the popup, and a real plan came back successfully
+    — confirming the deployed Worker, the rate-limit binding, and the full popup/
+    re-fetch flow all work together against production, not just against tests.

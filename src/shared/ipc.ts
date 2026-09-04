@@ -556,16 +556,16 @@ export interface FlightdeckApi {
   settingsGetSimbriefUsername: () => Promise<string | null>
   settingsSetSimbriefUsername: (username: string) => Promise<void>
   /**
-   * Triggers a real plan generation via SimBrief's keyed API (docs/plans/simbrief-plan-
-   * generation.md) — opens a visible window for SimBrief's own login/generation UI, and
-   * resolves with the resulting OFP once it closes. Throws if no username is set, no
-   * API key is built into this app, or the window closed without a new plan actually
-   * being generated.
+   * Triggers a real plan generation via SimBrief's keyed API, signed by flightdeck-backend
+   * rather than a locally-held key (docs/decisions.md, 2026-09-04) — opens a visible window
+   * for SimBrief's own login/generation UI, and resolves with the resulting OFP once it
+   * closes. Throws if no username is set, the backend signing request fails, or the window
+   * closed without a new plan actually being generated.
    */
   dispatchGenerateOfp: (params: DispatchOpenSimBriefParams) => Promise<DispatchOfp>
-  /** Whether generation is possible at all right now — a built-in key ships with the
-   *  app (docs/decisions.md), so this is true by default; false only for a build with no
-   *  key baked in (e.g. built from source with no .env configured). */
+  /** Whether generation is possible at all right now — always true, since generation goes
+   *  through flightdeck-backend rather than a per-build key. Kept as a channel for a
+   *  possible future bring-your-own-key or backend-downtime fallback. */
   dispatchGenerationAvailable: () => Promise<boolean>
   /** Pre-authenticates the generation window's session for the current app run only —
    *  login doesn't persist across a restart (docs/simbrief-notes.md). Purely a

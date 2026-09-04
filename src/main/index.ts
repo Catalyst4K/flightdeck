@@ -55,7 +55,7 @@ import { defaultGsxReceiptsPath } from './gsx/default-path'
 import { buildFlightMatchWindow } from './gsx/flight-window'
 import { readReceipt, receiptFileFromPath, scanGsxFolder } from './gsx/scan'
 import { fetchLatestOfp, type SimBriefOfp } from './simbrief/simbrief-client'
-import { BUILT_IN_API_KEY, generateOfp, loginToSimbrief } from './simbrief/simbrief-generate'
+import { generateOfp, loginToSimbrief } from './simbrief/simbrief-generate'
 import { SimConnectService } from './sim/SimConnectService'
 import { TrackingController } from './tracking/TrackingController'
 import { AutoStartDetector } from './tracking/AutoStartDetector'
@@ -135,7 +135,6 @@ app.whenReady().then(() => {
     async (_event, params: DispatchOpenSimBriefParams): Promise<DispatchOfp> => {
       const username = getSimbriefUsername(db)
       if (!username) throw new Error('Set your SimBrief username first')
-      if (!BUILT_IN_API_KEY) throw new Error('No SimBrief API key available in this build')
 
       // Baseline for the "did a new plan actually appear" check below — best-effort, a
       // pilot with no prior OFP at all is a valid starting state, not an error.
@@ -143,7 +142,7 @@ app.whenReady().then(() => {
         .then((ofp) => ofp.ofpId)
         .catch(() => null)
 
-      await generateOfp(params, BUILT_IN_API_KEY)
+      await generateOfp(params)
 
       const ofp = await fetchLatestOfp(username)
       if (ofp.ofpId === baselineOfpId) {
@@ -220,7 +219,11 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.settingsSetSimbriefUsername, (_event, username: string) =>
     setSimbriefUsername(db, username)
   )
-  ipcMain.handle(IpcChannels.dispatchGenerationAvailable, () => BUILT_IN_API_KEY !== null)
+  // Always true now — generation goes through flightdeck-backend rather than a per-build
+  // key, so there's no "build with no key baked in" case to fall back from anymore. Kept
+  // as a channel (rather than removing it and the renderer's "Plan on SimBrief…" fallback
+  // entirely) in case a future bring-your-own-key or backend-downtime path wants it back.
+  ipcMain.handle(IpcChannels.dispatchGenerationAvailable, () => true)
 
   ipcMain.handle(IpcChannels.settingsGetWeightUnit, () => getWeightUnit(db))
   ipcMain.handle(IpcChannels.settingsSetWeightUnit, (_event, unit: WeightUnit) => setWeightUnit(db, unit))
