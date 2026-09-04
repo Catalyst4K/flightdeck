@@ -339,14 +339,21 @@ What's safe to record, because it doesn't require reproducing anything of theirs
   `docs/plans/simbrief-plan-generation.md`. Not designed further until the items below are
   confirmed, and not by reference to the restricted materials even then — by testing the
   live API directly.
-- **Two things need live verification before anything is built on this**, same
-  "don't guess, test the real thing" discipline as everywhere else in this file:
-  1. Whether a departure date on this path is a formatted date string or a Unix epoch —
-     the keyless prefill URL (below) wants an epoch, and there's a specific, concrete
-     reason to think the keyed path might not follow the same convention. Don't assume
-     either without testing the real endpoint.
-  2. Whether the OFP identifier this path hands back matches the `xml_file` naming already
-     seen in a normal fetched OFP (above in this file), or is a separate, parallel scheme.
+- **Two open questions, both resolved by a live test on 2026-09-03** (`scripts/spike-
+  simbrief-generation.ts`, throwaway per CLAUDE.md's spike-first rule — not committed as
+  a description of the restricted mechanism, just working code that exercises it):
+  1. The departure date on this path is **not** a Unix epoch — it's a different
+     convention from the keyless prefill URL (below). Confirmed by round-tripping a
+     specific test departure time through a real generation and checking it came back
+     unchanged in the fetched plan.
+  2. The OFP identifier this path hands back **matches `params.request_id`** — the same
+     field a normal fetch already returns (see the top of this file) — not a separate
+     scheme. A real generation was confirmed live: `request_id` changed from a known
+     baseline to a new value once the plan finished, and that new plan was fetchable the
+     normal way, via `fetchLatestOfp`, no new fetch path needed.
+  Practical result: generation can be built entirely on functions this codebase already
+  has and already trusts — the existing `fetchLatestOfp` for retrieval, plus whatever
+  triggers the actual generation. No new identifier scheme or retrieval path to design.
 
 Everything from before the key arrived (2026-09-01) still holds and isn't restated here:
 SimBrief's dispatch website has a keyless URL that already does everything
