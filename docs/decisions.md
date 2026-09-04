@@ -1065,3 +1065,32 @@ one-line reason. Keeps PLAN.md stable and this file as the changelog of judgment
     treating Navigraph as blocked pending an external answer. The remaining open item is
     confirming the existing application's description, not whether the architecture
     itself is sound.
+- 2026-09-04: **Corrected an overly-permissive line drawn in the 2026-09-03 SimBrief-key
+  entry above.** That entry read "code that implements the real HTTP calls is fine... a
+  URL isn't a tutorial," and on that basis `scripts/spike-simbrief-generation.ts` was
+  committed to `main` with the actual keyed hash computation inline — the exact field
+  concatenation order and algorithm SimBrief's own restricted-distribution package
+  encodes, not just the endpoint URL. That's a different thing from "the HTTP call," and
+  it's the one thing Callum's standing instruction and SimBrief's own conditional
+  permission ("protect the API key somehow") both exist to keep off a public repo:
+  runnable proof-of-concept code disclosing a working signature scheme is a more complete
+  disclosure than any prose paraphrase would have been, not a lesser one. **Removed the
+  file from `main`** (and its now-dead `spike:simbrief-generation` npm script) — the
+  spike had already served its purpose; both open questions it existed to answer are
+  recorded in `docs/simbrief-notes.md`'s safe write-up, and the production version of
+  this computation is moving server-side per `docs/plans/backend-service.md` regardless.
+  Revised rule going forward: **implementing SimBrief's *retrieval* calls (`fetchLatestOfp`
+  and friends) in the open is fine; anything that computes the keyed authorization value
+  stays out of this repo's history entirely, including as "throwaway" spike code** — it
+  belongs only in the private backend-service repo once built, read from an environment
+  secret, never committed anywhere.
+  - **Known limitation of this fix**: this repo has no required-PR gate (a deliberate
+    choice, see `scripts/github-repo-security.sh`), so the file was live on `main` and
+    publicly browsable from 2026-09-03 until this commit. Removing it stops it appearing
+    in the current tree and in casual browsing, but the old commit remains reachable via
+    git history / GitHub's commit view unless that history is deliberately rewritten and
+    force-pushed — a separate, more disruptive decision (it invalidates any other existing
+    clone, including the one used for parallel work on this project) that Callum was asked
+    about rather than done unilaterally.
+  - The same file existed identically on `plan/backend-service` (branched after it was
+    already on `main`) and was removed there too, same commit shape.
