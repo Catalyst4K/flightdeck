@@ -13,6 +13,15 @@ updates:
       # rebuild and a real smoke test (see CLAUDE.md), not a rubber stamp.
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Vite 8 needs electron-vite >=6, which is still beta (5.0.0's peer range caps at
+      # ^7.0.0 — confirmed via `npm view electron-vite peerDependencies`, 2026-09-03).
+      # @vitejs/plugin-react 6.x requires vite ^8.0.0, so it's blocked for the same reason.
+      # Remove both ignores once electron-vite ships a stable vite-8-compatible release.
+      - dependency-name: 'vite'
+        versions: ['>=8.0.0']
+      - dependency-name: '@vitejs/plugin-react'
+        versions: ['>=6.0.0']
     commit-message:
       prefix: 'deps'
 
