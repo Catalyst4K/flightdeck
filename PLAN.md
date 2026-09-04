@@ -157,7 +157,8 @@ sections now assume.
       just generated, rather than "fetch whatever's newest and hope." The keyless prefill
       URL still covers everything already built; the key is what a proper in-app "Generate"
       button (rather than a browser hand-off) would need. See `docs/simbrief-notes.md`'s
-      Generation section and `docs/plans/simbrief-plan-generation.md`.
+      Generation section; the design doc itself has since moved to the private
+      `flightdeck-backend` repo's `docs/plans/` (§10).
 - [x] **Custom airframes.** Resolved — fleet entries own a SimBrief airframe ID
       (`aircraft.simbrief_airframe_id`, see §5 and `docs/decisions.md` §4). Confirmed live
       that the internal ID's format is `<simbrief user id>_<airframe id>` and that the
@@ -473,8 +474,12 @@ after fetching is the authoritative list if this table drifts.
 **As of 2026-09-04, new plan docs (and new `docs/decisions.md` entries) live in the
 private `flightdeck-backend` repo instead of this one** — see the note at the top of
 `CLAUDE.md`. The `plan/<name>` branch and its code still live here; only the design doc's
-location changed. All six plans below predate the cutover, so their docs stay in this
-repo's `docs/plans/`.
+location changed. All six plans below predate the cutover; the two still unmerged
+(`plan/backend-service`, `plan/sid-star-selection`) keep their design docs here in
+`docs/plans/` until they ship, same as always. A shipped plan's doc, once merged, moves to
+the private repo's `docs/plans/` too rather than lingering here — `simbrief-plan-
+generation.md` already has (its `docs/decisions.md` entries here are unaffected; only the
+standalone design doc moved).
 
 **Five of the six branches below were built in one session on 2026-09-03**, the day after
 they were planned — a much faster turnaround than the table implies by listing them
