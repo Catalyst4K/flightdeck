@@ -48,12 +48,21 @@ dep/arr/altn airports already on screen, not a general weather browser — so le
 list above rather than treated as a broken rule; TAF/NOTAM and a standalone browser stay
 out of scope.
 
-**Accounts, sync and a backend are no longer ruled out.** v1 was built deliberately
-local-only, and local stays the default — it's simpler, it's faster, and it's a genuine
-differentiator against the alternatives (see §2). But it's a starting point rather than a
-principle now, and a feature that genuinely needs a server or a signed-in account can be
-proposed on its merits. Two conditions: it goes through `docs/decisions.md` first, and
-local-only usage keeps working without it.
+**Accounts, sync and a backend are no longer ruled out — and one is now actually being
+built.** v1 was deliberately local-only, and local stays the default for everything that
+doesn't specifically need otherwise. But it's a starting point rather than a principle
+now: `docs/plans/backend-service.md` (§10) is a small credential-broker service — built
+in SimBrief and Navigraph access, so no end user requests their own API key, the way
+SimToolkitPro works. Two conditions were set for this kind of thing and both were followed
+here: it went through `docs/decisions.md` first (2026-09-03, refined 2026-09-03), and it
+runs in its own separate, private repo rather than inside this one — this repo stays
+GPL-3.0 and local-first regardless of what that service does. **The second original
+condition — "local-only usage keeps working without it" — is not yet guaranteed**: the
+backend plan's own open questions list a bring-your-own-key fallback as "worth a decision,
+not a hard blocker," which means as of this writing a user with no access to the shared
+service (or who doesn't trust it) has no confirmed path to use SimBrief/Navigraph
+features standalone. Settle that explicitly before or shortly after the backend ships,
+not by default.
 
 ---
 
@@ -472,16 +481,9 @@ was deliberately deferred; read those rather than re-deriving it from a diff.
 | Fleet ↔ SimBrief airframe management | ✅ Shipped | `docs/decisions.md`, 2026-09-03. No default-airframe picker (that idea needed scraping an unlicensed page — ruled out post-GPL); a free-text `simbrief_type` column instead. |
 | Dispatch advanced options (loads, fuel, cost index, reload a past plan) | ✅ Shipped | `docs/decisions.md`, 2026-09-03. Lives behind an "Advanced (N)" button in the existing card, not a new tab. |
 | GSX ground-service invoices in the Logbook | ✅ Shipped | `docs/decisions.md`, 2026-09-03. Opt-in, off by default; snapshots at flight completion rather than reading the folder live. |
-| Landing analysis (M6, redesigned) | ✅ Core shipped, gated on a spike | `docs/decisions.md`, 2026-09-03. Capture, storage, and both UI surfaces (Fleet history, Logbook pane, shared severity component) are live — `touchdown_source` is stamped `'derived'` throughout because whether MSFS 2024's dedicated touchdown SimVars are trustworthy is still unconfirmed. `scripts/spike-landing.ts` is ready to run against a real landing; that answer also decides whether the high-rate trace is worth building at all. |
+| Landing analysis (M6, redesigned) | ✅ Shipped, spike closed | `docs/decisions.md`, 2026-09-03. Capture, storage, and both UI surfaces (Fleet history, Logbook pane, shared severity component) are live. `scripts/spike-landing.ts` was run against a real landing at VHHH the same day: MSFS 2024's dedicated touchdown SimVars disagreed with the derived value not just in magnitude but in trend across a real bounce, so `touchdown_source` stays `'derived'` — settled, not open. |
 | Alternate SID/STAR selection | 🔶 Half shipped | `docs/decisions.md`, 2026-09-03. The unblocked half — labelling the SID/STAR segments SimBrief already chose, on the route text and as coloured waypoint pins — is live. Picking a *different* real procedure still needs Flightdeck's own navdata (Navigraph DFD), which needs Navigraph API credentials, applied for and still pending. `plan/sid-star-selection` stays unmerged as the design for that remaining half — not stale, just blocked. |
-
-**New, not yet written as a plan:** a real SimBrief API key arrived 2026-09-03, after the
-generation branch above shipped. It doesn't turn generation into a server call (the pilot
-still logs in via a popup), but it would let Flightdeck know the *exact* identifier of the
-plan it just asked for, rather than fetching "whatever's latest" — a real upgrade over
-what shipped. Findings so far, including one live contradiction still needing a spike
-(the API's own `date` format vs. the web form's), are in `docs/simbrief-notes.md`'s
-Generation section. Not designed further until that's resolved.
+| Backend credential-broker service (SimBrief signing + Navigraph OAuth) | 📝 Designed, not built | `docs/decisions.md`, 2026-09-03 (scope decision) and 2026-09-03 (Navigraph refinement against their real docs); design in `docs/plans/backend-service.md` on `plan/backend-service`. Covers the real SimBrief API key obtained 2026-09-03 (§4) — the exact-plan-identifier upgrade it enables is this plan's SimBrief half, not a separate loose end anymore. Blocked on confirming Callum's existing Navigraph developer application actually describes this shape before the Navigraph half is built; the SimBrief half has no equivalent blocker and could ship first. |
 
 None of these are scoped to a deadline. Pick one, read its plan doc in full, verify
 anything it flags as unconfirmed against real data before writing code, and follow the

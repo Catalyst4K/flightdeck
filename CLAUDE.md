@@ -61,7 +61,10 @@ docs/           decisions.md, simconnect-notes.md, and per-milestone notes as ne
 - Anything that sends data off the machine, stores credentials, or introduces an account
   or a server is a **decision, not an implementation detail**. Propose it, get agreement,
   and record it in `docs/decisions.md` before building it. Nothing is ruled out — but
-  nothing arrives by accident either, and the default stays local.
+  nothing arrives by accident either, and the default stays local. The backend-service
+  credential broker (`docs/plans/backend-service.md`) is the first case of this actually
+  happening — SimBrief and Navigraph access built in rather than every user requesting
+  their own key — not a hypothetical the rule is guarding against anymore.
 - Prefer a boring, working implementation over a clever one. This is a personal tool
   flown solo, not a platform.
 - Convert units at the IPC boundary per the decision in `docs/decisions.md` — don't let
@@ -79,6 +82,19 @@ Before committing or pushing:
   not in test fixtures, not in a `docs/` note, not in a commit message. Real cases already
   live in this project: the SimBrief username, and the Navigraph OAuth tokens the SID/STAR
   work will need. Those belong in the `app_setting` table at runtime, never in the repo.
+  The backend service's own credentials (the SimBrief signing key, the Navigraph
+  `client_secret`) are a stricter case of the same rule: they never touch *this* repo at
+  all, in any form — not as a value, and not as platform env vars either, since this repo
+  isn't where that service lives. See the backend-service paragraph below.
+- **A third party's protected mechanism is not "a secret" in the API-key sense, but treat
+  it the same way.** SimBrief's real request-signing scheme is deliberately not documented
+  in this repo — not in prose, not in code, not even in a "throwaway" spike. A working
+  implementation of a keyed signature scheme discloses it more completely than any
+  paraphrase would, so "it's just code, not a description" is not an exception — a real
+  case of exactly this mistake happened and was corrected (`docs/decisions.md`,
+  2026-09-04). If a future spike needs to exercise a mechanism like this, run it locally,
+  capture only the safe findings in the matching `docs/*-notes.md`, and don't commit the
+  script itself.
 - **Check what a broad `git add` actually staged** (`git status` after it) and read any
   file whose name doesn't obviously explain its contents.
 - **Scrub personal data out of test fixtures.** Real OFPs carry a SimBrief pilot ID; real
@@ -110,11 +126,25 @@ rather than assuming there isn't one:
   `npm audit` when adding one, and keep `package-lock.json` committed. A dependency that
   wants postinstall scripts or network access at build time deserves scrutiny.
 
+**A second trust boundary now exists: the backend-service Flightdeck talks to over HTTPS**
+(`docs/plans/backend-service.md` — a credential broker for SimBrief and Navigraph, living
+in its own private repo, not this one). It changes how a couple of the rules above apply:
+- The base URL is one constant (matching the `simvars.ts` discipline above), always
+  `https:`, never sprinkled through the codebase.
+- Its responses are external data like any other third-party input — parse them
+  defensively, same as OFP/GSX JSON.
+- Nothing about its implementation, secrets, or deployment belongs in this repo. If you're
+  ever asked to change how Flightdeck talks to it, that's a change to `src/main/backend/`
+  calling an existing deployed endpoint — not a reason to touch, vendor, or inline anything
+  from the other repo.
+
 For the repo itself, these are worth having on and are free for public repos: Dependabot
-alerts, secret scanning with push protection, and branch protection on `main` requiring a
-PR. Note that GitHub Actions workflows here run on `pull_request` from forks — never add a
-workflow that exposes secrets to fork PRs (`pull_request_target` with a checkout of the
-PR head is the classic mistake).
+alerts, secret scanning with push protection, and branch protection on `main` blocking
+force-push and branch deletion (deliberately *not* requiring a PR — this is developed
+solo, pushing directly from more than one machine; see `scripts/github-repo-security.sh`
+for why that's a considered choice, not an oversight). Note that GitHub Actions workflows
+here run on `pull_request` from forks — never add a workflow that exposes secrets to fork
+PRs (`pull_request_target` with a checkout of the PR head is the classic mistake).
 
 If you find something, say so plainly and fix it or flag it — don't quietly work around it.
 
