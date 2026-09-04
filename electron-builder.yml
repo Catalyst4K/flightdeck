@@ -6,6 +6,9 @@ directories:
 files:
   - out/**/*
   - package.json
+  # migrateDb() reads these at startup (src/main/index.ts) — without this, the packaged
+  # app has no migrations to run and fails silently before ever showing a window.
+  - drizzle/**/*
 asarUnpack:
   - '**/*.node'
   # node-simconnect is LGPL-3.0-or-later. Keeping it outside the asar archive leaves it as
