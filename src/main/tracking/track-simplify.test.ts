@@ -13,6 +13,7 @@ function point(overrides: Partial<TrackPoint> & { id: number }): TrackPoint {
     altitudeM: 10000,
     altitudeAglM: 10000,
     indicatedAirspeedMs: 230,
+    machSpeed: 0.75,
     groundSpeedMs: 230,
     verticalSpeedMs: 0,
     headingTrueDeg: 90,

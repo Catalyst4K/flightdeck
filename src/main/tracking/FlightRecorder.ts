@@ -196,6 +196,7 @@ export class FlightRecorder {
       altitudeM: t.altitudeM,
       altitudeAglM: t.altitudeAglM,
       indicatedAirspeedMs: t.indicatedAirspeedMs,
+      machSpeed: t.machSpeed,
       groundSpeedMs: t.groundSpeedMs,
       verticalSpeedMs: t.verticalSpeedMs,
       headingTrueDeg: t.headingTrueDeg,

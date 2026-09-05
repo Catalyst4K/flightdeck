@@ -200,6 +200,7 @@ describe('flight repo', () => {
         altitudeM: 0,
         altitudeAglM: 0,
         indicatedAirspeedMs: 0,
+        machSpeed: 0,
         groundSpeedMs: 0,
         verticalSpeedMs: 0,
         headingTrueDeg: 70,
