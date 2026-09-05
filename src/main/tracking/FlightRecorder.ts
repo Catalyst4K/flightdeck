@@ -32,6 +32,14 @@ export class FlightRecorder {
   private descentStreak = 0
   private lastPointAt: Date | undefined
   private paused = false
+  // Set once, at touchdown, and never cleared — guards the taxi -> takeoff transition
+  // below so a rollout/taxi-in speed blip (e.g. reverse thrust briefly pushing ground
+  // speed back over ROLL_SPEED_MS) can't be mistaken for a second takeoff roll. Without
+  // this the machine got permanently stuck back in 'takeoff' after landing (a real
+  // overnight flight hit this, 2026-09-05) — 'takeoff' only ever exits via !onGround
+  // (line below), which never happens again once truly on the ground rolling out, so the
+  // flight never reached 'shutdown' and auto-completion never fired.
+  private hasLanded = false
 
   constructor(private readonly flightId: number) {}
 
@@ -78,7 +86,7 @@ export class FlightRecorder {
         break
 
       case 'taxi':
-        if (t.onGround && t.groundSpeedMs > ROLL_SPEED_MS) this.phase = 'takeoff'
+        if (!this.hasLanded && t.onGround && t.groundSpeedMs > ROLL_SPEED_MS) this.phase = 'takeoff'
         break
 
       case 'takeoff':
@@ -106,6 +114,7 @@ export class FlightRecorder {
         // Matches M6's own touchdown detection: the on-ground false→true transition.
         if (t.onGround) {
           this.phase = 'landing'
+          this.hasLanded = true
           break
         }
         // A routine flight-level step-down sustains a descent rate for well over
