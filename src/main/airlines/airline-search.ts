@@ -52,10 +52,16 @@ export function searchAirlineList(airlines: AirlineOption[], query: string): Air
   return results
 }
 
-const ALL_AIRLINES = [...loadAirlines(airlinesRaw), ...loadAirlines(airlineAliasesRaw)]
+// Parsed on first use, not at module load (docs/decisions.md, memory-usage entry) — same
+// reasoning as airport-search.ts. Shared by both exports below, since either can be the
+// first to touch it (a Fleet airline search vs. the IATA backfill script).
+let allAirlines: AirlineOption[] | null = null
+function getAllAirlines(): AirlineOption[] {
+  return (allAirlines ??= [...loadAirlines(airlinesRaw), ...loadAirlines(airlineAliasesRaw)])
+}
 
 export function searchAirlines(query: string): AirlineOption[] {
-  return searchAirlineList(ALL_AIRLINES, query)
+  return searchAirlineList(getAllAirlines(), query)
 }
 
 /** Exact IATA-code lookup — used by scripts/backfill-operator-icao.ts to recover an
@@ -65,5 +71,5 @@ export function searchAirlines(query: string): AirlineOption[] {
 export function findAirlineByIata(iata: string): AirlineOption | undefined {
   const q = iata.trim().toLowerCase()
   if (!q) return undefined
-  return ALL_AIRLINES.find((a) => a.iata.toLowerCase() === q)
+  return getAllAirlines().find((a) => a.iata.toLowerCase() === q)
 }
