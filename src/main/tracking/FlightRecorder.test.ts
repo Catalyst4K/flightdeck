@@ -247,4 +247,64 @@ describe('FlightRecorder', () => {
     const result = recorder.ingest(telemetry({ latitude: 10, longitude: 20 }), at(1))
     expect(result.point).toMatchObject({ flightId: 42, phase: 'preflight', latitude: 10, longitude: 20 })
   })
+
+  it('does not re-enter takeoff on a post-landing speed blip (reverse thrust, real 2026-09-05 flight)', () => {
+    const recorder = new FlightRecorder(1)
+    let t = 0
+    const step = (overrides: Partial<SimTelemetry>): void => {
+      t += 1
+      recorder.ingest(telemetry(overrides), at(t))
+    }
+
+    // Same full walk as "walks a full flight through every phase in order" — reaching
+    // 'landing' for real requires actually passing through climb/cruise/descent's sustain
+    // windows, not just jumping onGround back to true from an earlier phase.
+    step({ engineCombustion1: true, parkingBrakeOn: true }) // preflight -> pushback
+    step({ engineCombustion1: true, parkingBrakeOn: false, groundSpeedMs: 5 }) // pushback -> taxi
+    step({ engineCombustion1: true, groundSpeedMs: 40, indicatedAirspeedMs: 38 }) // taxi -> takeoff
+    step({
+      engineCombustion1: true,
+      onGround: false,
+      groundSpeedMs: 90,
+      indicatedAirspeedMs: 85,
+      verticalSpeedMs: 12,
+      altitudeAglM: 50
+    }) // takeoff -> climb
+    for (let i = 0; i < 12; i++) {
+      step({
+        engineCombustion1: true,
+        onGround: false,
+        groundSpeedMs: 230,
+        indicatedAirspeedMs: 250,
+        verticalSpeedMs: 0.1,
+        altitudeAglM: 10000,
+        altitudeM: 10025
+      }) // climb -> cruise
+    }
+    for (let i = 0; i < 7; i++) {
+      step({
+        engineCombustion1: true,
+        onGround: false,
+        groundSpeedMs: 200,
+        indicatedAirspeedMs: 220,
+        verticalSpeedMs: -3,
+        altitudeAglM: 8000,
+        altitudeM: 8025
+      }) // cruise -> descent
+    }
+    step({ engineCombustion1: true, onGround: true, groundSpeedMs: 65, verticalSpeedMs: -1.5, altitudeAglM: 0 }) // descent -> landing
+    expect(recorder.getPhase()).toBe('landing')
+
+    step({ engineCombustion1: true, onGround: true, groundSpeedMs: 10 }) // landing -> taxi
+    expect(recorder.getPhase()).toBe('taxi')
+
+    // Reverse thrust / rollout speed noise: ground speed blips back above ROLL_SPEED_MS
+    // while still decelerating to a stop, same shape as what previously re-triggered
+    // 'takeoff' and left the flight permanently unable to reach 'shutdown'.
+    step({ engineCombustion1: true, onGround: true, groundSpeedMs: 25 })
+    expect(recorder.getPhase()).toBe('taxi')
+
+    step({ engineCombustion1: false, onGround: true, groundSpeedMs: 0, parkingBrakeOn: true })
+    expect(recorder.getPhase()).toBe('shutdown')
+  })
 })
