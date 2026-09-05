@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SimTelemetry } from '@shared/ipc'
-import { FlightRecorder } from './FlightRecorder'
+import { FlightRecorder, type FlightRecorderResult } from './FlightRecorder'
 
 const BASE_TIME = new Date('2026-09-01T12:00:00Z').getTime()
 const at = (seconds: number): Date => new Date(BASE_TIME + seconds * 1000)
@@ -306,5 +306,130 @@ describe('FlightRecorder', () => {
 
     step({ engineCombustion1: false, onGround: true, groundSpeedMs: 0, parkingBrakeOn: true })
     expect(recorder.getPhase()).toBe('shutdown')
+  })
+
+  it('goes back to climb on a go-around from landing (rejected landing, never slowed below roll speed)', () => {
+    const recorder = new FlightRecorder(1)
+    let t = 0
+    const step = (overrides: Partial<SimTelemetry>): void => {
+      t += 1
+      recorder.ingest(telemetry(overrides), at(t))
+    }
+
+    step({ engineCombustion1: true, parkingBrakeOn: true })
+    step({ engineCombustion1: true, parkingBrakeOn: false, groundSpeedMs: 5 })
+    step({ engineCombustion1: true, groundSpeedMs: 40, indicatedAirspeedMs: 38 })
+    step({
+      engineCombustion1: true,
+      onGround: false,
+      groundSpeedMs: 90,
+      verticalSpeedMs: 12,
+      altitudeAglM: 50
+    })
+    for (let i = 0; i < 12; i++) {
+      step({ engineCombustion1: true, onGround: false, groundSpeedMs: 230, verticalSpeedMs: 0.1, altitudeAglM: 10000 })
+    }
+    for (let i = 0; i < 7; i++) {
+      step({ engineCombustion1: true, onGround: false, groundSpeedMs: 200, verticalSpeedMs: -3, altitudeAglM: 8000 })
+    }
+    // Touches down, still fast (a bounce, or ATC/self go-around) — never drops below
+    // ROLL_SPEED_MS before powering back up and lifting off again.
+    step({ engineCombustion1: true, onGround: true, groundSpeedMs: 70, verticalSpeedMs: -1, altitudeAglM: 0 })
+    expect(recorder.getPhase()).toBe('landing')
+
+    step({ engineCombustion1: true, onGround: false, groundSpeedMs: 90, verticalSpeedMs: 8, altitudeAglM: 20 })
+    expect(recorder.getPhase()).toBe('climb')
+  })
+
+  it('goes back to climb on a go-around from taxi (real second departure, not rollout noise)', () => {
+    const recorder = new FlightRecorder(1)
+    let t = 0
+    const step = (overrides: Partial<SimTelemetry>): void => {
+      t += 1
+      recorder.ingest(telemetry(overrides), at(t))
+    }
+
+    step({ engineCombustion1: true, parkingBrakeOn: true })
+    step({ engineCombustion1: true, parkingBrakeOn: false, groundSpeedMs: 5 })
+    step({ engineCombustion1: true, groundSpeedMs: 40, indicatedAirspeedMs: 38 })
+    step({
+      engineCombustion1: true,
+      onGround: false,
+      groundSpeedMs: 90,
+      verticalSpeedMs: 12,
+      altitudeAglM: 50
+    })
+    for (let i = 0; i < 12; i++) {
+      step({ engineCombustion1: true, onGround: false, groundSpeedMs: 230, verticalSpeedMs: 0.1, altitudeAglM: 10000 })
+    }
+    for (let i = 0; i < 7; i++) {
+      step({ engineCombustion1: true, onGround: false, groundSpeedMs: 200, verticalSpeedMs: -3, altitudeAglM: 8000 })
+    }
+    step({ engineCombustion1: true, onGround: true, groundSpeedMs: 65, verticalSpeedMs: -1.5, altitudeAglM: 0 })
+    step({ engineCombustion1: true, onGround: true, groundSpeedMs: 10 }) // landing -> taxi
+    expect(recorder.getPhase()).toBe('taxi')
+
+    // A real second takeoff roll from taxi, then genuinely airborne — distinct from the
+    // reverse-thrust-blip test above, which never leaves the ground.
+    step({ engineCombustion1: true, onGround: true, groundSpeedMs: 45 })
+    step({ engineCombustion1: true, onGround: false, groundSpeedMs: 90, verticalSpeedMs: 10, altitudeAglM: 20 })
+    expect(recorder.getPhase()).toBe('climb')
+  })
+
+  it('records taxi at ~3s intervals instead of every 1s tick', () => {
+    const recorder = new FlightRecorder(1)
+    let t = 0
+    const step = (overrides: Partial<SimTelemetry>): FlightRecorderResult => {
+      t += 1
+      return recorder.ingest(telemetry(overrides), at(t))
+    }
+    step({ engineCombustion1: true })
+    step({ engineCombustion1: true, groundSpeedMs: 5 })
+    expect(recorder.getPhase()).toBe('taxi')
+
+    const results: boolean[] = []
+    for (let i = 0; i < 8; i++) {
+      results.push(step({ engineCombustion1: true, groundSpeedMs: 5 }).point !== undefined)
+    }
+    expect(results.filter(Boolean).length).toBeLessThanOrEqual(3)
+  })
+
+  it('records descent at ~5s intervals while well above the approach, then every tick once close to the ground', () => {
+    const recorder = new FlightRecorder(1)
+    let t = 0
+    const step = (overrides: Partial<SimTelemetry>): FlightRecorderResult => {
+      t += 1
+      return recorder.ingest(telemetry(overrides), at(t))
+    }
+    step({ engineCombustion1: true })
+    step({ engineCombustion1: true, groundSpeedMs: 5 })
+    step({ engineCombustion1: true, groundSpeedMs: 40 })
+    step({ engineCombustion1: true, onGround: false, groundSpeedMs: 90, verticalSpeedMs: 12, altitudeAglM: 50 })
+    for (let i = 0; i < 12; i++) {
+      step({ engineCombustion1: true, onGround: false, groundSpeedMs: 230, verticalSpeedMs: 0.1, altitudeAglM: 10000 })
+    }
+    for (let i = 0; i < 7; i++) {
+      step({ engineCombustion1: true, onGround: false, groundSpeedMs: 200, verticalSpeedMs: -3, altitudeAglM: 8000 })
+    }
+    expect(recorder.getPhase()).toBe('descent')
+
+    const highAltitude: boolean[] = []
+    for (let i = 0; i < 8; i++) {
+      highAltitude.push(
+        step({ engineCombustion1: true, onGround: false, groundSpeedMs: 200, verticalSpeedMs: -3, altitudeAglM: 5000 })
+          .point !== undefined
+      )
+    }
+    expect(highAltitude.filter(Boolean).length).toBeLessThanOrEqual(2)
+
+    const onApproach: boolean[] = []
+    for (let i = 0; i < 4; i++) {
+      onApproach.push(
+        step({ engineCombustion1: true, onGround: false, groundSpeedMs: 140, verticalSpeedMs: -2, altitudeAglM: 200 })
+          .point !== undefined
+      )
+    }
+    // Full 1 Hz once below DESCENT_APPROACH_AGL_M — every tick records.
+    expect(onApproach.every(Boolean)).toBe(true)
   })
 })

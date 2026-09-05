@@ -165,12 +165,17 @@ function FlightDetail(props: {
   const waypoints = useMemo(() => parseWaypointsFromOfpJson(flight.ofpJson), [flight.ofpJson])
 
   // Elapsed minutes since the first sample reads better on a chart than raw timestamps.
-  const startMs = trackPoints.length ? new Date(trackPoints[0].tsUtc).getTime() : 0
-  const profile = trackPoints.map((p) => ({
-    tMin: Math.round(((new Date(p.tsUtc).getTime() - startMs) / 60000) * 10) / 10,
-    altFt: Math.round(mToFt(p.altitudeM)),
-    iasKt: Math.round(msToKt(p.indicatedAirspeedMs))
-  }))
+  // Memoized like route/waypoints above — trackPoints only actually changes once, when
+  // the fetch above resolves, so recomputing this on every unrelated re-render was pure
+  // waste (previously not memoized at all, unlike its siblings here).
+  const profile = useMemo(() => {
+    const startMs = trackPoints.length ? new Date(trackPoints[0].tsUtc).getTime() : 0
+    return trackPoints.map((p) => ({
+      tMin: Math.round(((new Date(p.tsUtc).getTime() - startMs) / 60000) * 10) / 10,
+      altFt: Math.round(mToFt(p.altitudeM)),
+      iasKt: Math.round(msToKt(p.indicatedAirspeedMs))
+    }))
+  }, [trackPoints])
 
   // Only meaningful for flights dispatched with a planned fuel figure (SimBrief OFP) —
   // ad-hoc flights created directly from the Track view have no fuelPlannedKg.
@@ -237,7 +242,14 @@ function FlightDetail(props: {
                     labelFormatter={(label) => `${label} min`}
                     contentStyle={CHART_TOOLTIP_STYLE}
                   />
-                  <Line type="monotone" dataKey="altFt" stroke={CHART_SERIES_1} dot={false} name="Altitude" />
+                  <Line
+                    type="monotone"
+                    dataKey="altFt"
+                    stroke={CHART_SERIES_1}
+                    dot={false}
+                    name="Altitude"
+                    isAnimationActive={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -257,7 +269,14 @@ function FlightDetail(props: {
                     labelFormatter={(label) => `${label} min`}
                     contentStyle={CHART_TOOLTIP_STYLE}
                   />
-                  <Line type="monotone" dataKey="iasKt" stroke={CHART_SERIES_2} dot={false} name="IAS" />
+                  <Line
+                    type="monotone"
+                    dataKey="iasKt"
+                    stroke={CHART_SERIES_2}
+                    dot={false}
+                    name="IAS"
+                    isAnimationActive={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
