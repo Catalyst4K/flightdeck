@@ -84,7 +84,11 @@ const api: FlightdeckApi = {
   airportSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airportSearch, query),
   airlineSearch: (query: string) => ipcRenderer.invoke(IpcChannels.airlineSearch, query),
   weatherGetMetars: (icaoCodes: string[]) => ipcRenderer.invoke(IpcChannels.weatherGetMetars, icaoCodes),
-  fxGetRate: (targetCurrency: string) => ipcRenderer.invoke(IpcChannels.fxGetRate, targetCurrency)
+  fxGetRate: (targetCurrency: string) => ipcRenderer.invoke(IpcChannels.fxGetRate, targetCurrency),
+  authLogin: (email: string, password: string) => ipcRenderer.invoke(IpcChannels.authLogin, email, password),
+  authLogout: () => ipcRenderer.invoke(IpcChannels.authLogout),
+  syncNow: () => ipcRenderer.invoke(IpcChannels.syncNow),
+  syncStatus: () => ipcRenderer.invoke(IpcChannels.syncStatus)
 }
 
 contextBridge.exposeInMainWorld('flightdeck', api)

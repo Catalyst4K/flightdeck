@@ -470,6 +470,20 @@ export interface DispatchOpenSimBriefParams {
   extra?: [string, string][]
 }
 
+/** Cloud sync's runtime status (flightdeck-backend/docs/plans/cloud-sync.md) — polled by
+ *  Settings' "Cloud sync" section rather than pushed, since a sync is infrequent and
+ *  short (launch + manual "Sync now"), not worth a dedicated push channel for. */
+export interface SyncStatus {
+  loggedIn: boolean
+  email: string | null
+  syncing: boolean
+  /** ISO 8601 UTC of the last sync that completed without throwing — individual tables
+   *  can still have skipped/rejected rows even when this is set; see lastError for
+   *  whether the run itself failed outright. */
+  lastSyncedAt: string | null
+  lastError: string | null
+}
+
 export const IpcChannels = {
   aircraftList: 'aircraft:list',
   aircraftCreate: 'aircraft:create',
@@ -520,7 +534,11 @@ export const IpcChannels = {
   airportSearch: 'airport:search',
   airlineSearch: 'airline:search',
   weatherGetMetars: 'weather:get-metars',
-  fxGetRate: 'fx:get-rate'
+  fxGetRate: 'fx:get-rate',
+  authLogin: 'auth:login',
+  authLogout: 'auth:logout',
+  syncNow: 'sync:now',
+  syncStatus: 'sync:status'
 } as const
 
 export interface FlightdeckApi {
@@ -632,4 +650,18 @@ export interface FlightdeckApi {
   /** USD -> targetCurrency exchange rate for GSX total display. null on any lookup
    *  failure (unsupported code, network error) — the caller falls back to USD. */
   fxGetRate: (targetCurrency: string) => Promise<number | null>
+  /** Cloud sync (flightdeck-backend/docs/plans/cloud-sync.md) — off by default until a
+   *  successful login. Throws on invalid credentials or an unreachable backend; a
+   *  successful login persists the session (Electron's safeStorage) so it survives a
+   *  restart without asking again. */
+  authLogin: (email: string, password: string) => Promise<SyncStatus>
+  /** "Log out this device" — the stored session is cleared locally regardless of whether
+   *  the backend round-trip to invalidate it server-side succeeds. */
+  authLogout: () => Promise<SyncStatus>
+  /** Triggers one pull-then-push cycle across all synced tables and returns the resulting
+   *  status. Throws only if not logged in; a network/server failure during the sync
+   *  itself surfaces via the returned status's lastError instead, so a single try/catch
+   *  isn't needed at every call site. */
+  syncNow: () => Promise<SyncStatus>
+  syncStatus: () => Promise<SyncStatus>
 }
