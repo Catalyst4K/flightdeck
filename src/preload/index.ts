@@ -36,6 +36,7 @@ const api: FlightdeckApi = {
   flightList: () => ipcRenderer.invoke(IpcChannels.flightList),
   flightCreate: (flight: NewFlight) => ipcRenderer.invoke(IpcChannels.flightCreate, flight),
   flightCancel: (id: number) => ipcRenderer.invoke(IpcChannels.flightCancel, id),
+  flightDelete: (id: number) => ipcRenderer.invoke(IpcChannels.flightDelete, id),
   dispatchFetchOfp: () => ipcRenderer.invoke(IpcChannels.dispatchFetchOfp),
   dispatchOpenSimBrief: (params: DispatchOpenSimBriefParams) =>
     ipcRenderer.invoke(IpcChannels.dispatchOpenSimBrief, params),

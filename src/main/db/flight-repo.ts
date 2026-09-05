@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm'
 import type { Flight, FleetStats, NewFlight } from '@shared/ipc'
-import { aircraft, flight } from './schema'
+import { aircraft, flight, flightInvoice, landing, trackPoint } from './schema'
 import type { FlightdeckDb } from './client'
 
 function toFlight(row: typeof flight.$inferSelect): Flight {
@@ -165,6 +165,23 @@ export function completeFlight(db: FlightdeckDb, id: number, fuelInKg: number): 
 export function abandonFlight(db: FlightdeckDb, id: number): Flight | undefined {
   const [row] = db.update(flight).set({ status: 'abandoned' }).where(eq(flight.id, id)).returning().all()
   return row ? toFlight(row) : undefined
+}
+
+/**
+ * Removes a flight entirely — a bad test entry, or any flight that logged wrong data
+ * (e.g. a phase-machine hiccup that produced a nonsense fuel-burn figure). None of
+ * `landing`/`trackPoint`/`flightInvoice`'s FK references declare `onDelete: 'cascade'`
+ * (schema.ts) and `client.ts` turns on `foreign_keys = ON`, so a bare delete of the
+ * `flight` row would throw — clean up the three dependents first, in one transaction so
+ * a mid-way failure can't leave the flight orphaned from only some of its data.
+ */
+export function deleteFlight(db: FlightdeckDb, id: number): void {
+  db.transaction((tx) => {
+    tx.delete(trackPoint).where(eq(trackPoint.flightId, id)).run()
+    tx.delete(landing).where(eq(landing.flightId, id)).run()
+    tx.delete(flightInvoice).where(eq(flightInvoice.flightId, id)).run()
+    tx.delete(flight).where(eq(flight.id, id)).run()
+  })
 }
 
 /**

@@ -32,6 +32,7 @@ import {
   abandonAllPlanned,
   abandonFlight,
   createFlight,
+  deleteFlight,
   getFleetStats,
   listCompletedFlights,
   listFlights
@@ -284,6 +285,12 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.flightCancel, (_event, id: number) => {
     abandonFlight(db, id)
     autoStartDetector.disarm()
+  })
+  ipcMain.handle(IpcChannels.flightDelete, (_event, id: number) => {
+    // Refuse to delete the flight currently being tracked out from under
+    // TrackingController — stop() (same path flightCancel uses) first if it's the one.
+    if (trackingController.getActive()?.flightId === id) trackingController.stop()
+    deleteFlight(db, id)
   })
 
   ipcMain.handle(IpcChannels.logbookListCompletedFlights, () => listCompletedFlights(db))

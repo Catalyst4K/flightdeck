@@ -10,8 +10,19 @@ import {
   XAxis,
   YAxis
 } from 'recharts'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { Aircraft, Flight, Landing, TrackPoint, WeightUnit } from '@shared/ipc'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -80,7 +91,7 @@ function LandingCard(props: { flightId: number }): React.JSX.Element | null {
   const severity = classifyLanding(landing.verticalSpeedMs, thresholds)
 
   return (
-    <Card className="max-w-2xl">
+    <Card className="min-w-72 flex-1">
       <CardHeader>
         <CardTitle className="text-sm">Landing</CardTitle>
       </CardHeader>
@@ -129,9 +140,22 @@ function FlightDetail(props: {
   aircraft: Aircraft | undefined
   weightUnit: WeightUnit
   onBack: () => void
+  onDeleted: () => void
 }): React.JSX.Element {
   const { flight, aircraft, weightUnit } = props
   const [trackPoints, setTrackPoints] = useState<TrackPoint[]>([])
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  async function handleConfirmDelete(): Promise<void> {
+    setConfirmingDelete(false)
+    try {
+      await window.flightdeck.flightDelete(flight.id)
+      props.onDeleted()
+      toast.success('Flight deleted.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
+  }
 
   useEffect(() => {
     window.flightdeck.trackPointList(flight.id).then(setTrackPoints)
@@ -160,28 +184,37 @@ function FlightDetail(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      <Button type="button" variant="ghost" size="sm" onClick={props.onBack} className="w-fit">
-        <ArrowLeft />
-        Back to logbook
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button type="button" variant="ghost" size="sm" onClick={props.onBack} className="w-fit">
+          <ArrowLeft />
+          Back to logbook
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)}>
+          <Trash2 />
+          Delete flight
+        </Button>
+      </div>
 
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>
-            {flight.flightNumber ?? `Flight #${flight.id}`} — {flight.depIcao} → {flight.arrIcao}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-            <DetailField label="Aircraft" value={aircraft?.registration ?? '—'} />
-            <DetailField label="Date" value={formatDate(flight.actualOutUtc)} />
-            <DetailField label="Block time" value={formatMinutes(flight.blockMinutes)} />
-            <DetailField label="Air time" value={formatMinutes(flight.airMinutes)} />
-            <DetailField label="Fuel burn" value={formatWeight(flight.fuelBurnKg, weightUnit)} />
-            <DetailField label="Fuel planned" value={formatWeight(flight.fuelPlannedKg, weightUnit)} />
-          </dl>
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap gap-4">
+        <Card className="min-w-72 flex-1">
+          <CardHeader>
+            <CardTitle>
+              {flight.flightNumber ?? `Flight #${flight.id}`} — {flight.depIcao} → {flight.arrIcao}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+              <DetailField label="Aircraft" value={aircraft?.registration ?? '—'} />
+              <DetailField label="Date" value={formatDate(flight.actualOutUtc)} />
+              <DetailField label="Block time" value={formatMinutes(flight.blockMinutes)} />
+              <DetailField label="Air time" value={formatMinutes(flight.airMinutes)} />
+              <DetailField label="Fuel burn" value={formatWeight(flight.fuelBurnKg, weightUnit)} />
+              <DetailField label="Fuel planned" value={formatWeight(flight.fuelPlannedKg, weightUnit)} />
+            </dl>
+          </CardContent>
+        </Card>
+        <LandingCard flightId={flight.id} />
+      </div>
 
       <div className="h-[min(36vh,360px)] min-h-56">
         <FlightMap live={false} route={route} waypoints={waypoints} trackPoints={trackPoints} />
@@ -254,8 +287,25 @@ function FlightDetail(props: {
         </Card>
       )}
 
-      <LandingCard flightId={flight.id} />
       <GsxInvoicesCard flightId={flight.id} />
+
+      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this flight?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the flight and its landing, GSX invoice, and track data permanently. This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -310,6 +360,10 @@ export function LogbookView(props: { weightUnit: WeightUnit }): React.JSX.Elemen
         aircraft={aircraft.find((a) => a.id === flight.aircraftId)}
         weightUnit={props.weightUnit}
         onBack={() => setView({ kind: 'list' })}
+        onDeleted={() => {
+          setView({ kind: 'list' })
+          reload()
+        }}
       />
     )
   }
