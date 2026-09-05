@@ -8,6 +8,7 @@ const WEIGHT_UNIT_KEY = 'weightUnit'
 const ALTITUDE_UNIT_KEY = 'altitudeUnit'
 const GSX_ENABLED_KEY = 'gsxEnabled'
 const GSX_FOLDER_PATH_KEY = 'gsxFolderPath'
+const GSX_DISPLAY_CURRENCY_KEY = 'gsxDisplayCurrency'
 const FIRM_LANDING_FPM_KEY = 'firmLandingFpm'
 const HARD_LANDING_FPM_KEY = 'hardLandingFpm'
 
@@ -59,12 +60,17 @@ export function setAltitudeUnit(db: FlightdeckDb, unit: AltitudeUnit): void {
  *  should never see anything from this feature, so it stays opt-in rather than trying to
  *  auto-detect-and-enable. */
 export function getGsxSettings(db: FlightdeckDb): GsxSettings {
-  return { enabled: getSetting(db, GSX_ENABLED_KEY) === '1', folderPath: getSetting(db, GSX_FOLDER_PATH_KEY) || null }
+  return {
+    enabled: getSetting(db, GSX_ENABLED_KEY) === '1',
+    folderPath: getSetting(db, GSX_FOLDER_PATH_KEY) || null,
+    displayCurrency: getSetting(db, GSX_DISPLAY_CURRENCY_KEY) || 'USD'
+  }
 }
 
 export function setGsxSettings(db: FlightdeckDb, settings: GsxSettings): void {
   setSetting(db, GSX_ENABLED_KEY, settings.enabled ? '1' : '0')
   setSetting(db, GSX_FOLDER_PATH_KEY, settings.folderPath ?? '')
+  setSetting(db, GSX_DISPLAY_CURRENCY_KEY, settings.displayCurrency || 'USD')
 }
 
 export function getLandingThresholds(db: FlightdeckDb): LandingThresholds {
