@@ -2,12 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { createDb, type FlightdeckDb } from './client'
 import { createAircraft, getAircraftByRegistration } from './aircraft-repo'
+import { createLanding, getLandingByFlight, type NewLanding } from './landing-repo'
+import { createTrackPoint, listTrackPoints } from './track-point-repo'
 import {
   abandonAllPlanned,
   abandonFlight,
   completeFlight,
   createFlight,
   createHistoricalFlight,
+  deleteFlight,
   getFleetStats,
   getFlight,
   listCompletedFlights,
@@ -16,6 +19,29 @@ import {
   recordOn,
   startFlight
 } from './flight-repo'
+
+function newLandingFixture(flightId: number): NewLanding {
+  return {
+    flightId,
+    touchdownTsUtc: '2026-09-01T12:00:00.000Z',
+    verticalSpeedMs: -1.5,
+    gForce: 1.2,
+    pitchDeg: 3,
+    bankDeg: 0,
+    headingTrueDeg: 70,
+    indicatedAirspeedMs: 65,
+    groundSpeedMs: 65,
+    windSpeedMs: 3,
+    windDirectionDeg: 250,
+    headwindMs: 2,
+    crosswindMs: 1,
+    runwayIdent: '07L',
+    distanceFromThresholdM: 120,
+    centrelineOffsetM: 2,
+    flapSetting: 3,
+    touchdownSource: 'derived'
+  }
+}
 
 describe('flight repo', () => {
   let db: FlightdeckDb
@@ -161,6 +187,49 @@ describe('flight repo', () => {
       expect(getFlight(db, planned.id)?.status).toBe('abandoned')
       expect(getFlight(db, alsoPlanned.id)?.status).toBe('abandoned')
       expect(getFlight(db, active.id)?.status).toBe('active')
+    })
+
+    it('deleteFlight removes the flight and its landing/track-point dependents', () => {
+      const created = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' })
+      startFlight(db, created.id, 10000)
+      createTrackPoint(db, {
+        flightId: created.id,
+        tsUtc: '2026-09-01T11:00:00.000Z',
+        latitude: 22.3,
+        longitude: 113.9,
+        altitudeM: 0,
+        altitudeAglM: 0,
+        indicatedAirspeedMs: 0,
+        machSpeed: 0,
+        groundSpeedMs: 0,
+        verticalSpeedMs: 0,
+        headingTrueDeg: 70,
+        pitchDeg: 0,
+        bankDeg: 0,
+        phase: 'preflight',
+        onGround: true,
+        fuelKg: 10000,
+        gForce: 1,
+        windSpeedMs: 0,
+        windDirectionDeg: 0
+      })
+      createLanding(db, newLandingFixture(created.id))
+      completeFlight(db, created.id, 3700)
+
+      expect(listTrackPoints(db, created.id)).toHaveLength(1)
+      expect(getLandingByFlight(db, created.id)).toBeDefined()
+
+      deleteFlight(db, created.id)
+
+      expect(getFlight(db, created.id)).toBeUndefined()
+      expect(listTrackPoints(db, created.id)).toEqual([])
+      expect(getLandingByFlight(db, created.id)).toBeUndefined()
+    })
+
+    it('deleteFlight on a flight with no dependents is a no-op beyond removing the row', () => {
+      const created = createFlight(db, { aircraftId, depIcao: 'EGLL', arrIcao: 'VHHH' })
+      deleteFlight(db, created.id)
+      expect(getFlight(db, created.id)).toBeUndefined()
     })
   })
 
