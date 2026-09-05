@@ -12,6 +12,21 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+// A curated, common-currency subset of what frankfurter.dev supports — enough for
+// "I want to see this in my own currency" without a second fetch just to populate a
+// dropdown (the currency list itself barely ever changes).
+const DISPLAY_CURRENCY_OPTIONS = [
+  { code: 'USD', label: 'USD — US Dollar (no conversion)' },
+  { code: 'GBP', label: 'GBP — British Pound' },
+  { code: 'EUR', label: 'EUR — Euro' },
+  { code: 'CAD', label: 'CAD — Canadian Dollar' },
+  { code: 'AUD', label: 'AUD — Australian Dollar' },
+  { code: 'NZD', label: 'NZD — New Zealand Dollar' },
+  { code: 'JPY', label: 'JPY — Japanese Yen' },
+  { code: 'CHF', label: 'CHF — Swiss Franc' }
+]
 
 function summarizeAircraftImport(summary: AircraftImportSummary): string {
   if (summary.skipped.length === 0) return `Imported ${summary.imported} aircraft.`
@@ -40,7 +55,7 @@ export function SettingsView(props: {
   const [loggingIn, setLoggingIn] = useState(false)
   const [importingAircraft, setImportingAircraft] = useState(false)
   const [importingLogbook, setImportingLogbook] = useState(false)
-  const [gsx, setGsx] = useState<GsxSettings>({ enabled: false, folderPath: null })
+  const [gsx, setGsx] = useState<GsxSettings>({ enabled: false, folderPath: null, displayCurrency: 'USD' })
   const [landingThresholds, setLandingThresholds] = useState<LandingThresholds>({ firmFpm: 480, hardFpm: 600 })
 
   useEffect(() => {
@@ -65,6 +80,12 @@ export function SettingsView(props: {
     const folderPath = await window.flightdeck.gsxBrowseFolder()
     if (!folderPath) return
     const next = { ...gsx, folderPath }
+    setGsx(next)
+    await window.flightdeck.settingsSetGsx(next)
+  }
+
+  async function handleGsxCurrencyChange(displayCurrency: string): Promise<void> {
+    const next = { ...gsx, displayCurrency }
     setGsx(next)
     await window.flightdeck.settingsSetGsx(next)
   }
@@ -301,6 +322,24 @@ export function SettingsView(props: {
           <p className="text-xs text-muted-foreground">
             Usually %APPDATA%\Virtuali\GSX\Receipts. A path that's wrong or no longer exists just means no
             receipts are found — never an error.
+          </p>
+          <Label className="flex flex-col items-start gap-1.5">
+            Display currency
+            <Select value={gsx.displayCurrency} onValueChange={handleGsxCurrencyChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DISPLAY_CURRENCY_OPTIONS.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            GSX totals convert using a live rate fetched at the time you view them — nothing is stored converted.
           </p>
         </CardContent>
       </Card>

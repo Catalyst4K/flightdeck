@@ -95,10 +95,22 @@ export function GsxInvoicesCard(props: { flightId: number }): React.JSX.Element 
   const [invoices, setInvoices] = useState<FlightInvoice[]>([])
   const [notailCandidates, setNotailCandidates] = useState<GsxNotailCandidate[]>([])
   const [rescanning, setRescanning] = useState(false)
+  const [displayCurrency, setDisplayCurrency] = useState('USD')
+  // null = USD or not yet resolved (fetch failed / still loading) — falls back to USD
+  // display either way, same as before this feature existed.
+  const [rate, setRate] = useState<number | null>(null)
 
   useEffect(() => {
     window.flightdeck.logbookListInvoices(props.flightId).then(setInvoices)
   }, [props.flightId])
+
+  useEffect(() => {
+    window.flightdeck.settingsGetGsx().then((settings) => {
+      setDisplayCurrency(settings.displayCurrency)
+      if (settings.displayCurrency === 'USD') return
+      window.flightdeck.fxGetRate(settings.displayCurrency).then(setRate)
+    })
+  }, [])
 
   async function handleRescan(): Promise<void> {
     setRescanning(true)
@@ -125,6 +137,14 @@ export function GsxInvoicesCard(props: { flightId: number }): React.JSX.Element 
 
   const totalUsd = invoices.reduce((sum, inv) => sum + (inv.totalUsd ?? 0), 0)
   const hasAnyUsdTotal = invoices.some((inv) => inv.totalUsd != null)
+  // Falls back to showing the USD figure whenever the rate hasn't resolved (still
+  // loading, or the lookup failed) — never blocks on it, never shows a stale conversion.
+  const showConverted = displayCurrency !== 'USD' && rate != null
+  const displayTotal = showConverted ? totalUsd * rate : totalUsd
+  const displayCode = showConverted ? displayCurrency : 'USD'
+  const formattedTotal = new Intl.NumberFormat(undefined, { style: 'currency', currency: displayCode }).format(
+    displayTotal
+  )
 
   return (
     <Card className="w-full max-w-2xl">
@@ -148,8 +168,8 @@ export function GsxInvoicesCard(props: { flightId: number }): React.JSX.Element 
             ))}
             {hasAnyUsdTotal && (
               <div className="flex justify-between border-t border-border pt-2 text-sm">
-                <span className="text-muted-foreground">Total (USD)</span>
-                <span className="font-mono tabular-nums text-foreground">${totalUsd.toFixed(2)}</span>
+                <span className="text-muted-foreground">Total ({displayCode})</span>
+                <span className="font-mono tabular-nums text-foreground">{formattedTotal}</span>
               </div>
             )}
           </>

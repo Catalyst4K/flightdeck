@@ -315,6 +315,9 @@ export interface GsxRescanResult {
 export interface GsxSettings {
   enabled: boolean
   folderPath: string | null
+  // ISO 4217 code GSX totals are converted to and displayed in, via a live rate
+  // (fxGetRate) — 'USD' means no conversion, matching GSX's own totalUsd field verbatim.
+  displayCurrency: string
 }
 
 export interface LogbookImportSkip {
@@ -516,7 +519,8 @@ export const IpcChannels = {
   aircraftTypeSearch: 'aircraft:type-search',
   airportSearch: 'airport:search',
   airlineSearch: 'airline:search',
-  weatherGetMetars: 'weather:get-metars'
+  weatherGetMetars: 'weather:get-metars',
+  fxGetRate: 'fx:get-rate'
 } as const
 
 export interface FlightdeckApi {
@@ -625,4 +629,7 @@ export interface FlightdeckApi {
   /** Looks up current METARs for one or more ICAO codes. An unknown/non-reporting code
    *  is just absent from the result array, not an error. */
   weatherGetMetars: (icaoCodes: string[]) => Promise<MetarReport[]>
+  /** USD -> targetCurrency exchange rate for GSX total display. null on any lookup
+   *  failure (unsupported code, network error) — the caller falls back to USD. */
+  fxGetRate: (targetCurrency: string) => Promise<number | null>
 }

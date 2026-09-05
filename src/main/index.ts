@@ -15,6 +15,7 @@ import { fetchAircraftByRegistration } from './aircraft-lookup/adsbdb-client'
 import { searchAircraftTypes } from './aircraft-lookup/icao-types'
 import { searchAirlines } from './airlines/airline-search'
 import { fetchMetars } from './weather/metar-client'
+import { fetchExchangeRate } from './fx/fx-client'
 import { searchAirports } from './airports/airport-search'
 import { createDb } from './db/client'
 import { migrateDb } from './db/migrate'
@@ -350,6 +351,7 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.airportSearch, (_event, query: string) => searchAirports(query))
   ipcMain.handle(IpcChannels.airlineSearch, (_event, query: string) => searchAirlines(query))
   ipcMain.handle(IpcChannels.weatherGetMetars, (_event, icaoCodes: string[]) => fetchMetars(icaoCodes))
+  ipcMain.handle(IpcChannels.fxGetRate, (_event, targetCurrency: string) => fetchExchangeRate(targetCurrency))
 
   // CI packaging check (see .github/workflows/package.yml): proves the built
   // binary launches, migrates the DB and renders a first frame, then exits
