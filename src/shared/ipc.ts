@@ -653,9 +653,11 @@ export interface FlightdeckApi {
   /** Looks up current METARs for one or more ICAO codes. An unknown/non-reporting code
    *  is just absent from the result array, not an error. */
   weatherGetMetars: (icaoCodes: string[]) => Promise<MetarReport[]>
-  /** USD -> targetCurrency exchange rate for GSX total display. null on any lookup
-   *  failure (unsupported code, network error) — the caller falls back to USD. */
-  fxGetRate: (targetCurrency: string) => Promise<number | null>
+  /** USD -> targetCurrency exchange rate for GSX total display, as of `date` (YYYY-MM-DD,
+   *  the receipt's issued date) rather than today's rate — omit `date` for the live rate.
+   *  null on any lookup failure (unsupported code, network error, future date) — the
+   *  caller falls back to USD. */
+  fxGetRate: (targetCurrency: string, date?: string) => Promise<number | null>
   /** Cloud sync (flightdeck-backend/docs/plans/cloud-sync.md) — off by default until a
    *  successful login. Throws on invalid credentials or an unreachable backend; a
    *  successful login persists the session (Electron's safeStorage) so it survives a

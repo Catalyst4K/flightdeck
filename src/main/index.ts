@@ -366,7 +366,9 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.airportSearch, (_event, query: string) => searchAirports(query))
   ipcMain.handle(IpcChannels.airlineSearch, (_event, query: string) => searchAirlines(query))
   ipcMain.handle(IpcChannels.weatherGetMetars, (_event, icaoCodes: string[]) => fetchMetars(icaoCodes))
-  ipcMain.handle(IpcChannels.fxGetRate, (_event, targetCurrency: string) => fetchExchangeRate(targetCurrency))
+  ipcMain.handle(IpcChannels.fxGetRate, (_event, targetCurrency: string, date?: string) =>
+    fetchExchangeRate(targetCurrency, date)
+  )
 
   // Cloud sync (flightdeck-backend/docs/plans/cloud-sync.md) — off by default; nothing
   // above this point depends on it, and it's the only feature in the app that talks to
