@@ -52,6 +52,7 @@ import {
   setWeightUnit
 } from './db/settings-repo'
 import { listTrackPoints } from './db/track-point-repo'
+import { simplifyTrackPoints } from './tracking/track-simplify'
 import { defaultGsxReceiptsPath } from './gsx/default-path'
 import { buildFlightMatchWindow } from './gsx/flight-window'
 import { readReceipt, receiptFileFromPath, scanGsxFolder } from './gsx/scan'
@@ -270,7 +271,13 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.trackingStop, () => trackingController.stop())
   ipcMain.handle(IpcChannels.trackingFinish, () => trackingController.finish())
   ipcMain.handle(IpcChannels.trackingGetActive, () => trackingController.getActive() ?? null)
-  ipcMain.handle(IpcChannels.trackPointList, (_event, flightId: number) => listTrackPoints(db, flightId))
+  // Simplified for both callers (Logbook review and TrackView's resume-an-in-progress-
+  // flight catch-up load) — storage itself stays full resolution regardless, this only
+  // shapes what crosses IPC and gets rendered. Live tracking's own point-by-point stream
+  // (the 'point' event below) is completely separate and unaffected.
+  ipcMain.handle(IpcChannels.trackPointList, (_event, flightId: number) =>
+    simplifyTrackPoints(listTrackPoints(db, flightId))
+  )
 
   // Only one flight is ever meant to be "in progress" (planned or active) at once —
   // pressing "Fly" on a new plan replaces whatever was already planned or being tracked,
