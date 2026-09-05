@@ -114,6 +114,7 @@ export interface SimTelemetry {
   verticalSpeedMs: number
   indicatedAirspeedMs: number
   trueAirspeedMs: number
+  machSpeed: number
   groundSpeedMs: number
   headingTrueDeg: number
   pitchDeg: number
@@ -158,6 +159,7 @@ export interface TrackPoint {
   altitudeM: number
   altitudeAglM: number
   indicatedAirspeedMs: number
+  machSpeed: number
   groundSpeedMs: number
   verticalSpeedMs: number
   headingTrueDeg: number
