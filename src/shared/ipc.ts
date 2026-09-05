@@ -114,6 +114,7 @@ export interface SimTelemetry {
   verticalSpeedMs: number
   indicatedAirspeedMs: number
   trueAirspeedMs: number
+  machSpeed: number
   groundSpeedMs: number
   headingTrueDeg: number
   pitchDeg: number
@@ -158,6 +159,7 @@ export interface TrackPoint {
   altitudeM: number
   altitudeAglM: number
   indicatedAirspeedMs: number
+  machSpeed: number
   groundSpeedMs: number
   verticalSpeedMs: number
   headingTrueDeg: number
@@ -513,6 +515,7 @@ export const IpcChannels = {
   trackingFinish: 'tracking:finish',
   trackingGetActive: 'tracking:get-active',
   flightCancel: 'flight:cancel',
+  flightDelete: 'flight:delete',
   trackingPoint: 'tracking:point',
   trackPointList: 'track-point:list',
   logbookListCompletedFlights: 'logbook:list-completed-flights',
@@ -567,6 +570,9 @@ export interface FlightdeckApi {
   flightCreate: (flight: NewFlight) => Promise<Flight>
   /** Abandons a flight (planned or active) by id — "Cancel flight" before or during tracking. */
   flightCancel: (id: number) => Promise<void>
+  /** Permanently deletes a flight and its landing/invoice/track-point rows — a completed
+   *  or abandoned flight with bad data, not an in-progress one (use flightCancel for that). */
+  flightDelete: (id: number) => Promise<void>
   /** Fetches the SimBrief user's latest OFP. Throws if no username is set or the fetch fails. */
   dispatchFetchOfp: () => Promise<DispatchOfp>
   /** Opens SimBrief's dispatch page in the default browser, pre-filled where possible. */

@@ -1,14 +1,19 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BookOpen, Plane, Radar, Route, Settings as SettingsIcon } from 'lucide-react'
 import type { AltitudeUnit, AppPage, DispatchOfp, SimConnectionStatus, SimTelemetry, WeightUnit } from '@shared/ipc'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
-import { DispatchView } from './DispatchView'
 import { FleetView } from './FleetView'
-import { LogbookView } from './LogbookView'
-import { SettingsView } from './SettingsView'
-import { TrackView } from './TrackView'
+
+// Fleet is the default/first tab, so it's the one view kept eager — every other tab is
+// lazy so its JS (and, for Track/Logbook, the maplibre-gl and recharts they pull in —
+// together the two heaviest dependencies in the app) doesn't get parsed and evaluated
+// until the user actually visits it. docs/decisions.md, memory-usage entry.
+const DispatchView = lazy(() => import('./DispatchView').then((m) => ({ default: m.DispatchView })))
+const TrackView = lazy(() => import('./TrackView').then((m) => ({ default: m.TrackView })))
+const LogbookView = lazy(() => import('./LogbookView').then((m) => ({ default: m.LogbookView })))
+const SettingsView = lazy(() => import('./SettingsView').then((m) => ({ default: m.SettingsView })))
 
 const TABS: { page: AppPage; label: string; icon: typeof Plane }[] = [
   { page: 'fleet', label: 'Fleet', icon: Plane },
@@ -108,36 +113,38 @@ export default function App(): React.JSX.Element {
 
         <div className="flex-1 overflow-auto p-8">
           {page === 'fleet' && <FleetView />}
-          {page === 'dispatch' && (
-            <DispatchView
-              weightUnit={weightUnit}
-              altitudeUnit={altitudeUnit}
-              onPlanned={() => setPage('track')}
-              ofp={dispatchOfp}
-              onOfpChange={setDispatchOfp}
-              dispatchedOfpId={dispatchedOfpId}
-              onDispatchedOfpIdChange={setDispatchedOfpId}
-            />
-          )}
-          {page === 'track' && (
-            <TrackView
-              previewOfpJson={dispatchOfp?.ofpJson ?? null}
-              telemetry={telemetry}
-              onFlightEnded={() => {
-                setDispatchOfp(null)
-                setDispatchedOfpId(null)
-              }}
-            />
-          )}
-          {page === 'logbook' && <LogbookView weightUnit={weightUnit} />}
-          {page === 'settings' && (
-            <SettingsView
-              weightUnit={weightUnit}
-              onWeightUnitChange={handleWeightUnitChange}
-              altitudeUnit={altitudeUnit}
-              onAltitudeUnitChange={handleAltitudeUnitChange}
-            />
-          )}
+          <Suspense fallback={null}>
+            {page === 'dispatch' && (
+              <DispatchView
+                weightUnit={weightUnit}
+                altitudeUnit={altitudeUnit}
+                onPlanned={() => setPage('track')}
+                ofp={dispatchOfp}
+                onOfpChange={setDispatchOfp}
+                dispatchedOfpId={dispatchedOfpId}
+                onDispatchedOfpIdChange={setDispatchedOfpId}
+              />
+            )}
+            {page === 'track' && (
+              <TrackView
+                previewOfpJson={dispatchOfp?.ofpJson ?? null}
+                telemetry={telemetry}
+                onFlightEnded={() => {
+                  setDispatchOfp(null)
+                  setDispatchedOfpId(null)
+                }}
+              />
+            )}
+            {page === 'logbook' && <LogbookView weightUnit={weightUnit} />}
+            {page === 'settings' && (
+              <SettingsView
+                weightUnit={weightUnit}
+                onWeightUnitChange={handleWeightUnitChange}
+                altitudeUnit={altitudeUnit}
+                onAltitudeUnitChange={handleAltitudeUnitChange}
+              />
+            )}
+          </Suspense>
         </div>
       </Tabs>
       <Toaster />

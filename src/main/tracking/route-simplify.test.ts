@@ -44,6 +44,7 @@ function trackPoint(latitude: number, longitude: number): TrackPoint {
     altitudeM: 0,
     altitudeAglM: 0,
     indicatedAirspeedMs: 0,
+    machSpeed: 0,
     groundSpeedMs: 0,
     verticalSpeedMs: 0,
     headingTrueDeg: 0,

@@ -145,6 +145,10 @@ export const trackPoint = sqliteTable('track_point', {
   altitudeM: real('altitude_m').notNull(),
   altitudeAglM: real('altitude_agl_m').notNull(),
   indicatedAirspeedMs: real('indicated_airspeed_ms').notNull(),
+  // Default 0 only so ALTER TABLE ADD COLUMN can backfill pre-existing NOT NULL rows —
+  // every new row from FlightRecorder.toTrackPoint always supplies a real value, same
+  // pattern as gForce/windSpeedMs/windDirectionDeg below.
+  machSpeed: real('mach_speed').notNull().default(0),
   groundSpeedMs: real('ground_speed_ms').notNull(),
   verticalSpeedMs: real('vertical_speed_ms').notNull(),
   headingTrueDeg: real('heading_true_deg').notNull(),
